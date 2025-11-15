@@ -63,6 +63,15 @@ wrangler dev
 
 **注意**: 两个服务器必须同时运行才能完整使用所有功能。前端通过 API 调用与后端通信。
 
+### 代码检查
+```bash
+# 运行 ESLint 检查
+npm run lint
+
+# 运行 TypeScript 类型检查
+npm run check
+```
+
 ### 构建和部署
 
 ```bash
@@ -348,11 +357,30 @@ Response:
 ### 3. 环境变量设置
 在Cloudflare Workers设置页面添加所有必要的环境变量。
 
-### 4. 部署
+### 4. 后端部署 (Cloudflare Workers)
 ```bash
+# 构建 Worker
 npm run build:worker
+
+# 部署到 Cloudflare Workers
 wrangler deploy
 ```
+
+### 5. 前端部署 (Cloudflare Pages)
+```bash
+# 构建前端
+npm run build
+
+# 部署到 Cloudflare Pages
+wrangler pages deploy dist --project-name=aosp-patch-frontend
+```
+
+### 部署后的服务地址
+- **前端 (Cloudflare Pages)**: `https://32c80ee8.aosp-patch-frontend.pages.dev`
+- **后端 API (Cloudflare Workers)**: `https://aosp-patch-service.angersax.workers.dev`
+
+### 自动重定向配置
+前端通过 `_redirects` 文件自动将 `/api/*` 请求转发到后端 Workers，无需修改前端代码。
 
 ## 💡 使用建议
 
