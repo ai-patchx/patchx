@@ -22,6 +22,33 @@ export default {
     }
 
     try {
+      // 根路径处理 - 返回服务信息
+      if (path === '/' && method === 'GET') {
+        return new Response(
+          JSON.stringify({
+            service: 'AOSP Patch Submission Service',
+            version: '1.0.0',
+            status: 'running',
+            endpoints: {
+              upload: '/api/upload',
+              submit: '/api/submit',
+              status: '/api/status/:id',
+              aiResolveConflict: '/api/ai/resolve-conflict',
+              aiProviders: '/api/ai/providers',
+              aiTestProviders: '/api/ai/test-providers'
+            },
+            documentation: 'https://github.com/your-repo/aosp-patch-service'
+          }),
+          {
+            status: 200,
+            headers: {
+              'Content-Type': 'application/json',
+              ...corsHeaders
+            }
+          }
+        )
+      }
+
       // 现有的API路由
       if (path === '/api/upload' && method === 'POST') {
         return await handleUpload(request, env, corsHeaders)
