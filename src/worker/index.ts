@@ -258,7 +258,7 @@ async function handleAITestProviders(env: Env, corsHeaders: Record<string, strin
 // 原有的处理函数保持不变...
 async function handleUpload(request: Request, env: Env, corsHeaders: Record<string, string>): Promise<Response> {
   const formData = await request.formData()
-  const file = formData.get('file') as File
+  const file = formData.get('file') as File | null
   const project = formData.get('project') as string
 
   if (!file || !project) {

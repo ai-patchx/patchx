@@ -80,9 +80,9 @@ export const parsePatchContent = (content: string) => {
     } else if (inDiff && line.length > 0) {
       const firstChar = line[0]
       if (firstChar === '+') {
-        currentFile.additions++
+        if (currentFile) currentFile.additions++
       } else if (firstChar === '-') {
-        currentFile.deletions++
+        if (currentFile) currentFile.deletions++
       } else if (firstChar === ' ' || firstChar === '\\') {
         // Context line or escape sequence, do nothing
       } else {
