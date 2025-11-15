@@ -81,7 +81,7 @@ const SubmitPage: React.FC = () => {
       })
 
       if (!submitResponse.ok) {
-        throw new Error('Patch提交失败')
+        throw new Error('Patch 提交失败')
       }
 
       await submitResponse.json()
@@ -104,10 +104,10 @@ const SubmitPage: React.FC = () => {
         <div className="bg-white rounded-lg shadow-lg p-8">
           <div className="mb-8">
             <h1 className="text-3xl font-bold text-gray-900 mb-2">
-              提交AOSP Patch
+              提交 AOSP Patch
             </h1>
             <p className="text-gray-600">
-              上传您的Git patch文件，我们将帮您提交到AOSP Gerrit进行代码审查
+              上传您的 Git patch 文件，我们将帮您提交到 AOSP Gerrit 进行代码审查
             </p>
           </div>
 
@@ -117,7 +117,7 @@ const SubmitPage: React.FC = () => {
               <label className="block text-sm font-medium text-gray-700 mb-4">
                 <div className="flex items-center space-x-2">
                   <FileText className="w-5 h-5" />
-                  <span>Patch文件</span>
+                  <span>Patch 文件</span>
                   <span className="text-red-500">*</span>
                 </div>
               </label>
@@ -139,7 +139,7 @@ const SubmitPage: React.FC = () => {
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
                 required
               >
-                <option value="">请选择AOSP项目</option>
+                <option value="">请选择 AOSP 项目</option>
                 {AOSP_PROJECTS.map((project) => (
                   <option key={project.value} value={project.value}>
                     {project.label}
@@ -214,7 +214,7 @@ const SubmitPage: React.FC = () => {
                 `}
               >
                 <Send className="w-5 h-5" />
-                <span>{isSubmitting ? '提交中...' : '提交Patch'}</span>
+                <span>{isSubmitting ? '提交中...' : '提交 Patch'}</span>
               </button>
             </div>
           </form>
