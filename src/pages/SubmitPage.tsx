@@ -125,7 +125,7 @@ const SubmitPage: React.FC = () => {
             <h1 className={`text-3xl font-bold mb-2 ${
               theme === 'dark' ? 'text-gradient-primary' : 'text-gray-900'
             }`}>
-              提交 AOSP Patch
+              PatchX
             </h1>
             <p className={theme === 'dark' ? 'text-gradient-secondary' : 'text-gray-600'}>
               上传您的 Git patch 文件，我们将帮您提交到 AOSP Gerrit 进行代码审查
