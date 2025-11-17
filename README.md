@@ -372,11 +372,11 @@ wrangler deploy
 npm run build
 
 # 部署到 Cloudflare Pages
-wrangler pages deploy dist --project-name=aosp-patch-frontend
+wrangler pages deploy dist --project-name=patchx
 ```
 
 ### 部署后的服务地址
-- **前端 (Cloudflare Pages)**: `https://32c80ee8.aosp-patch-frontend.pages.dev`
+- **前端 (Cloudflare Pages)**: `https://patchx.pages.dev`
 - **后端 API (Cloudflare Workers)**: `https://aosp-patch-service.angersax.workers.dev`
 
 ### 自动重定向配置
