@@ -212,8 +212,8 @@ Request:
   "incomingCode": "传入的patch代码",
   "currentCode": "当前代码内容",
   "filePath": "文件路径",
-  "provider": "openai", // 可选，指定AI提供商
-  "useMultipleProviders": true // 可选，使用多个提供商对比
+  "provider": "openai",
+  "useMultipleProviders": true
 }
 ```
 
