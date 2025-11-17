@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { FileText, Settings, Send, Moon, Sun } from 'lucide-react'
+import { FileText, Settings, Send, Moon, Sun, Eye } from 'lucide-react'
 import FileUpload from '../components/FileUpload'
 import useFileUploadStore from '../stores/fileUploadStore'
 import { useTheme } from '../hooks/useTheme'
@@ -33,10 +33,23 @@ const SubmitPage: React.FC = () => {
   const [subject, setSubject] = useState('')
   const [description, setDescription] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [showPreview, setShowPreview] = useState(false)
 
   const handleFileSelect = async (selectedFile: File) => {
     // 这里可以添加文件预览逻辑
     console.log('Selected file:', selectedFile)
+  }
+
+  const handlePreview = () => {
+    setShowPreview(!showPreview)
+  }
+
+  const generateCommitMessage = () => {
+    let message = subject
+    if (description) {
+      message += '\n\n' + description
+    }
+    return message
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -246,8 +259,48 @@ const SubmitPage: React.FC = () => {
               />
             </div>
 
+            {/* Commit Message 预览 */}
+            {showPreview && (
+              <div className={`border rounded-md p-4 ${
+                theme === 'dark'
+                  ? 'bg-gradient-highlight border-gradient-accent'
+                  : 'bg-gray-50 border-gray-200'
+              }`}>
+                <h3 className={`text-sm font-medium mb-2 ${
+                  theme === 'dark' ? 'text-gradient-primary' : 'text-gray-700'
+                }`}>
+                  Commit Message 预览：
+                </h3>
+                <pre className={`text-sm whitespace-pre-wrap ${
+                  theme === 'dark' ? 'text-gradient-secondary' : 'text-gray-600'
+                }`}>
+                  {generateCommitMessage()}
+                </pre>
+              </div>
+            )}
+
             {/* 提交按钮 */}
-            <div className="flex justify-end">
+            <div className="flex justify-end space-x-3">
+              <button
+                type="button"
+                onClick={handlePreview}
+                className={`
+                  flex items-center space-x-2 px-4 py-3 rounded-md font-medium
+                  transition-colors duration-200
+                  ${
+                    theme === 'dark'
+                      ? showPreview
+                        ? 'bg-gradient-accent text-gradient-primary hover:bg-gradient-highlight'
+                        : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                      : showPreview
+                        ? 'bg-blue-600 text-white hover:bg-blue-700'
+                        : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                  }
+                `}
+              >
+                <Eye className="w-5 h-5" />
+                <span>{showPreview ? '隐藏预览' : '预览 Commit'}</span>
+              </button>
               <button
                 type="submit"
                 disabled={!file || !selectedProject || !subject || isSubmitting}
