@@ -12,3 +12,106 @@
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
+
+/* Dark gradient theme styles */
+html.dark {
+  background: linear-gradient(135deg, #0f0f23 0%, #1a1a2e 35%, #16213e 100%);
+  color: #e2e8f0;
+}
+
+/* Ensure gradient covers entire viewport for dark theme */
+html.dark,
+html.dark body {
+  background: linear-gradient(135deg, #0f0f23 0%, #1a1a2e 35%, #16213e 100%) !important;
+  background-attachment: fixed !important;
+  background-size: cover !important;
+  color: #e2e8f0 !important;
+  min-height: 100vh !important;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  background: #ffffff;
+  min-height: 100vh;
+}
+
+/* Ensure gradient covers entire viewport */
+html, body {
+  height: 100%;
+}
+
+#root {
+  min-height: 100%;
+  background: transparent;
+}
+
+/* Dark theme for root element */
+html.dark #root {
+  background: transparent;
+}
+
+/* Gradient background utilities */
+.bg-gradient-dark {
+  background: linear-gradient(135deg, #0f0f23 0%, #1a1a2e 35%, #16213e 100%);
+}
+
+.bg-gradient-dark-radial {
+  background: radial-gradient(circle at top right, #0f0f23 0%, #1a1a2e 40%, #16213e 100%);
+}
+
+.bg-gradient-dark-subtle {
+  background: linear-gradient(180deg, #1a1a2e 0%, #16213e 100%);
+}
+
+/* Card styles for dark gradient theme */
+.gradient-card {
+  background: rgba(26, 26, 46, 0.8);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(45, 53, 97, 0.3);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+}
+
+.gradient-card:hover {
+  box-shadow: 0 0 20px rgba(45, 53, 97, 0.3);
+  border-color: rgba(45, 53, 97, 0.5);
+}
+
+/* Text colors for dark gradient theme */
+.text-gradient-primary {
+  color: #e2e8f0;
+}
+
+.text-gradient-secondary {
+  color: #a0aec0;
+}
+
+.text-gradient-accent {
+  color: #4a5568;
+}
+
+/* Button styles for dark gradient theme */
+.btn-gradient {
+  background: linear-gradient(45deg, #2d3561, #4a5568);
+  border: 1px solid rgba(45, 53, 97, 0.5);
+  color: #e2e8f0;
+  transition: all 0.3s ease;
+}
+
+.btn-gradient:hover {
+  background: linear-gradient(45deg, #4a5568, #2d3561);
+  box-shadow: 0 0 15px rgba(45, 53, 97, 0.4);
+  transform: translateY(-1px);
+}
+
+/* Input styles for dark gradient theme */
+.input-gradient {
+  background: rgba(26, 26, 46, 0.6);
+  border: 1px solid rgba(45, 53, 97, 0.3);
+  color: #e2e8f0;
+}
+
+.input-gradient:focus {
+  border-color: rgba(45, 53, 97, 0.5);
+  box-shadow: 0 0 10px rgba(45, 53, 97, 0.2);
+}

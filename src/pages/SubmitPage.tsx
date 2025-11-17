@@ -1,7 +1,8 @@
 import { useState } from 'react'
-import { FileText, Settings, Send } from 'lucide-react'
+import { FileText, Settings, Send, Moon, Sun } from 'lucide-react'
 import FileUpload from '../components/FileUpload'
 import useFileUploadStore from '../stores/fileUploadStore'
+import { useTheme } from '../hooks/useTheme'
 
 const AOSP_PROJECTS = [
   { value: 'platform/frameworks/base', label: 'frameworks/base' },
@@ -24,6 +25,8 @@ const BRANCHES = [
 
 const SubmitPage: React.FC = () => {
   const { file, setUploadStatus, setUploadId, setError } = useFileUploadStore()
+  const { theme, toggleTheme } = useTheme()
+
   const [selectedProject, setSelectedProject] = useState('')
   const [selectedBranch, setSelectedBranch] = useState('main')
   const [subject, setSubject] = useState('')
@@ -99,14 +102,32 @@ const SubmitPage: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 py-8">
+    <div className="min-h-screen py-8">
       <div className="max-w-4xl mx-auto px-4">
-        <div className="bg-white rounded-lg shadow-lg p-8">
+        {/* Theme toggle button */}
+        <div className="flex justify-end mb-4">
+          <button
+            onClick={toggleTheme}
+            className={`p-2 rounded-lg transition-colors duration-200 ${
+              theme === 'dark'
+                ? 'bg-gradient-accent text-gradient-primary hover:bg-gradient-highlight'
+                : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+            }`}
+          >
+            {theme === 'dark' ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
+          </button>
+        </div>
+
+        <div className={`rounded-lg shadow-lg p-8 ${
+          theme === 'dark' ? 'gradient-card' : 'bg-white'
+        }`}>
           <div className="mb-8">
-            <h1 className="text-3xl font-bold text-gray-900 mb-2">
+            <h1 className={`text-3xl font-bold mb-2 ${
+              theme === 'dark' ? 'text-gradient-primary' : 'text-gray-900'
+            }`}>
               提交 AOSP Patch
             </h1>
-            <p className="text-gray-600">
+            <p className={theme === 'dark' ? 'text-gradient-secondary' : 'text-gray-600'}>
               上传您的 Git patch 文件，我们将帮您提交到 AOSP Gerrit 进行代码审查
             </p>
           </div>
@@ -114,7 +135,9 @@ const SubmitPage: React.FC = () => {
           <form onSubmit={handleSubmit} className="space-y-8">
             {/* 文件上传 */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-4">
+              <label className={`block text-sm font-medium mb-4 ${
+                theme === 'dark' ? 'text-gradient-primary' : 'text-gray-700'
+              }`}>
                 <div className="flex items-center space-x-2">
                   <FileText className="w-5 h-5" />
                   <span>Patch 文件</span>
@@ -126,7 +149,9 @@ const SubmitPage: React.FC = () => {
 
             {/* 项目选择 */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className={`block text-sm font-medium mb-2 ${
+                theme === 'dark' ? 'text-gradient-primary' : 'text-gray-700'
+              }`}>
                 <div className="flex items-center space-x-2">
                   <Settings className="w-5 h-5" />
                   <span>目标项目</span>
@@ -136,7 +161,11 @@ const SubmitPage: React.FC = () => {
               <select
                 value={selectedProject}
                 onChange={(e) => setSelectedProject(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent ${
+                  theme === 'dark'
+                    ? 'input-gradient border-gradient-accent'
+                    : 'border-gray-300 bg-white'
+                }`}
                 required
               >
                 <option value="">请选择 AOSP 项目</option>
@@ -150,13 +179,19 @@ const SubmitPage: React.FC = () => {
 
             {/* 分支选择 */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className={`block text-sm font-medium mb-2 ${
+                theme === 'dark' ? 'text-gradient-primary' : 'text-gray-700'
+              }`}>
                 目标分支
               </label>
               <select
                 value={selectedBranch}
                 onChange={(e) => setSelectedBranch(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent ${
+                  theme === 'dark'
+                    ? 'input-gradient border-gradient-accent'
+                    : 'border-gray-300 bg-white'
+                }`}
               >
                 {BRANCHES.map((branch) => (
                   <option key={branch.value} value={branch.value}>
@@ -168,7 +203,9 @@ const SubmitPage: React.FC = () => {
 
             {/* 提交主题 */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className={`block text-sm font-medium mb-2 ${
+                theme === 'dark' ? 'text-gradient-primary' : 'text-gray-700'
+              }`}>
                 <div className="flex items-center space-x-2">
                   <span>提交主题</span>
                   <span className="text-red-500">*</span>
@@ -179,14 +216,20 @@ const SubmitPage: React.FC = () => {
                 value={subject}
                 onChange={(e) => setSubject(e.target.value)}
                 placeholder="简要描述您的更改，例如：Fix memory leak in ActivityManager"
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent ${
+                  theme === 'dark'
+                    ? 'input-gradient border-gradient-accent'
+                    : 'border-gray-300 bg-white'
+                }`}
                 required
               />
             </div>
 
             {/* 详细描述 */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className={`block text-sm font-medium mb-2 ${
+                theme === 'dark' ? 'text-gradient-primary' : 'text-gray-700'
+              }`}>
                 详细描述
               </label>
               <textarea
@@ -194,7 +237,11 @@ const SubmitPage: React.FC = () => {
                 onChange={(e) => setDescription(e.target.value)}
                 placeholder="详细描述您的更改内容、原因和影响..."
                 rows={4}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent ${
+                  theme === 'dark'
+                    ? 'input-gradient border-gradient-accent'
+                    : 'border-gray-300 bg-white'
+                }`}
               />
             </div>
 
@@ -208,8 +255,12 @@ const SubmitPage: React.FC = () => {
                   transition-colors duration-200
                   ${
                     !file || !selectedProject || !subject || isSubmitting
-                      ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                      : 'bg-green-600 text-white hover:bg-green-700'
+                      ? theme === 'dark'
+                        ? 'bg-gradient-highlight text-gradient-secondary cursor-not-allowed'
+                        : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                      : theme === 'dark'
+                        ? 'btn-gradient'
+                        : 'bg-green-600 text-white hover:bg-green-700'
                   }
                 `}
               >

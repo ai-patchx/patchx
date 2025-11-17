@@ -1,11 +1,13 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useParams } from 'react-router-dom'
-import { Clock, CheckCircle, XCircle, AlertCircle, ExternalLink, RefreshCw } from 'lucide-react'
+import { Clock, CheckCircle, XCircle, AlertCircle, ExternalLink, RefreshCw, Moon, Sun } from 'lucide-react'
 import { getSubmissionStatus } from '../services/api'
 import type { StatusResponse } from '../types'
+import { useTheme } from '../hooks/useTheme'
 
 const StatusPage: React.FC = () => {
   const { id } = useParams<{ id: string }>()
+  const { theme, toggleTheme } = useTheme()
   const [status, setStatus] = useState<StatusResponse | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -83,24 +85,38 @@ const StatusPage: React.FC = () => {
   const getStatusColor = () => {
     switch (status?.status) {
       case 'pending':
-        return 'text-yellow-600 bg-yellow-50'
+        return theme === 'dark'
+          ? 'text-yellow-400 bg-yellow-900/20 border border-yellow-700/30'
+          : 'text-yellow-600 bg-yellow-50'
       case 'processing':
-        return 'text-blue-600 bg-blue-50'
+        return theme === 'dark'
+          ? 'text-blue-400 bg-blue-900/20 border border-blue-700/30'
+          : 'text-blue-600 bg-blue-50'
       case 'completed':
-        return 'text-green-600 bg-green-50'
+        return theme === 'dark'
+          ? 'text-green-400 bg-green-900/20 border border-green-700/30'
+          : 'text-green-600 bg-green-50'
       case 'failed':
-        return 'text-red-600 bg-red-50'
+        return theme === 'dark'
+          ? 'text-red-400 bg-red-900/20 border border-red-700/30'
+          : 'text-red-600 bg-red-50'
       default:
-        return 'text-gray-600 bg-gray-50'
+        return theme === 'dark'
+          ? 'text-gray-400 bg-gray-900/20 border border-gray-700/30'
+          : 'text-gray-600 bg-gray-50'
     }
   }
 
   if (loading && !status) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
-          <RefreshCw className="w-12 h-12 text-blue-500 animate-spin mx-auto mb-4" />
-          <p className="text-gray-600">正在加载状态...</p>
+          <RefreshCw className={`w-12 h-12 animate-spin mx-auto mb-4 ${
+            theme === 'dark' ? 'text-blue-400' : 'text-blue-500'
+          }`} />
+          <p className={theme === 'dark' ? 'text-gradient-secondary' : 'text-gray-600'}>
+            正在加载状态...
+          </p>
         </div>
       </div>
     )
@@ -108,15 +124,26 @@ const StatusPage: React.FC = () => {
 
   if (error) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="bg-white rounded-lg shadow-lg p-8 max-w-md w-full mx-4">
+      <div className="min-h-screen flex items-center justify-center">
+        <div className={`rounded-lg shadow-lg p-8 max-w-md w-full mx-4 ${
+          theme === 'dark' ? 'gradient-card' : 'bg-white'
+        }`}>
           <div className="text-center">
-            <XCircle className="w-16 h-16 text-red-500 mx-auto mb-4" />
-            <h2 className="text-xl font-semibold text-gray-900 mb-2">获取状态失败</h2>
-            <p className="text-gray-600 mb-4">{error}</p>
+            <XCircle className={`w-16 h-16 mx-auto mb-4 ${
+              theme === 'dark' ? 'text-red-400' : 'text-red-500'
+            }`} />
+            <h2 className={`text-xl font-semibold mb-2 ${
+              theme === 'dark' ? 'text-gradient-primary' : 'text-gray-900'
+            }`}>获取状态失败</h2>
+            <p className={`mb-4 ${
+              theme === 'dark' ? 'text-gradient-secondary' : 'text-gray-600'
+            }`}>{error}</p>
             <button
               onClick={fetchStatus}
-              className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+              className={theme === 'dark'
+                ? 'btn-gradient px-4 py-2 rounded-md'
+                : 'px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700'
+              }
             >
               重试
             </button>
@@ -127,11 +154,29 @@ const StatusPage: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 py-8">
+    <div className="min-h-screen py-8">
       <div className="max-w-4xl mx-auto px-4">
-        <div className="bg-white rounded-lg shadow-lg p-8">
+        {/* Theme toggle button */}
+        <div className="flex justify-end mb-4">
+          <button
+            onClick={toggleTheme}
+            className={`p-2 rounded-lg transition-colors duration-200 ${
+              theme === 'dark'
+                ? 'bg-gradient-accent text-gradient-primary hover:bg-gradient-highlight'
+                : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+            }`}
+          >
+            {theme === 'dark' ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
+          </button>
+        </div>
+
+        <div className={`rounded-lg shadow-lg p-8 ${
+          theme === 'dark' ? 'gradient-card' : 'bg-white'
+        }`}>
           <div className="text-center mb-8">
-            <h1 className="text-3xl font-bold text-gray-900 mb-4">提交状态</h1>
+            <h1 className={`text-3xl font-bold mb-4 ${
+              theme === 'dark' ? 'text-gradient-primary' : 'text-gray-900'
+            }`}>提交状态</h1>
 
             <div className="flex justify-center mb-6">
               {getStatusIcon()}
@@ -143,30 +188,50 @@ const StatusPage: React.FC = () => {
           </div>
 
           {/* 状态详情 */}
-          <div className="bg-gray-50 rounded-lg p-6 mb-6">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">详细信息</h3>
+          <div className={`rounded-lg p-6 mb-6 ${
+            theme === 'dark'
+              ? 'bg-gradient-start/50 border border-gradient-accent/30'
+              : 'bg-gray-50'
+          }`}>
+            <h3 className={`text-lg font-semibold mb-4 ${
+              theme === 'dark' ? 'text-gradient-primary' : 'text-gray-900'
+            }`}>详细信息</h3>
             <div className="space-y-3">
               <div className="flex justify-between">
-                <span className="text-gray-600">提交ID:</span>
-                <span className="font-mono text-sm">{id}</span>
+                <span className={theme === 'dark' ? 'text-gradient-secondary' : 'text-gray-600'}>
+                  提交ID:
+                </span>
+                <span className={`font-mono text-sm ${
+                  theme === 'dark' ? 'text-gradient-primary' : 'text-gray-900'
+                }`}>{id}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-gray-600">状态:</span>
+                <span className={theme === 'dark' ? 'text-gradient-secondary' : 'text-gray-600'}>
+                  状态:
+                </span>
                 <span className={`font-medium ${getStatusColor().split(' ')[0]}`}>
                   {getStatusText()}
                 </span>
               </div>
               <div className="flex justify-between">
-                <span className="text-gray-600">创建时间:</span>
-                <span className="text-sm">
+                <span className={theme === 'dark' ? 'text-gradient-secondary' : 'text-gray-600'}>
+                  创建时间:
+                </span>
+                <span className={`text-sm ${
+                  theme === 'dark' ? 'text-gradient-primary' : 'text-gray-900'
+                }`}>
                   {status?.createdAt ? new Date(status.createdAt).toLocaleString() : '-'}
                 </span>
               </div>
 
               {status?.changeId && (
                 <div className="flex justify-between">
-                  <span className="text-gray-600">Change ID:</span>
-                  <span className="font-mono text-sm">{status.changeId}</span>
+                  <span className={theme === 'dark' ? 'text-gradient-secondary' : 'text-gray-600'}>
+                    Change ID:
+                  </span>
+                  <span className={`font-mono text-sm ${
+                    theme === 'dark' ? 'text-gradient-primary' : 'text-gray-900'
+                  }`}>{status.changeId}</span>
                 </div>
               )}
             </div>
@@ -174,18 +239,31 @@ const StatusPage: React.FC = () => {
 
           {/* Gerrit链接 */}
           {status?.changeUrl && (
-            <div className="bg-green-50 border border-green-200 rounded-lg p-6 mb-6">
-              <h3 className="text-lg font-semibold text-green-900 mb-4">Gerrit Change</h3>
+            <div className={`border rounded-lg p-6 mb-6 ${
+              theme === 'dark'
+                ? 'bg-green-900/20 border-green-700/30'
+                : 'bg-green-50 border-green-200'
+            }`}>
+              <h3 className={`text-lg font-semibold mb-4 ${
+                theme === 'dark' ? 'text-green-400' : 'text-green-900'
+              }`}>Gerrit Change</h3>
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-green-700 mb-2">您的patch已成功提交到AOSP Gerrit</p>
-                  <p className="text-sm text-green-600">点击链接查看详细信息并跟踪审核进度</p>
+                  <p className={`mb-2 ${
+                    theme === 'dark' ? 'text-green-300' : 'text-green-700'
+                  }`}>您的patch已成功提交到AOSP Gerrit</p>
+                  <p className={`text-sm ${
+                    theme === 'dark' ? 'text-green-400' : 'text-green-600'
+                  }`}>点击链接查看详细信息并跟踪审核进度</p>
                 </div>
                 <a
                   href={status.changeUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700"
+                  className={theme === 'dark'
+                    ? 'btn-gradient inline-flex items-center px-4 py-2 rounded-md'
+                    : 'inline-flex items-center px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700'
+                  }
                 >
                   <span>查看Change</span>
                   <ExternalLink className="w-4 h-4 ml-2" />
@@ -196,9 +274,17 @@ const StatusPage: React.FC = () => {
 
           {/* 错误信息 */}
           {status?.error && (
-            <div className="bg-red-50 border border-red-200 rounded-lg p-6 mb-6">
-              <h3 className="text-lg font-semibold text-red-900 mb-4">错误信息</h3>
-              <p className="text-red-700">{status.error}</p>
+            <div className={`border rounded-lg p-6 mb-6 ${
+              theme === 'dark'
+                ? 'bg-red-900/20 border-red-700/30'
+                : 'bg-red-50 border-red-200'
+            }`}>
+              <h3 className={`text-lg font-semibold mb-4 ${
+                theme === 'dark' ? 'text-red-400' : 'text-red-900'
+              }`}>错误信息</h3>
+              <p className={theme === 'dark' ? 'text-red-300' : 'text-red-700'}>
+                {status.error}
+              </p>
             </div>
           )}
 
@@ -207,7 +293,13 @@ const StatusPage: React.FC = () => {
             <button
               onClick={fetchStatus}
               disabled={loading}
-              className="inline-flex items-center px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 disabled:opacity-50"
+              className={`
+                inline-flex items-center px-4 py-2 rounded-md disabled:opacity-50
+                ${theme === 'dark'
+                  ? 'btn-gradient'
+                  : 'bg-gray-600 text-white hover:bg-gray-700'
+                }
+              `}
             >
               <RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
               <span>刷新状态</span>
@@ -215,7 +307,13 @@ const StatusPage: React.FC = () => {
 
             <a
               href="/"
-              className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+              className={`
+                inline-flex items-center px-4 py-2 rounded-md
+                ${theme === 'dark'
+                  ? 'btn-gradient'
+                  : 'bg-blue-600 text-white hover:bg-blue-700'
+                }
+              `}
             >
               返回首页
             </a>
