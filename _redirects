@@ -1,6 +1,6 @@
 # Cloudflare Pages 重定向配置
 # API 请求转发到你的 Cloudflare Worker
-/api/* https://aosp-patch-service.angersax.workers.dev/api/:splat 200
+/api/* https://patchx-service.angersax.workers.dev/api/:splat 200
 
 # 所有其他请求都交给前端应用
 /* /index.html 200

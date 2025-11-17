@@ -377,7 +377,7 @@ wrangler pages deploy dist --project-name=patchx
 
 ### 部署后的服务地址
 - **前端 (Cloudflare Pages)**: `https://patchx.pages.dev`
-- **后端 API (Cloudflare Workers)**: `https://aosp-patch-service.angersax.workers.dev`
+- **后端 API (Cloudflare Workers)**: `https://patchx-service.angersax.workers.dev`
 
 ### 自动重定向配置
 前端通过 `_redirects` 文件自动将 `/api/*` 请求转发到后端 Workers，无需修改前端代码。
