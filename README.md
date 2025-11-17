@@ -1,153 +1,155 @@
 # PatchX
 
-一个用于简化 Android 开源项目（AOSP）代码贡献流程的 Web 服务，支持 AI 驱动的 patch 冲突解决。
+**English** | [中文](README_cn.md)
 
-## 🚀 功能特性
+A web service that streamlines contributing code to the Android Open Source Project (AOSP), with AI‑driven patch conflict resolution.
 
-- 📤 **文件上传**: 支持拖拽上传 Git patch 文件
-- ✅ **格式验证**: 自动验证 patch 文件格式
-- 🤖 **AI冲突解决**: 智能分析和解决代码冲突
-- 🔄 **自动提交**: 自动提交到 Google AOSP Gerrit
-- 📊 **状态跟踪**: 实时显示提交进度和结果
-- 📱 **响应式设计**: 支持桌面和移动设备
+## 🚀 Features
 
-## 🛠️ 技术栈
+- 📤 File upload: drag and drop Git patch files
+- ✅ Format validation: automatically validate patch file format
+- 🤖 AI conflict resolution: intelligently analyze and resolve code conflicts
+- 🔄 Auto submission: push to Google AOSP Gerrit
+- 📊 Status tracking: real‑time submission progress and results
+- 📱 Responsive design: desktop and mobile support
 
-- **前端**: React 18 + TypeScript + Tailwind CSS
-- **后端**: Cloudflare Workers + TypeScript
-- **AI集成**: 支持 OpenAI、Anthropic 等第三方大模型
-- **存储**: Cloudflare KV
-- **部署**: Cloudflare Workers + Pages
+## 🛠️ Tech Stack
 
-## 🤖 AI 冲突解决特性
+- Frontend: React 18 + TypeScript + Tailwind CSS
+- Backend: Cloudflare Workers + TypeScript
+- AI integration: OpenAI, Anthropic, and any OpenAI‑compatible providers
+- Storage: Cloudflare KV
+- Deployment: Cloudflare Workers + Pages
 
-### 支持的 AI 提供商
-- **OpenAI**: GPT-4, GPT-3.5 Turbo
-- **Anthropic**: Claude 3 Sonnet, Claude 3 Haiku
-- **自定义**: 支持 OpenAI API 兼容的任何提供商
+## 🤖 AI Conflict Resolution
 
-### AI 功能
-- **智能冲突检测**: 自动识别 patch 中的代码冲突
-- **多提供商对比**: 同时使用多个 AI 提供商，选择最佳解决方案
-- **置信度评估**: AI 解决方案的可信度评分
-- **人工审查建议**: 标记需要人工确认的复杂冲突
+### Supported AI Providers
+- OpenAI: GPT‑4, GPT‑3.5 Turbo
+- Anthropic: Claude 3 Sonnet, Claude 3 Haiku
+- Custom: any provider compatible with the OpenAI API
 
-## 📦 安装和运行
+### AI Capabilities
+- Intelligent conflict detection
+- Multi‑provider comparison to select the best solution
+- Confidence scoring for AI solutions
+- Human review suggestions for complex conflicts
 
-### 本地开发
+## 📦 Installation & Run
 
-本项目采用前后端分离架构，需要同时运行两个开发服务器：
+### Local Development
 
-#### 终端 1: 前端开发服务器（Vite）
+This project uses a decoupled frontend and backend; run two development servers:
+
+#### Terminal 1: Frontend Dev Server (Vite)
 ```bash
-# 安装依赖
+# Install dependencies
 npm install
 
-# 格式化
+# Format
 npm run lint -- --fix
 
-# 启动前端开发服务器
+# Start frontend dev server
 npm run dev
-# 访问: http://localhost:5173
+# Visit: http://localhost:5173
 ```
 
-#### 终端 2: 后端 API 服务器（Wrangler）
+#### Terminal 2: Backend API Server (Wrangler)
 ```bash
-# 构建 Cloudflare Worker（API）
+# Build Cloudflare Worker (API)
 npm run build:worker
 
-# 启动后端 API 开发服务器
+# Start backend API dev server
 wrangler dev
-# API 端点: http://127.0.0.1:8787
+# API endpoint: http://127.0.0.1:8787
 ```
 
-**注意**: 两个服务器必须同时运行才能完整使用所有功能。前端通过 API 调用与后端通信。
+Note: Both servers must run to use all features. The frontend communicates with the backend via API calls.
 
-### 代码检查
+### Code Checks
 ```bash
-# 运行 ESLint 检查
+# Run ESLint
 npm run lint
 
-# 运行 TypeScript 类型检查
+# Run TypeScript type checks
 npm run check
 ```
 
-### 构建和部署
+### Build & Deploy
 
 ```bash
-# 构建项目
+# Build frontend
 npm run build
 
-# 构建 Cloudflare Worker（API）
+# Build Cloudflare Worker (API)
 npm run build:worker
 ```
 
-### Cloudflare Workers 开发
+### Cloudflare Workers Development
 
 ```bash
-# 安装 Wrangler
+# Install Wrangler
 npm install -g wrangler
 
-# 登录 Cloudflare
+# Login to Cloudflare
 wrangler login
 
-# 本地开发（API Worker）
+# Local development (API Worker)
 npm run build:worker
 wrangler dev
 
-# 部署到生产环境（API Worker）
+# Deploy to production (API Worker)
 npm run build:worker
 wrangler deploy
 ```
 
-## 🔄 开发服务器说明
+## 🔄 Dev Servers
 
-### 服务器区别
+### Server Differences
 
-| 服务器 | 端口 | 用途 | 访问地址 |
-|--------|------|------|----------|
-| **Vite Dev Server** | 5173 | 前端 React 应用 | http://localhost:5173 |
-| **Wrangler Dev Server** | 8787 | 后端 API Worker | http://127.0.0.1:8787 |
+| Server | Port | Purpose | Address |
+|--------|------|---------|---------|
+| Vite Dev Server | 5173 | Frontend React app | http://localhost:5173 |
+| Wrangler Dev Server | 8787 | Backend API Worker | http://127.0.0.1:8787 |
 
-### 常见问题
+### FAQ
 
-**Q: 为什么访问 `http://127.0.0.1:8787` 显示 404？**
-A: Wrangler 服务器只提供 API 端点，没有根路径路由。请访问具体的 API 端点，如：
+**Q: Why does `http://127.0.0.1:8787` show 404?**
+A: The Wrangler dev server only exposes API routes and has no root path route. Access specific API endpoints such as:
 - `http://127.0.0.1:8787/api/ai/providers`
 - `http://127.0.0.1:8787/api/upload`
 
-**Q: 如何测试 API 是否正常工作？**
-A: 可以使用以下命令测试 API：
+**Q: How can I test whether the API works?**
+Use the following commands:
 ```bash
-# 测试 AI 提供商列表
+# Test AI providers list (PowerShell)
 Invoke-WebRequest -Uri http://127.0.0.1:8787/api/ai/providers -Method GET
 
-# 或者使用 curl（如果已安装）
+# Or curl (if installed)
 curl http://127.0.0.1:8787/api/ai/providers
 ```
 
-## 🔧 AI 配置
+## 🔧 AI Configuration
 
-### 环境变量配置
+### Environment Variables
 
-在 Cloudflare Workers 中设置以下 AI 相关的环境变量：
+Set the following AI‑related environment variables in Cloudflare Workers:
 
 ```bash
-# OpenAI 配置
+# OpenAI
 OPENAI_API_KEY=your-openai-api-key
 OPENAI_BASE_URL=https://api.openai.com/v1
 OPENAI_MODEL=gpt-4
 OPENAI_MAX_TOKENS=2000
 OPENAI_TEMPERATURE=0.1
 
-# Anthropic 配置
+# Anthropic
 ANTHROPIC_API_KEY=your-anthropic-api-key
 ANTHROPIC_BASE_URL=https://api.anthropic.com/v1
 ANTHROPIC_MODEL=claude-3-sonnet-20240229
 ANTHROPIC_MAX_TOKENS=2000
 ANTHROPIC_TEMPERATURE=0.1
 
-# 自定义 AI 提供商（兼容OpenAI API）
+# Custom AI provider (OpenAI API compatible)
 CUSTOM_AI_BASE_URL=https://your-custom-ai-provider.com/v1
 CUSTOM_AI_API_KEY=your-custom-api-key
 CUSTOM_AI_MODEL=gpt-3.5-turbo
@@ -155,31 +157,31 @@ CUSTOM_AI_MAX_TOKENS=2000
 CUSTOM_AI_TEMPERATURE=0.1
 ```
 
-### Gerrit 配置
+### Gerrit Configuration
 
-在 Cloudflare Workers 中配置与 AOSP Gerrit 交互所需的环境变量与密钥：
+Configure environment variables and secrets needed to interact with AOSP Gerrit in Cloudflare Workers:
 
 ```bash
-# Gerrit 基本配置（wrangler.toml 中 vars）
+# Gerrit basics (vars in wrangler.toml)
 GERRIT_BASE_URL=https://android-review.googlesource.com
 MAX_FILE_SIZE=10485760           # 10MB
-RATE_LIMIT_WINDOW=900000         # 15分钟（毫秒）
-RATE_LIMIT_MAX=10                # 窗口内最大请求数
+RATE_LIMIT_WINDOW=900000         # 15 minutes (ms)
+RATE_LIMIT_MAX=10                # max requests per window
 
-# Gerrit 凭据（使用 Wrangler Secrets 存储）
-# 这些是敏感信息，务必使用 secrets 管理
+# Gerrit credentials (store via Wrangler Secrets)
+# Sensitive information must be managed as secrets
 wrangler secret put GERRIT_USERNAME
 wrangler secret put GERRIT_PASSWORD
 
-# AI 提供商密钥（同样使用 secrets 管理）
+# AI provider secrets (also via secrets)
 wrangler secret put OPENAI_API_KEY
 wrangler secret put ANTHROPIC_API_KEY
 wrangler secret put CUSTOM_AI_API_KEY
 ```
 
-### KV 命名空间
+### KV Namespaces
 
-确保在 `wrangler.toml` 中绑定 KV 命名空间：
+Bind KV namespaces in `wrangler.toml`:
 
 ```toml
 [env.production]
@@ -188,19 +190,19 @@ kv_namespaces = [
 ]
 ```
 
-### AI 功能启用
+### AI Feature Activation
 
-AI 冲突解决功能会根据配置自动启用：
+AI conflict resolution is enabled based on configuration:
 
-1. **自动检测**: 系统会自动检测可用的 AI 提供商
-2. **多提供商模式**: 可以同时配置多个 AI 提供商进行对比
-3. **智能选择**: 系统会选择置信度最高的 AI 解决方案
+1. Auto detection of available providers
+2. Multi‑provider mode for comparison
+3. Smart selection of the highest‑confidence solution
 
-## 📋 API 文档
+## 📋 API Documentation
 
-### AI 冲突解决 API
+### AI Conflict Resolution API
 
-#### 解决代码冲突
+#### Resolve code conflicts
 ```
 POST /api/ai/resolve-conflict
 ```
@@ -208,10 +210,10 @@ POST /api/ai/resolve-conflict
 Request:
 ```json
 {
-  "originalCode": "原始代码内容",
-  "incomingCode": "传入的 patch 代码",
-  "currentCode": "当前代码内容",
-  "filePath": "文件路径",
+  "originalCode": "Original code content",
+  "incomingCode": "Patch code",
+  "currentCode": "Current code content",
+  "filePath": "File path",
   "provider": "openai",
   "useMultipleProviders": true
 }
@@ -222,25 +224,25 @@ Response:
 {
   "success": true,
   "data": {
-    "resolvedCode": "解决后的代码",
-    "explanation": "解决策略解释",
+    "resolvedCode": "Resolved code",
+    "explanation": "Resolution strategy explanation",
     "confidence": 0.85,
-    "suggestions": ["建议1", "建议2"],
+    "suggestions": ["Suggestion 1", "Suggestion 2"],
     "requiresManualReview": false
   }
 }
 ```
 
-### Patch 上传与提交 API
+### Patch Upload & Submission API
 
-#### 上传 Patch 文件
+#### Upload patch file
 ```
 POST /api/upload
 ```
 
-Request（`multipart/form-data`）：
-- `file`: Git patch 文件
-- `project`: 目标项目（例如 `platform/frameworks/base`）
+Request (`multipart/form-data`):
+- `file`: Git patch file
+- `project`: Target project (e.g., `platform/frameworks/base`)
 
 Response:
 ```json
@@ -249,27 +251,27 @@ Response:
   "data": {
     "uploadId": "<id>",
     "status": "success",
-    "message": "文件上传成功"
+    "message": "File uploaded successfully"
   }
 }
 ```
 
-#### 创建提交并异步推送到 Gerrit
+#### Create submission and push to Gerrit asynchronously
 ```
 POST /api/submit
 ```
 
-Request（`application/json`）：
+Request (`application/json`):
 ```json
 {
   "uploadId": "<id>",
-  "subject": "提交标题",
-  "description": "提交描述",
+  "subject": "Commit title",
+  "description": "Commit description",
   "branch": "refs/heads/master"
 }
 ```
 
-Response：
+Response:
 ```json
 {
   "success": true,
@@ -280,12 +282,12 @@ Response：
 }
 ```
 
-#### 查询提交状态
+#### Query submission status
 ```
 GET /api/status/<submissionId>
 ```
 
-Response：
+Response:
 ```json
 {
   "success": true,
@@ -299,7 +301,7 @@ Response：
 }
 ```
 
-#### 获取 AI 提供商列表
+#### Get AI providers list
 ```
 GET /api/ai/providers
 ```
@@ -311,12 +313,12 @@ Response:
   "data": {
     "enabled": true,
     "providers": ["openai", "anthropic", "custom"],
-    "message": "AI 冲突解决已启用"
+    "message": "AI conflict resolution is enabled"
   }
 }
 ```
 
-#### 测试 AI 提供商
+#### Test AI providers
 ```
 POST /api/ai/test-providers
 ```
@@ -342,69 +344,69 @@ Response:
 }
 ```
 
-## 🚀 部署步骤
+## 🚀 Deployment Steps
 
-### 1. 基础配置
-- 创建 Cloudflare 账户
-- 安装 Wrangler CLI
-- 配置 KV 命名空间
+### 1. Basics
+- Create a Cloudflare account
+- Install the Wrangler CLI
+- Configure KV namespaces
 
-### 2. AI 提供商配置
-- 获取 OpenAI API 密钥
-- 获取 Anthropic API 密钥（可选）
-- 配置自定义 AI 提供商（可选）
+### 2. AI Provider Setup
+- Obtain an OpenAI API key
+- Obtain an Anthropic API key (optional)
+- Configure a custom AI provider (optional)
 
-### 3. 环境变量设置
-在 Cloudflare Workers 设置页面添加所有必要的环境变量。
+### 3. Environment Variables
+Add all required environment variables in the Cloudflare Workers settings.
 
-### 4. 后端部署（Cloudflare Workers）
+### 4. Backend Deployment (Cloudflare Workers)
 ```bash
-# 构建 Worker
+# Build the Worker
 npm run build:worker
 
-# 部署到 Cloudflare Workers
+# Deploy to Cloudflare Workers
 wrangler deploy
 ```
 
-### 5. 前端部署（Cloudflare Pages）
+### 5. Frontend Deployment (Cloudflare Pages)
 ```bash
-# 构建前端
+# Build the frontend
 npm run build
 
-# 部署到 Cloudflare Pages
+# Deploy to Cloudflare Pages
 wrangler pages deploy dist --project-name=patchx
 ```
 
-### 部署后的服务地址
-- **前端（Cloudflare Pages）**: `https://patchx.pages.dev`
-- **后端 API（Cloudflare Workers）**: `https://patchx-service.angersax.workers.dev`
+### Post‑deployment URLs
+- Frontend (Cloudflare Pages): `https://patchx.pages.dev`
+- Backend API (Cloudflare Workers): `https://patchx-service.angersax.workers.dev`
 
-### 自动重定向配置
-前端通过 `_redirects` 文件自动将 `/api/*` 请求转发到后端 Workers，无需修改前端代码。
+### Automatic redirects
+The frontend uses a `_redirects` file to forward `/api/*` requests to the backend Workers. No frontend code changes are required.
 
-## 💡 使用建议
+## 💡 Tips
 
-### AI 冲突解决最佳实践
+### AI Conflict Resolution Best Practices
 
-1. **多提供商对比**: 启用多个 AI 提供商以获得更好的解决方案
-2. **置信度评估**: 关注 AI 解决方案的置信度评分
-3. **人工审查**: 对于复杂冲突，始终进行人工审查
-4. **测试验证**: 应用 AI 解决方案后，充分测试代码功能
+1. Enable multiple AI providers for better solutions
+2. Pay attention to confidence scores
+3. Perform human review for complex conflicts
+4. Thoroughly test after applying AI solutions
 
-### 性能优化
+### Performance Optimization
 
-1. **缓存策略**: 对相似的冲突结果进行缓存
-2. **超时设置**: 为 AI 调用设置合理的超时时间
-3. **并发控制**: 限制同时进行的 AI 请求数量
-4. **错误重试**: 实现智能的错误重试机制
+1. Cache results for similar conflicts
+2. Set reasonable timeouts for AI calls
+3. Limit concurrency for AI requests
+4. Implement smart retry logic
 
-## 🔒 安全考虑
+## 🔒 Security Considerations
 
-- **API 密钥保护**: 所有 AI 提供商的 API 密钥都存储在环境变量中
-- **请求限制**: 实现速率限制防止滥用
-- **内容过滤**: 对输入和输出进行适当的内容检查
-- **审计日志**: 记录所有 AI 冲突解决操作
+- API key protection: store all AI provider keys in environment variables
+- Rate limiting: prevent abuse with request limits
+- Content filtering: validate input and output appropriately
+- Audit logs: record all AI conflict resolution operations
 
-## 📄 许可证
+## 📄 License
 
-MIT License
+Apache-2.0
