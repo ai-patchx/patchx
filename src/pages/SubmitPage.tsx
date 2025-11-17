@@ -3,6 +3,7 @@ import { FileText, Settings, Send, Moon, Sun } from 'lucide-react'
 import FileUpload from '../components/FileUpload'
 import useFileUploadStore from '../stores/fileUploadStore'
 import { useTheme } from '../hooks/useTheme'
+import packageInfo from '../../package.json'
 
 const AOSP_PROJECTS = [
   { value: 'platform/frameworks/base', label: 'frameworks/base' },
@@ -102,7 +103,7 @@ const SubmitPage: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen py-8">
+    <div className="min-h-screen py-8 relative">
       <div className="max-w-4xl mx-auto px-4">
         {/* Theme toggle button */}
         <div className="flex justify-end mb-4">
@@ -269,6 +270,17 @@ const SubmitPage: React.FC = () => {
               </button>
             </div>
           </form>
+        </div>
+      </div>
+
+      {/* Version and build time information - Bottom left */}
+      <div className="fixed bottom-4 left-4 z-10">
+      <div className={`text-xs space-y-1 ${
+          theme === 'dark' ? 'text-gradient-secondary opacity-70' : 'text-gray-500'
+        }`}>
+          <div>版本: v{packageInfo.version}</div>
+          <div>提交: {import.meta.env.GIT_HASH}</div>
+          <div>构建时间: {new Date(import.meta.env.BUILD_TIME).toLocaleString('zh-CN')}</div>
         </div>
       </div>
     </div>

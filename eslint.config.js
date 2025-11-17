@@ -5,7 +5,25 @@ import reactRefresh from 'eslint-plugin-react-refresh'
 import tseslint from 'typescript-eslint'
 
 export default tseslint.config(
-  { ignores: ['dist', 'node_modules', '.wrangler', '.vercel'] },
+  {
+    ignores: [
+      'dist',
+      'node_modules',
+      '.build',
+      '.wrangler',
+      '.vercel',
+      '.vscode',
+      '.idea',
+      '.env',
+      '.env.local',
+      '.DS_Store',
+      'Thumbs.db',
+      '**/*.log',
+      '**/npm-debug.log*',
+      '**/yarn-debug.log*',
+      '**/yarn-error.log*',
+    ],
+  },
   {
     extends: [js.configs.recommended, ...tseslint.configs.recommended],
     files: ['**/*.{js,ts,tsx}'],
