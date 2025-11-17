@@ -1,13 +1,13 @@
-# AOSP Patch Submission Service
+# PatchX
 
-一个用于简化Android开源项目(AOSP)代码贡献流程的Web服务，支持AI驱动的patch冲突解决。
+一个用于简化 Android 开源项目（AOSP）代码贡献流程的 Web 服务，支持 AI 驱动的 patch 冲突解决。
 
 ## 🚀 功能特性
 
-- 📤 **文件上传**: 支持拖拽上传Git patch文件
-- ✅ **格式验证**: 自动验证patch文件格式
+- 📤 **文件上传**: 支持拖拽上传 Git patch 文件
+- ✅ **格式验证**: 自动验证 patch 文件格式
 - 🤖 **AI冲突解决**: 智能分析和解决代码冲突
-- 🔄 **自动提交**: 自动提交到Google AOSP Gerrit
+- 🔄 **自动提交**: 自动提交到 Google AOSP Gerrit
 - 📊 **状态跟踪**: 实时显示提交进度和结果
 - 📱 **响应式设计**: 支持桌面和移动设备
 
@@ -15,21 +15,21 @@
 
 - **前端**: React 18 + TypeScript + Tailwind CSS
 - **后端**: Cloudflare Workers + TypeScript
-- **AI集成**: 支持OpenAI、Anthropic等第三方大模型
+- **AI集成**: 支持 OpenAI、Anthropic 等第三方大模型
 - **存储**: Cloudflare KV
 - **部署**: Cloudflare Workers + Pages
 
-## 🤖 AI冲突解决特性
+## 🤖 AI 冲突解决特性
 
-### 支持的AI提供商
+### 支持的 AI 提供商
 - **OpenAI**: GPT-4, GPT-3.5 Turbo
 - **Anthropic**: Claude 3 Sonnet, Claude 3 Haiku
-- **自定义**: 支持OpenAI API兼容的任何提供商
+- **自定义**: 支持 OpenAI API 兼容的任何提供商
 
-### AI功能
-- **智能冲突检测**: 自动识别patch中的代码冲突
-- **多提供商对比**: 同时使用多个AI提供商，选择最佳解决方案
-- **置信度评估**: AI解决方案的可信度评分
+### AI 功能
+- **智能冲突检测**: 自动识别 patch 中的代码冲突
+- **多提供商对比**: 同时使用多个 AI 提供商，选择最佳解决方案
+- **置信度评估**: AI 解决方案的可信度评分
 - **人工审查建议**: 标记需要人工确认的复杂冲突
 
 ## 📦 安装和运行
@@ -38,7 +38,7 @@
 
 本项目采用前后端分离架构，需要同时运行两个开发服务器：
 
-#### 终端 1: 前端开发服务器 (Vite)
+#### 终端 1: 前端开发服务器（Vite）
 ```bash
 # 安装依赖
 npm install
@@ -51,7 +51,7 @@ npm run dev
 # 访问: http://localhost:5173
 ```
 
-#### 终端 2: 后端 API 服务器 (Wrangler)
+#### 终端 2: 后端 API 服务器（Wrangler）
 ```bash
 # 构建 Cloudflare Worker（API）
 npm run build:worker
@@ -82,13 +82,13 @@ npm run build
 npm run build:worker
 ```
 
-### Cloudflare Workers开发
+### Cloudflare Workers 开发
 
 ```bash
-# 安装Wrangler
+# 安装 Wrangler
 npm install -g wrangler
 
-# 登录Cloudflare
+# 登录 Cloudflare
 wrangler login
 
 # 本地开发（API Worker）
@@ -106,48 +106,48 @@ wrangler deploy
 
 | 服务器 | 端口 | 用途 | 访问地址 |
 |--------|------|------|----------|
-| **Vite Dev Server** | 5173 | 前端React应用 | http://localhost:5173 |
-| **Wrangler Dev Server** | 8787 | 后端API Worker | http://127.0.0.1:8787 |
+| **Vite Dev Server** | 5173 | 前端 React 应用 | http://localhost:5173 |
+| **Wrangler Dev Server** | 8787 | 后端 API Worker | http://127.0.0.1:8787 |
 
 ### 常见问题
 
-**Q: 为什么访问 `http://127.0.0.1:8787` 显示404？**
-A: Wrangler服务器只提供API端点，没有根路径路由。请访问具体的API端点，如：
+**Q: 为什么访问 `http://127.0.0.1:8787` 显示 404？**
+A: Wrangler 服务器只提供 API 端点，没有根路径路由。请访问具体的 API 端点，如：
 - `http://127.0.0.1:8787/api/ai/providers`
 - `http://127.0.0.1:8787/api/upload`
 
-**Q: 如何测试API是否正常工作？**
-A: 可以使用以下命令测试API：
+**Q: 如何测试 API 是否正常工作？**
+A: 可以使用以下命令测试 API：
 ```bash
-# 测试AI提供商列表
+# 测试 AI 提供商列表
 Invoke-WebRequest -Uri http://127.0.0.1:8787/api/ai/providers -Method GET
 
-# 或者使用curl（如果已安装）
+# 或者使用 curl（如果已安装）
 curl http://127.0.0.1:8787/api/ai/providers
 ```
 
-## 🔧 AI配置
+## 🔧 AI 配置
 
 ### 环境变量配置
 
-在Cloudflare Workers中设置以下AI相关的环境变量：
+在 Cloudflare Workers 中设置以下 AI 相关的环境变量：
 
 ```bash
-# OpenAI配置
+# OpenAI 配置
 OPENAI_API_KEY=your-openai-api-key
 OPENAI_BASE_URL=https://api.openai.com/v1
 OPENAI_MODEL=gpt-4
 OPENAI_MAX_TOKENS=2000
 OPENAI_TEMPERATURE=0.1
 
-# Anthropic配置
+# Anthropic 配置
 ANTHROPIC_API_KEY=your-anthropic-api-key
 ANTHROPIC_BASE_URL=https://api.anthropic.com/v1
 ANTHROPIC_MODEL=claude-3-sonnet-20240229
 ANTHROPIC_MAX_TOKENS=2000
 ANTHROPIC_TEMPERATURE=0.1
 
-# 自定义AI提供商（兼容OpenAI API）
+# 自定义 AI 提供商（兼容OpenAI API）
 CUSTOM_AI_BASE_URL=https://your-custom-ai-provider.com/v1
 CUSTOM_AI_API_KEY=your-custom-api-key
 CUSTOM_AI_MODEL=gpt-3.5-turbo
@@ -155,9 +155,9 @@ CUSTOM_AI_MAX_TOKENS=2000
 CUSTOM_AI_TEMPERATURE=0.1
 ```
 
-### Gerrit配置
+### Gerrit 配置
 
-在Cloudflare Workers中配置与AOSP Gerrit交互所需的环境变量与密钥：
+在 Cloudflare Workers 中配置与 AOSP Gerrit 交互所需的环境变量与密钥：
 
 ```bash
 # Gerrit 基本配置（wrangler.toml 中 vars）
@@ -188,17 +188,17 @@ kv_namespaces = [
 ]
 ```
 
-### AI功能启用
+### AI 功能启用
 
-AI冲突解决功能会根据配置自动启用：
+AI 冲突解决功能会根据配置自动启用：
 
-1. **自动检测**: 系统会自动检测可用的AI提供商
-2. **多提供商模式**: 可以同时配置多个AI提供商进行对比
-3. **智能选择**: 系统会选择置信度最高的AI解决方案
+1. **自动检测**: 系统会自动检测可用的 AI 提供商
+2. **多提供商模式**: 可以同时配置多个 AI 提供商进行对比
+3. **智能选择**: 系统会选择置信度最高的 AI 解决方案
 
-## 📋 API文档
+## 📋 API 文档
 
-### AI冲突解决API
+### AI 冲突解决 API
 
 #### 解决代码冲突
 ```
@@ -209,7 +209,7 @@ Request:
 ```json
 {
   "originalCode": "原始代码内容",
-  "incomingCode": "传入的patch代码",
+  "incomingCode": "传入的 patch 代码",
   "currentCode": "当前代码内容",
   "filePath": "文件路径",
   "provider": "openai",
@@ -299,7 +299,7 @@ Response：
 }
 ```
 
-#### 获取AI提供商列表
+#### 获取 AI 提供商列表
 ```
 GET /api/ai/providers
 ```
@@ -311,12 +311,12 @@ Response:
   "data": {
     "enabled": true,
     "providers": ["openai", "anthropic", "custom"],
-    "message": "AI冲突解决已启用"
+    "message": "AI 冲突解决已启用"
   }
 }
 ```
 
-#### 测试AI提供商
+#### 测试 AI 提供商
 ```
 POST /api/ai/test-providers
 ```
@@ -345,19 +345,19 @@ Response:
 ## 🚀 部署步骤
 
 ### 1. 基础配置
-- 创建Cloudflare账户
-- 安装Wrangler CLI
-- 配置KV命名空间
+- 创建 Cloudflare 账户
+- 安装 Wrangler CLI
+- 配置 KV 命名空间
 
-### 2. AI提供商配置
-- 获取OpenAI API密钥
-- 获取Anthropic API密钥（可选）
-- 配置自定义AI提供商（可选）
+### 2. AI 提供商配置
+- 获取 OpenAI API 密钥
+- 获取 Anthropic API 密钥（可选）
+- 配置自定义 AI 提供商（可选）
 
 ### 3. 环境变量设置
-在Cloudflare Workers设置页面添加所有必要的环境变量。
+在 Cloudflare Workers 设置页面添加所有必要的环境变量。
 
-### 4. 后端部署 (Cloudflare Workers)
+### 4. 后端部署（Cloudflare Workers）
 ```bash
 # 构建 Worker
 npm run build:worker
@@ -366,7 +366,7 @@ npm run build:worker
 wrangler deploy
 ```
 
-### 5. 前端部署 (Cloudflare Pages)
+### 5. 前端部署（Cloudflare Pages）
 ```bash
 # 构建前端
 npm run build
@@ -376,34 +376,34 @@ wrangler pages deploy dist --project-name=patchx
 ```
 
 ### 部署后的服务地址
-- **前端 (Cloudflare Pages)**: `https://patchx.pages.dev`
-- **后端 API (Cloudflare Workers)**: `https://patchx-service.angersax.workers.dev`
+- **前端（Cloudflare Pages）**: `https://patchx.pages.dev`
+- **后端 API（Cloudflare Workers）**: `https://patchx-service.angersax.workers.dev`
 
 ### 自动重定向配置
 前端通过 `_redirects` 文件自动将 `/api/*` 请求转发到后端 Workers，无需修改前端代码。
 
 ## 💡 使用建议
 
-### AI冲突解决最佳实践
+### AI 冲突解决最佳实践
 
-1. **多提供商对比**: 启用多个AI提供商以获得更好的解决方案
-2. **置信度评估**: 关注AI解决方案的置信度评分
+1. **多提供商对比**: 启用多个 AI 提供商以获得更好的解决方案
+2. **置信度评估**: 关注 AI 解决方案的置信度评分
 3. **人工审查**: 对于复杂冲突，始终进行人工审查
-4. **测试验证**: 应用AI解决方案后，充分测试代码功能
+4. **测试验证**: 应用 AI 解决方案后，充分测试代码功能
 
 ### 性能优化
 
 1. **缓存策略**: 对相似的冲突结果进行缓存
-2. **超时设置**: 为AI调用设置合理的超时时间
-3. **并发控制**: 限制同时进行的AI请求数量
+2. **超时设置**: 为 AI 调用设置合理的超时时间
+3. **并发控制**: 限制同时进行的 AI 请求数量
 4. **错误重试**: 实现智能的错误重试机制
 
 ## 🔒 安全考虑
 
-- **API密钥保护**: 所有AI提供商的API密钥都存储在环境变量中
+- **API 密钥保护**: 所有 AI 提供商的 API 密钥都存储在环境变量中
 - **请求限制**: 实现速率限制防止滥用
 - **内容过滤**: 对输入和输出进行适当的内容检查
-- **审计日志**: 记录所有AI冲突解决操作
+- **审计日志**: 记录所有 AI 冲突解决操作
 
 ## 📄 许可证
 
