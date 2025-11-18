@@ -23,6 +23,7 @@ GERRIT_BASE_URL = "https://android-review.googlesource.com"
 MAX_FILE_SIZE = "10485760"
 RATE_LIMIT_WINDOW = "900000"
 RATE_LIMIT_MAX = "10"
+TEST_USER_PASSWORD = "patchx"
 
 # AI提供商配置 - OpenAI
 OPENAI_BASE_URL = "https://api.openai.com/v1"
@@ -47,6 +48,7 @@ GERRIT_BASE_URL = "https://android-review.googlesource.com"
 MAX_FILE_SIZE = "10485760"
 RATE_LIMIT_WINDOW = "900000"
 RATE_LIMIT_MAX = "10"
+TEST_USER_PASSWORD = "patchx"
 
 # AI提供商配置 - OpenAI
 OPENAI_BASE_URL = "https://api.openai.com/v1"

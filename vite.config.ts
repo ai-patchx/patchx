@@ -22,6 +22,15 @@ export default defineConfig({
     'import.meta.env.BUILD_TIME': JSON.stringify(new Date().toISOString()),
     'import.meta.env.TEST_USER_PASSWORD': JSON.stringify(process.env.TEST_USER_PASSWORD || 'patchx'),
   },
+  server: {
+    proxy: {
+      '/api': {
+        target: 'http://localhost:3001',
+        changeOrigin: true,
+        rewrite: (path) => path
+      }
+    }
+  },
   plugins: [
     react({
       babel: {

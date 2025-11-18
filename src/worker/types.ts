@@ -6,6 +6,7 @@ export interface Env {
   MAX_FILE_SIZE: number
   RATE_LIMIT_WINDOW: number
   RATE_LIMIT_MAX: number
+  TEST_USER_PASSWORD?: string
   OPENAI_API_KEY?: string
   OPENAI_BASE_URL?: string
   OPENAI_MODEL?: string

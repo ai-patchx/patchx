@@ -58,6 +58,11 @@ export default {
         return await handleStatus(path, env, corsHeaders)
       }
 
+      // 登录API路由
+      else if (path === '/api/auth/login' && method === 'POST') {
+        return await handleLogin(request, env, corsHeaders)
+      }
+
       // 新的AI冲突解决API路由
       else if (path === '/api/ai/resolve-conflict' && method === 'POST') {
         return await handleAIConflictResolution(request, env, corsHeaders)
@@ -271,6 +276,99 @@ async function handleAITestProviders(env: Env, corsHeaders: Record<string, strin
         success: false,
         error: error instanceof Error ? error.message : '测试AI提供商失败'
       }),
+      {
+        status: 500,
+        headers: {
+          'Content-Type': 'application/json',
+          ...corsHeaders
+        }
+      }
+    )
+  }
+}
+
+// 登录处理函数
+async function handleLogin(request: Request, env: Env, corsHeaders: Record<string, string>): Promise<Response> {
+  try {
+    const body = await request.json() as { username: string; password: string }
+    const { username, password } = body
+
+    // 验证输入
+    if (!username || !password) {
+      return new Response(
+        JSON.stringify({ message: '用户名和密码不能为空' }),
+        {
+          status: 400,
+          headers: {
+            'Content-Type': 'application/json',
+            ...corsHeaders
+          }
+        }
+      )
+    }
+
+    // 获取测试账号密码
+    const getTestPassword = () => {
+      // 支持 Cloudflare Workers 环境变量
+      if (env.TEST_USER_PASSWORD) {
+        return env.TEST_USER_PASSWORD
+      }
+      // 默认密码
+      return 'patchx'
+    }
+
+    const VALID_CREDENTIALS = {
+      username: 'patchx',
+      password: getTestPassword()
+    }
+
+    // 验证凭据
+    if (username !== VALID_CREDENTIALS.username || password !== VALID_CREDENTIALS.password) {
+      return new Response(
+        JSON.stringify({ message: '用户名或密码错误' }),
+        {
+          status: 401,
+          headers: {
+            'Content-Type': 'application/json',
+            ...corsHeaders
+          }
+        }
+      )
+    }
+
+    // 创建用户对象和简单的 JWT token
+    const user = {
+      id: 'user-123',
+      username: username
+    }
+
+    // 简单的 token 生成（使用 base64 编码）
+    const token = btoa(JSON.stringify({
+      userId: user.id,
+      username: user.username,
+      exp: Date.now() + 24 * 60 * 60 * 1000 // 24 小时后过期
+    }))
+
+    const response = {
+      user,
+      token,
+      message: '登录成功'
+    }
+
+    return new Response(
+      JSON.stringify(response),
+      {
+        status: 200,
+        headers: {
+          'Content-Type': 'application/json',
+          ...corsHeaders
+        }
+      }
+    )
+  } catch (error) {
+    console.error('Login error:', error)
+    return new Response(
+      JSON.stringify({ message: '服务器内部错误' }),
       {
         status: 500,
         headers: {
