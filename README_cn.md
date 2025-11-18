@@ -178,6 +178,16 @@ CUSTOM_AI_TEMPERATURE=0.1
 TEST_USER_PASSWORD=your-secure-password
 ```
 
+### 前端环境变量（Vite）
+
+为避免端点硬编码并按环境区分配置，请设置前端用于访问后端 Worker 的基地址：
+
+```bash
+VITE_WORKER_BASE_URL=https://patchx-service.angersax.workers.dev
+```
+
+登录页面将调用 `${VITE_WORKER_BASE_URL}/api/auth/login`，可在不同环境设置不同值（如 staging/production）。
+
 ### Gerrit 配置
 
 在 Cloudflare Workers 中配置与 AOSP Gerrit 交互所需的环境变量与密钥：
@@ -473,6 +483,7 @@ wrangler pages deploy dist --project-name=patchx
 - **请求限制**: 实现速率限制防止滥用
 - **内容过滤**: 对输入和输出进行适当的内容检查
 - **审计日志**: 记录所有 AI 冲突解决操作
+- **生产环境日志**: 生产构建中自动禁用常规控制台输出（log/debug/info/warn），避免日志外泄
 
 ## 📄 许可证
 

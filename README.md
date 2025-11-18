@@ -178,6 +178,16 @@ CUSTOM_AI_TEMPERATURE=0.1
 TEST_USER_PASSWORD=your-secure-password
 ```
 
+### Frontend environment (Vite)
+
+Set the frontend base URL for the backend Worker to avoid hardcoded endpoints and enable per‑environment configuration:
+
+```bash
+VITE_WORKER_BASE_URL=https://patchx-service.angersax.workers.dev
+```
+
+The login page calls `${VITE_WORKER_BASE_URL}/api/auth/login`. Provide different values for staging/production as needed.
+
 ### Gerrit Configuration
 
 Configure environment variables and secrets needed to interact with AOSP Gerrit in Cloudflare Workers:
@@ -473,6 +483,7 @@ The frontend uses a `_redirects` file to forward `/api/*` requests to the backen
 - Rate limiting: prevent abuse with request limits
 - Content filtering: validate input and output appropriately
 - Audit logs: record all AI conflict resolution operations
+- Production log hygiene: console output (log/debug/info/warn) is disabled automatically in production builds
 
 ## 📄 License
 

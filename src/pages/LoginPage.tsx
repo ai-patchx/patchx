@@ -18,11 +18,8 @@ export default function LoginPage() {
     setIsLoading(true)
 
     try {
-      console.log('Attempting login with:', { username, password })
-
-      // Use the Worker directly instead of going through Pages redirect
-      const workerUrl = 'https://patchx-service.angersax.workers.dev/api/auth/login'
-      console.log('Calling Worker directly:', workerUrl)
+      const base = import.meta.env.VITE_WORKER_BASE_URL || 'https://patchx-service.angersax.workers.dev'
+      const workerUrl = `${base}/api/auth/login`
 
       const response = await fetch(workerUrl, {
         method: 'POST',
@@ -31,9 +28,6 @@ export default function LoginPage() {
         },
         body: JSON.stringify({ username, password }),
       })
-
-      console.log('Login response status:', response.status)
-      console.log('Login response headers:', Object.fromEntries(response.headers.entries()))
 
       if (!response.ok) {
         let errorMessage = '登录失败'
@@ -54,7 +48,6 @@ export default function LoginPage() {
       let data: LoginResponse
       try {
         data = await response.json() as LoginResponse
-        console.log('Login successful, received data:', { user: data.user, hasToken: !!data.token })
       } catch {
         throw new Error('服务器返回数据格式错误')
       }
@@ -82,9 +75,6 @@ export default function LoginPage() {
           </h2>
           <p className="mt-2 text-center text-sm text-gray-600 dark:text-gray-400">
             使用您的账号登录 PatchX
-          </p>
-          <p className="mt-1 text-center text-xs text-gray-500 dark:text-gray-500">
-            测试账号: patchx / patchx
           </p>
         </div>
 
