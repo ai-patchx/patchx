@@ -9,11 +9,12 @@ export default {
     const path = url.pathname
     const method = request.method
 
-    // 设置CORS头
+    // 设置CORS头 - 更完整的CORS支持
     const corsHeaders = {
       'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type',
+      'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+      'Access-Control-Max-Age': '86400',
     }
 
     // 处理OPTIONS请求

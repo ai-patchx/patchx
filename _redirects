@@ -1,6 +1,5 @@
 # Cloudflare Pages 重定向配置
-# 移除登录重定向，使用 Pages Functions 处理
-# 其他 API 请求仍然转发到 Worker
+# 使用 Worker 处理所有 API 请求
 /api/* https://patchx-service.angersax.workers.dev/api/:splat 200
 
 # 所有其他请求都交给前端应用

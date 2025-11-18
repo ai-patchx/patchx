@@ -20,7 +20,11 @@ export default function LoginPage() {
     try {
       console.log('Attempting login with:', { username, password })
 
-      const response = await fetch('/api/auth/login', {
+      // Use the Worker directly instead of going through Pages redirect
+      const workerUrl = 'https://patchx-service.angersax.workers.dev/api/auth/login'
+      console.log('Calling Worker directly:', workerUrl)
+
+      const response = await fetch(workerUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
