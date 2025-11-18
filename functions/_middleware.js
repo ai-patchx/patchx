@@ -4,7 +4,6 @@ export async function onRequest(context) {
   const url = new URL(request.url);
   const pathname = url.pathname;
 
-  // Handle CORS preflight
   if (request.method === 'OPTIONS') {
     return new Response(null, {
       headers: {
@@ -15,21 +14,11 @@ export async function onRequest(context) {
     });
   }
 
-  // Only handle /api/auth/login
   if (pathname === '/api/auth/login' && request.method === 'POST') {
     return handleLogin(context);
   }
 
-  // Return 404 for other routes
-  return new Response('Not Found', {
-    status: 404,
-    headers: {
-      'Content-Type': 'text/plain',
-      'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type, Authorization'
-    }
-  });
+  return context.next();
 }
 
 async function handleLogin(context) {
