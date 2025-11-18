@@ -4,6 +4,7 @@ import FileUpload from '../components/FileUpload'
 import useFileUploadStore from '../stores/fileUploadStore'
 import useGitAuthorStore from '../stores/gitAuthorStore'
 import { useTheme } from '../hooks/useTheme'
+import UserInfo from '../components/UserInfo'
 import packageInfo from '../../package.json'
 
 const AOSP_PROJECTS = [
@@ -217,6 +218,7 @@ const SubmitPage: React.FC = () => {
           >
             {theme === 'dark' ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
           </button>
+          <UserInfo />
         </div>
 
         <div className={`rounded-lg shadow-lg p-8 ${

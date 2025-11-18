@@ -12,6 +12,7 @@
 - 🔄 **自动提交**: 自动提交到 Google AOSP Gerrit
 - 📊 **状态跟踪**: 实时显示提交进度和结果
 - 📱 **响应式设计**: 支持桌面和移动设备
+- 🔐 **用户登录与令牌鉴权**
 
 ## 🛠️ 技术栈
 
@@ -51,6 +52,23 @@ npm run lint -- --fix
 # 启动前端开发服务器
 npm run dev
 # 访问: http://localhost:5173
+```
+
+### 鉴权（本地开发）
+
+- 登录页面：`http://localhost:5173/login`
+- 默认测试账号：`用户名=patchx`，`密码=patchx`
+- 可通过环境变量 `TEST_USER_PASSWORD` 覆盖测试密码。
+
+示例：
+
+- PowerShell（Windows）：
+```powershell
+$env:TEST_USER_PASSWORD="your_password"; npm run dev
+```
+- Vite 助手脚本：
+```bash
+npm run dev:env  # 使用 TEST_USER_PASSWORD=test123 启动开发服务器
 ```
 
 #### 终端 2: 后端 API 服务器（Wrangler）
@@ -155,6 +173,9 @@ CUSTOM_AI_API_KEY=your-custom-api-key
 CUSTOM_AI_MODEL=gpt-3.5-turbo
 CUSTOM_AI_MAX_TOKENS=2000
 CUSTOM_AI_TEMPERATURE=0.1
+
+# 鉴权相关
+TEST_USER_PASSWORD=your-secure-password
 ```
 
 ### Gerrit 配置
@@ -199,6 +220,52 @@ AI 冲突解决功能会根据配置自动启用：
 3. **智能选择**: 系统会选择置信度最高的 AI 解决方案
 
 ## 📋 API 文档
+
+### 鉴权 API
+
+#### 登录
+```
+POST /api/auth/login
+```
+
+Request:
+```json
+{
+  "username": "patchx",
+  "password": "<password>"
+}
+```
+
+Response:
+```json
+{
+  "user": { "id": "user-123", "username": "patchx" },
+  "token": "<base64-token>",
+  "message": "登录成功"
+}
+```
+
+#### 当前用户（需要鉴权）
+```
+GET /api/auth/me
+```
+
+Headers:
+```
+Authorization: Bearer <token>
+```
+
+Response:
+```json
+{
+  "user": { "id": "user-123", "username": "patchx" },
+  "message": "获取用户信息成功"
+}
+```
+
+说明：
+- 受保护的接口需要携带 `Authorization: Bearer <token>` 请求头。
+- 前端在登录后会自动添加该请求头。
 
 ### AI 冲突解决 API
 

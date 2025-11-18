@@ -1,6 +1,14 @@
 import { UploadResponse, ApiResponse, StatusResponse } from '../types'
+import { useAuthStore } from '@/stores/authStore'
 
 const API_BASE_URL = '/api'
+
+const getAuthHeaders = () => {
+  const token = useAuthStore.getState().token
+  return {
+    ...(token && { 'Authorization': `Bearer ${token}` })
+  }
+}
 
 export const uploadFile = async (file: File, project: string): Promise<UploadResponse> => {
   const formData = new FormData()
@@ -9,6 +17,7 @@ export const uploadFile = async (file: File, project: string): Promise<UploadRes
 
   const response = await fetch(`${API_BASE_URL}/upload`, {
     method: 'POST',
+    headers: getAuthHeaders(),
     body: formData
   })
 
@@ -43,7 +52,9 @@ export const submitPatch = async (data: {
 }
 
 export const getSubmissionStatus = async (id: string): Promise<ApiResponse<StatusResponse>> => {
-  const response = await fetch(`${API_BASE_URL}/status/${id}`)
+  const response = await fetch(`${API_BASE_URL}/status/${id}`, {
+    headers: getAuthHeaders()
+  })
 
   if (!response.ok) {
     const error = await response.text()

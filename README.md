@@ -12,6 +12,7 @@ A web service that streamlines contributing code to the Android Open Source Proj
 - 🔄 Auto submission: push to Google AOSP Gerrit
 - 📊 Status tracking: real‑time submission progress and results
 - 📱 Responsive design: desktop and mobile support
+- 🔐 User login and token‑based authentication
 
 ## 🛠️ Tech Stack
 
@@ -51,6 +52,23 @@ npm run lint -- --fix
 # Start frontend dev server
 npm run dev
 # Visit: http://localhost:5173
+```
+
+### Authentication (Local dev)
+
+- Login page: `http://localhost:5173/login`
+- Default test account: `username=patchx`, `password=patchx`
+- You can override the test password with the `TEST_USER_PASSWORD` environment variable.
+
+Examples:
+
+- PowerShell (Windows):
+```powershell
+$env:TEST_USER_PASSWORD="your_password"; npm run dev
+```
+- Vite helper script:
+```bash
+npm run dev:env  # starts dev with TEST_USER_PASSWORD=test123
 ```
 
 #### Terminal 2: Backend API Server (Wrangler)
@@ -155,6 +173,9 @@ CUSTOM_AI_API_KEY=your-custom-api-key
 CUSTOM_AI_MODEL=gpt-3.5-turbo
 CUSTOM_AI_MAX_TOKENS=2000
 CUSTOM_AI_TEMPERATURE=0.1
+
+# Authentication
+TEST_USER_PASSWORD=your-secure-password
 ```
 
 ### Gerrit Configuration
@@ -199,6 +220,52 @@ AI conflict resolution is enabled based on configuration:
 3. Smart selection of the highest‑confidence solution
 
 ## 📋 API Documentation
+
+### Authentication API
+
+#### Login
+```
+POST /api/auth/login
+```
+
+Request:
+```json
+{
+  "username": "patchx",
+  "password": "<password>"
+}
+```
+
+Response:
+```json
+{
+  "user": { "id": "user-123", "username": "patchx" },
+  "token": "<base64-token>",
+  "message": "Login successful"
+}
+```
+
+#### Current user (requires auth)
+```
+GET /api/auth/me
+```
+
+Headers:
+```
+Authorization: Bearer <token>
+```
+
+Response:
+```json
+{
+  "user": { "id": "user-123", "username": "patchx" },
+  "message": "OK"
+}
+```
+
+Notes:
+- Protected endpoints require the `Authorization: Bearer <token>` header.
+- The frontend automatically adds the header when authenticated.
 
 ### AI Conflict Resolution API
 

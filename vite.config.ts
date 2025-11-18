@@ -20,6 +20,7 @@ export default defineConfig({
   define: {
     'import.meta.env.GIT_HASH': JSON.stringify(gitHash),
     'import.meta.env.BUILD_TIME': JSON.stringify(new Date().toISOString()),
+    'import.meta.env.TEST_USER_PASSWORD': JSON.stringify(process.env.TEST_USER_PASSWORD || 'patchx'),
   },
   plugins: [
     react({
