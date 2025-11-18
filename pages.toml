@@ -1,0 +1,7 @@
+# Cloudflare Pages configuration
+name: patchx
+build_command: npm run build
+build_output_directory: dist
+
+# Enable Pages Functions
+functions_directory: functions

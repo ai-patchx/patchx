@@ -18,6 +18,8 @@ export default function LoginPage() {
     setIsLoading(true)
 
     try {
+      console.log('Attempting login with:', { username, password })
+
       const response = await fetch('/api/auth/login', {
         method: 'POST',
         headers: {
@@ -25,6 +27,9 @@ export default function LoginPage() {
         },
         body: JSON.stringify({ username, password }),
       })
+
+      console.log('Login response status:', response.status)
+      console.log('Login response headers:', Object.fromEntries(response.headers.entries()))
 
       if (!response.ok) {
         let errorMessage = '登录失败'
@@ -45,6 +50,7 @@ export default function LoginPage() {
       let data: LoginResponse
       try {
         data = await response.json() as LoginResponse
+        console.log('Login successful, received data:', { user: data.user, hasToken: !!data.token })
       } catch {
         throw new Error('服务器返回数据格式错误')
       }
