@@ -33,6 +33,7 @@ export default {
               upload: '/api/upload',
               submit: '/api/submit',
               status: '/api/status/:id',
+              login: '/api/auth/login',
               aiResolveConflict: '/api/ai/resolve-conflict',
               aiProviders: '/api/ai/providers',
               aiTestProviders: '/api/ai/test-providers'

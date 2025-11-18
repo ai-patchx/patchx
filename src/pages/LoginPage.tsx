@@ -26,15 +26,37 @@ export default function LoginPage() {
         body: JSON.stringify({ username, password }),
       })
 
-      const data = await response.json() as LoginResponse
-
       if (!response.ok) {
-        throw new Error(data.message || '登录失败')
+        let errorMessage = '登录失败'
+        try {
+          const errorData: unknown = await response.json()
+          if (typeof errorData === 'object' && errorData !== null) {
+            const payload = errorData as { message?: string; error?: string }
+            errorMessage = payload.message || payload.error || `HTTP ${response.status}: ${response.statusText}`
+          } else {
+            errorMessage = `HTTP ${response.status}: ${response.statusText}`
+          }
+        } catch {
+          errorMessage = `HTTP ${response.status}: ${response.statusText}`
+        }
+        throw new Error(errorMessage)
+      }
+
+      let data: LoginResponse
+      try {
+        data = await response.json() as LoginResponse
+      } catch {
+        throw new Error('服务器返回数据格式错误')
+      }
+
+      if (!data.user || !data.token) {
+        throw new Error('登录响应缺少必要数据')
       }
 
       login(data.user, data.token)
       navigate('/')
     } catch (err) {
+      console.error('Login error:', err)
       setError(err instanceof Error ? err.message : '登录失败，请重试')
     } finally {
       setIsLoading(false)
@@ -50,6 +72,9 @@ export default function LoginPage() {
           </h2>
           <p className="mt-2 text-center text-sm text-gray-600 dark:text-gray-400">
             使用您的账号登录 PatchX
+          </p>
+          <p className="mt-1 text-center text-xs text-gray-500 dark:text-gray-500">
+            测试账号: patchx / patchx
           </p>
         </div>
 
