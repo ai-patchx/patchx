@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { FileText, Settings, Send, Moon, Sun, Eye, Terminal } from 'lucide-react'
+import { FileText, Settings, Send, Moon, Sun, Eye, Terminal, Github } from 'lucide-react'
 import FileUpload from '../components/FileUpload'
 import useFileUploadStore from '../stores/fileUploadStore'
 import useGitAuthorStore from '../stores/gitAuthorStore'
@@ -193,8 +193,20 @@ const SubmitPage: React.FC = () => {
   return (
     <div className="min-h-screen py-8 relative">
       <div className="max-w-4xl mx-auto px-4">
-        {/* Theme toggle button */}
-        <div className="flex justify-end mb-4">
+        {/* Theme toggle and GitHub buttons */}
+        <div className="flex justify-end mb-4 space-x-2">
+          <a
+            href="https://github.com/ai-patchx/patchx"
+            target="_blank"
+            rel="noopener noreferrer"
+            className={`p-2 rounded-lg transition-colors duration-200 ${
+              theme === 'dark'
+                ? 'bg-gradient-accent text-gradient-primary hover:bg-gradient-highlight'
+                : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+            }`}
+          >
+            <Github className="w-5 h-5" />
+          </a>
           <button
             onClick={toggleTheme}
             className={`p-2 rounded-lg transition-colors duration-200 ${
