@@ -9,7 +9,7 @@ import { useAuthStore } from './stores/authStore'
 
 function App() {
   const { theme } = useTheme()
-  const { user, checkUser } = useAuthStore()
+  const { user, workerUser, checkUser } = useAuthStore()
 
   useEffect(() => {
     // Apply theme class to document root
@@ -25,15 +25,15 @@ function App() {
     <Router>
       <div className={`min-h-screen ${theme === 'dark' ? 'bg-gradient-dark' : ''}`}>
         <Routes>
-          <Route path="/" element={user ? <Home /> : <Navigate to="/login" replace />} />
+          <Route path="/" element={(user || workerUser) ? <Home /> : <Navigate to="/login" replace />} />
           <Route path="/login" element={<LoginPage />} />
           <Route
             path="/submit"
-            element={user ? <SubmitPage /> : <Navigate to="/login" replace />}
+            element={(user || workerUser) ? <SubmitPage /> : <Navigate to="/login" replace />}
           />
           <Route
             path="/status/:id"
-            element={user ? <StatusPage /> : <Navigate to="/login" replace />}
+            element={(user || workerUser) ? <StatusPage /> : <Navigate to="/login" replace />}
           />
         </Routes>
       </div>

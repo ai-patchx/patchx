@@ -12,7 +12,7 @@ export default function LoginPage() {
   const [showRegistrationModal, setShowRegistrationModal] = useState(false)
 
   const navigate = useNavigate()
-  const { signIn } = useAuthStore()
+  const { signIn, signInWorker } = useAuthStore()
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -20,7 +20,12 @@ export default function LoginPage() {
     setIsLoading(true)
 
     try {
-      await signIn(username, password)
+      const useWorkerAuth = import.meta.env.VITE_USE_WORKER_AUTH === 'true'
+      if (useWorkerAuth || username === 'patchx') {
+        await signInWorker(username, password)
+      } else {
+        await signIn(username, password)
+      }
       navigate('/submit')
     } catch (err) {
       console.error('Login error:', err)

@@ -55,6 +55,12 @@ npm run dev
 # Visit: http://localhost:5173
 ```
 
+Set the test account password in Cloudflare Workers as a secret (Wrangler Secrets):
+
+```bash
+wrangler secret put TEST_USER_PASSWORD
+```
+
 ### Authentication & Registration (Local dev)
 
 - Homepage provides Login/Registration modal

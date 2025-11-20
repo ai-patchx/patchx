@@ -55,6 +55,12 @@ npm run dev
 # 访问: http://localhost:5173
 ```
 
+在 Cloudflare Workers 上为测试账号密码设置变量：
+
+```bash
+wrangler secret put TEST_USER_PASSWORD
+```
+
 ### 鉴权与注册（本地开发）
 
 - 首页提供登录/注册弹窗
