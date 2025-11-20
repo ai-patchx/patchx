@@ -1,5 +1,3 @@
-import { useAuthStore } from '@/stores/authStore'
-
 const API_BASE_URL = '/api'
 
 export interface LoginRequest {
@@ -26,10 +24,8 @@ export interface UserResponse {
 
 class AuthService {
   private getAuthHeader() {
-    const token = useAuthStore.getState().token
     return {
       'Content-Type': 'application/json',
-      ...(token && { 'Authorization': `Bearer ${token}` })
     }
   }
 

@@ -1,10 +1,10 @@
 import { useAuthStore } from '@/stores/authStore'
 
 export default function UserInfo() {
-  const { user, logout } = useAuthStore()
+  const { user, signOut } = useAuthStore()
 
   const handleLogout = () => {
-    logout()
+    signOut()
     window.location.href = '/login'
   }
 
@@ -15,7 +15,7 @@ export default function UserInfo() {
   return (
     <div className="flex items-center space-x-4">
       <div className="text-sm text-gray-700 dark:text-gray-300">
-        欢迎, {user.username}
+        欢迎, {user?.email || '用户'}
       </div>
       <button
         onClick={handleLogout}

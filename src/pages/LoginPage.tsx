@@ -1,16 +1,18 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { Mail } from 'lucide-react'
 import { useAuthStore } from '@/stores/authStore'
-import type { LoginResponse } from '@/services/authService'
+import RegistrationModal from '@/components/RegistrationModal'
 
 export default function LoginPage() {
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [isLoading, setIsLoading] = useState(false)
+  const [showRegistrationModal, setShowRegistrationModal] = useState(false)
 
   const navigate = useNavigate()
-  const login = useAuthStore((state) => state.login)
+  const { signIn } = useAuthStore()
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -18,46 +20,8 @@ export default function LoginPage() {
     setIsLoading(true)
 
     try {
-      const base = import.meta.env.VITE_WORKER_BASE_URL || 'https://patchx-service.angersax.workers.dev'
-      const workerUrl = `${base}/api/auth/login`
-
-      const response = await fetch(workerUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ username, password }),
-      })
-
-      if (!response.ok) {
-        let errorMessage = '登录失败'
-        try {
-          const errorData: unknown = await response.json()
-          if (typeof errorData === 'object' && errorData !== null) {
-            const payload = errorData as { message?: string; error?: string }
-            errorMessage = payload.message || payload.error || `HTTP ${response.status}: ${response.statusText}`
-          } else {
-            errorMessage = `HTTP ${response.status}: ${response.statusText}`
-          }
-        } catch {
-          errorMessage = `HTTP ${response.status}: ${response.statusText}`
-        }
-        throw new Error(errorMessage)
-      }
-
-      let data: LoginResponse
-      try {
-        data = await response.json() as LoginResponse
-      } catch {
-        throw new Error('服务器返回数据格式错误')
-      }
-
-      if (!data.user || !data.token) {
-        throw new Error('登录响应缺少必要数据')
-      }
-
-      login(data.user, data.token)
-      navigate('/')
+      await signIn(username, password)
+      navigate('/submit')
     } catch (err) {
       console.error('Login error:', err)
       setError(err instanceof Error ? err.message : '登录失败，请重试')
@@ -118,7 +82,7 @@ export default function LoginPage() {
             </div>
           )}
 
-          <div>
+          <div className="space-y-3">
             <button
               type="submit"
               disabled={isLoading}
@@ -126,9 +90,36 @@ export default function LoginPage() {
             >
               {isLoading ? '登录中...' : '登录'}
             </button>
+
+            <div className="relative">
+              <div className="absolute inset-0 flex items-center">
+                <div className="w-full border-t border-gray-300 dark:border-gray-600" />
+              </div>
+              <div className="relative flex justify-center text-sm">
+                <span className="px-2 bg-gray-50 dark:bg-gray-900 text-gray-500 dark:text-gray-400">
+                  或者
+                </span>
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              <button
+                type="button"
+                onClick={() => setShowRegistrationModal(true)}
+                className="w-full flex justify-center items-center py-2 px-4 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+              >
+                <Mail className="w-4 h-4 mr-2" />
+                邮箱注册
+              </button>
+            </div>
           </div>
         </form>
       </div>
+
+      <RegistrationModal
+        isOpen={showRegistrationModal}
+        onClose={() => setShowRegistrationModal(false)}
+      />
     </div>
   )
 }

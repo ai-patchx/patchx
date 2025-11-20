@@ -13,6 +13,7 @@
 - 📊 **状态跟踪**: 实时显示提交进度和结果
 - 📱 **响应式设计**: 支持桌面和移动设备
 - 🔐 **用户登录与令牌鉴权**
+- 🧑‍💻 **用户注册**：仅支持邮箱注册（基于 Supabase）
 
 ## 🛠️ 技术栈
 
@@ -54,14 +55,24 @@ npm run dev
 # 访问: http://localhost:5173
 ```
 
-### 鉴权（本地开发）
+### 鉴权与注册（本地开发）
 
-- 登录页面：`http://localhost:5173/login`
+- 首页提供登录/注册弹窗
+- 仅支持邮箱注册（基于 Supabase）
+- 在 `.env.local` 配置以下变量：
+```bash
+VITE_SUPABASE_URL=https://your-supabase-project.supabase.co
+VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
+```
+
+在 Supabase 中启用 GitHub OAuth：
+- 在 Auth 设置中开启 GitHub 提供商
+- 设置重定向地址：`http://localhost:5173/auth/callback`
+
+遗留的测试账号（仅用于 Worker API 测试）：
 - 默认测试账号：`用户名=patchx`，`密码=patchx`
-- 可通过环境变量 `TEST_USER_PASSWORD` 覆盖测试密码。
-
+- 可通过 `TEST_USER_PASSWORD` 覆盖测试密码
 示例：
-
 - PowerShell（Windows）：
 ```powershell
 $env:TEST_USER_PASSWORD="your_password"; npm run dev
@@ -176,6 +187,10 @@ CUSTOM_AI_TEMPERATURE=0.1
 
 # 鉴权相关
 TEST_USER_PASSWORD=your-secure-password
+
+# Supabase（前端）
+VITE_SUPABASE_URL=https://your-supabase-project.supabase.co
+VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
 ```
 
 ### 前端环境变量（Vite）
@@ -187,6 +202,36 @@ VITE_WORKER_BASE_URL=https://patchx-service.angersax.workers.dev
 ```
 
 登录页面将调用 `${VITE_WORKER_BASE_URL}/api/auth/login`，可在不同环境设置不同值（如 staging/production）。
+
+#### Cloudflare Pages：Supabase 环境变量配置
+
+在 Cloudflare Pages 项目中为前端构建配置 Supabase 环境变量：
+
+1. 进入 Cloudflare Pages → 选择项目 → Settings → Environment variables
+2. 在 "Production" 与 "Preview"（按需）添加以下变量：
+   - `VITE_SUPABASE_URL` → `https://<your-project>.supabase.co`
+   - `VITE_SUPABASE_ANON_KEY` → `<your_anon_key>`
+3. 重新部署 Pages 项目使新的环境变量生效。
+
+说明：
+- Vite 仅会将以 `VITE_` 开头的变量暴露到前端代码；Supabase 的 anon key 设计为公开可在前端使用。请勿在前端使用 service role key。
+
+#### Cloudflare Workers：通过 `wrangler.toml` 配置 Supabase
+
+也可以在 Workers 端配置 Supabase，并由前端在运行时拉取：
+
+1. 在 `wrangler.toml` 增加变量：
+```toml
+[env.production.vars]
+SUPABASE_URL = "https://<your-project>.supabase.co"
+SUPABASE_ANON_KEY = "<your_anon_key>"
+
+[env.staging.vars]
+SUPABASE_URL = "https://<your-project>.supabase.co"
+SUPABASE_ANON_KEY = "<your_anon_key>"
+```
+2. Worker 提供公共配置端点 `/api/config/public`，返回 `{ supabaseUrl, supabaseAnonKey }`。
+3. 前端采用惰性初始化 Supabase，当未设置 `VITE_SUPABASE_*` 时将回退到该端点。
 
 ### Gerrit 配置
 

@@ -3,12 +3,13 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import SubmitPage from './pages/SubmitPage'
 import StatusPage from './pages/StatusPage'
 import LoginPage from './pages/LoginPage'
+import Home from './pages/Home'
 import { useTheme } from './hooks/useTheme'
 import { useAuthStore } from './stores/authStore'
 
 function App() {
   const { theme } = useTheme()
-  const isAuthenticated = useAuthStore((state) => state.isAuthenticated)
+  const { user, checkUser } = useAuthStore()
 
   useEffect(() => {
     // Apply theme class to document root
@@ -16,25 +17,23 @@ function App() {
     document.documentElement.classList.add(theme)
   }, [theme])
 
+  useEffect(() => {
+    checkUser()
+  }, [checkUser])
+
   return (
     <Router>
       <div className={`min-h-screen ${theme === 'dark' ? 'bg-gradient-dark' : ''}`}>
         <Routes>
-          <Route
-            path="/login"
-            element={!isAuthenticated ? <LoginPage /> : <Navigate to="/" replace />}
-          />
-          <Route
-            path="/"
-            element={isAuthenticated ? <SubmitPage /> : <Navigate to="/login" replace />}
-          />
+          <Route path="/" element={user ? <Home /> : <Navigate to="/login" replace />} />
+          <Route path="/login" element={<LoginPage />} />
           <Route
             path="/submit"
-            element={isAuthenticated ? <SubmitPage /> : <Navigate to="/login" replace />}
+            element={user ? <SubmitPage /> : <Navigate to="/login" replace />}
           />
           <Route
             path="/status/:id"
-            element={isAuthenticated ? <StatusPage /> : <Navigate to="/login" replace />}
+            element={user ? <StatusPage /> : <Navigate to="/login" replace />}
           />
         </Routes>
       </div>

@@ -13,6 +13,7 @@ A web service that streamlines contributing code to the Android Open Source Proj
 - 📊 Status tracking: real‑time submission progress and results
 - 📱 Responsive design: desktop and mobile support
 - 🔐 User login and token‑based authentication
+- 🧑‍💻 User registration: Email only (Supabase)
 
 ## 🛠️ Tech Stack
 
@@ -54,14 +55,20 @@ npm run dev
 # Visit: http://localhost:5173
 ```
 
-### Authentication (Local dev)
+### Authentication & Registration (Local dev)
 
-- Login page: `http://localhost:5173/login`
+- Homepage provides Login/Registration modal
+- Email registration only via Supabase
+- Configure environment variables in `.env.local`:
+```bash
+VITE_SUPABASE_URL=https://your-supabase-project.supabase.co
+VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
+```
+
+Legacy test account (for Worker API testing only):
 - Default test account: `username=patchx`, `password=patchx`
-- You can override the test password with the `TEST_USER_PASSWORD` environment variable.
-
+- Override password via `TEST_USER_PASSWORD`
 Examples:
-
 - PowerShell (Windows):
 ```powershell
 $env:TEST_USER_PASSWORD="your_password"; npm run dev
@@ -176,6 +183,10 @@ CUSTOM_AI_TEMPERATURE=0.1
 
 # Authentication
 TEST_USER_PASSWORD=your-secure-password
+
+# Supabase (frontend)
+VITE_SUPABASE_URL=https://your-supabase-project.supabase.co
+VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
 ```
 
 ### Frontend environment (Vite)
@@ -187,6 +198,36 @@ VITE_WORKER_BASE_URL=https://patchx-service.angersax.workers.dev
 ```
 
 The login page calls `${VITE_WORKER_BASE_URL}/api/auth/login`. Provide different values for staging/production as needed.
+
+#### Cloudflare Pages: Supabase environment configuration
+
+Configure Supabase environment variables for the frontend build in your Cloudflare Pages project settings:
+
+1. Go to Cloudflare Pages → your project → Settings → Environment variables
+2. Add the following variables under both "Production" and "Preview" (as needed):
+   - `VITE_SUPABASE_URL` → `https://<your-project>.supabase.co`
+   - `VITE_SUPABASE_ANON_KEY` → `<your_anon_key>`
+3. Redeploy the Pages project so the new variables are applied to the build.
+
+Notes:
+- Vite exposes variables that begin with `VITE_` to client code; the Supabase anon key is designed to be public and safe for client-side use. Do NOT use service role keys in the frontend.
+
+#### Cloudflare Workers: Configure Supabase via `wrangler.toml`
+
+You can configure Supabase values on the Worker side and have the frontend fetch them at runtime.
+
+1. Add vars in `wrangler.toml`:
+```toml
+[env.production.vars]
+SUPABASE_URL = "https://<your-project>.supabase.co"
+SUPABASE_ANON_KEY = "<your_anon_key>"
+
+[env.staging.vars]
+SUPABASE_URL = "https://<your-project>.supabase.co"
+SUPABASE_ANON_KEY = "<your_anon_key>"
+```
+2. The Worker exposes a public config endpoint at `/api/config/public` returning `{ supabaseUrl, supabaseAnonKey }`.
+3. The frontend lazily initializes Supabase and falls back to this endpoint if `VITE_SUPABASE_*` are not set.
 
 ### Gerrit Configuration
 

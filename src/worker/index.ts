@@ -72,6 +72,8 @@ export default {
         return await handleAIProviders(env, corsHeaders)
       } else if (path === '/api/ai/test-providers' && method === 'POST') {
         return await handleAITestProviders(env, corsHeaders)
+      } else if (path === '/api/config/public' && method === 'GET') {
+        return await handlePublicConfig(env, corsHeaders)
       }
 
       else {
@@ -540,4 +542,20 @@ async function handleStatus(path: string, env: Env, corsHeaders: Record<string, 
       }
     )
   }
+}
+async function handlePublicConfig(env: Env, corsHeaders: Record<string, string>): Promise<Response> {
+  const data = {
+    supabaseUrl: env.SUPABASE_URL || '',
+    supabaseAnonKey: env.SUPABASE_ANON_KEY || ''
+  }
+
+  return new Response(
+    JSON.stringify({ success: true, data }),
+    {
+      headers: {
+        'Content-Type': 'application/json',
+        ...corsHeaders
+      }
+    }
+  )
 }
