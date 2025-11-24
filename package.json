@@ -11,7 +11,10 @@
     "build:worker": "tsc -p tsconfig.worker.json",
     "lint": "eslint .",
     "preview": "vite preview",
-    "check": "tsc -b --noEmit"
+    "check": "tsc -b --noEmit",
+    "db:reset": "bash scripts/reset-db.sh",
+    "db:reset:confirm": "bash scripts/reset-db.sh --confirm",
+    "deploy": "npm run build:worker && wrangler deploy"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.83.0",

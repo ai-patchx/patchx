@@ -135,7 +135,61 @@ wrangler dev
 # 部署到生产环境（API Worker）
 npm run build:worker
 wrangler deploy
+# 或使用部署脚本：
+npm run deploy
 ```
+
+**注意：** `wrangler deploy` **不会**重置数据库。数据库重置功能可通过以下脚本单独使用。
+
+### 数据库管理
+
+#### 重置数据库
+
+数据库重置功能作为可选脚本提供，在 `wrangler deploy` 过程中**永远不会**执行。
+
+**使用 npm 脚本：**
+```bash
+# 带确认提示的重置数据库
+npm run db:reset
+
+# 无需确认的重置数据库（请谨慎使用）
+npm run db:reset:confirm
+```
+
+**直接使用 bash 脚本：**
+```bash
+# 带确认提示
+./scripts/reset-db.sh
+
+# 跳过确认
+./scripts/reset-db.sh --confirm
+
+# 指定项目引用
+./scripts/reset-db.sh --project-ref YOUR_PROJECT_REF
+
+# 使用环境变量（推荐）
+export SUPABASE_PROJECT_REF=your_project_ref
+export SUPABASE_URL=https://your-project.supabase.co
+export SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
+./scripts/reset-db.sh
+```
+
+**要求：**
+- 安装 Supabase CLI：`npm install -g supabase`（推荐）
+- 或提供 `SUPABASE_URL` 和 `SUPABASE_SERVICE_ROLE_KEY` 环境变量
+
+**环境变量：**
+创建 `.env.local` 文件或导出以下变量：
+```bash
+SUPABASE_PROJECT_REF=your_project_ref
+SUPABASE_URL=https://your-project.supabase.co
+SUPABASE_SERVICE_ROLE_KEY=your_service_role_key  # 仅 API 方式重置时需要
+```
+
+**重要提示：**
+- 数据库重置在 `wrangler deploy` 过程中**永远不会**执行
+- 重置前请务必备份数据
+- 除非使用 `--confirm`，否则重置脚本需要明确确认
 
 ## 🔄 开发服务器说明
 

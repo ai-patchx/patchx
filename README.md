@@ -131,7 +131,61 @@ wrangler dev
 # Deploy to production (API Worker)
 npm run build:worker
 wrangler deploy
+# Or use the deploy script:
+npm run deploy
 ```
+
+**Note:** `wrangler deploy` does NOT reset the database. Database reset is available separately via the scripts below.
+
+### Database Management
+
+#### Reset Database
+
+The database reset functionality is available as an optional script and is **never** executed during `wrangler deploy`.
+
+**Using npm scripts:**
+```bash
+# Reset database with confirmation prompt
+npm run db:reset
+
+# Reset database without confirmation (use with caution)
+npm run db:reset:confirm
+```
+
+**Using the bash script directly:**
+```bash
+# With confirmation prompt
+./scripts/reset-db.sh
+
+# Skip confirmation
+./scripts/reset-db.sh --confirm
+
+# With specific project reference
+./scripts/reset-db.sh --project-ref YOUR_PROJECT_REF
+
+# With environment variables (recommended)
+export SUPABASE_PROJECT_REF=your_project_ref
+export SUPABASE_URL=https://your-project.supabase.co
+export SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
+./scripts/reset-db.sh
+```
+
+**Requirements:**
+- Supabase CLI installed: `npm install -g supabase` (recommended)
+- Or provide `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` environment variables
+
+**Environment Variables:**
+Create a `.env.local` file or export these variables:
+```bash
+SUPABASE_PROJECT_REF=your_project_ref
+SUPABASE_URL=https://your-project.supabase.co
+SUPABASE_SERVICE_ROLE_KEY=your_service_role_key  # Only needed for API-based reset
+```
+
+**Important:**
+- Database reset is **never** executed during `wrangler deploy`
+- Always backup your data before resetting
+- The reset script requires explicit confirmation unless `--confirm` is used
 
 ## 🔄 Dev Servers
 

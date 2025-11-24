@@ -15,6 +15,8 @@ kv_namespaces = [
 ]
 
 [build]
+# Build command - does NOT reset database
+# Database reset is available separately via: npm run db:reset
 command = "npm run build:worker"
 
 # 环境变量配置
