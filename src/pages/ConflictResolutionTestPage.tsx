@@ -154,7 +154,7 @@ const ConflictResolutionTestPage: React.FC = () => {
 
   const handleTestComplexScenario = async () => {
     try {
-      // 首先尝试自动解决
+      // First try automatic resolution
       const autoResolveResponse = await fetch('/api/conflict-resolution', {
         method: 'POST',
         headers: {
@@ -178,7 +178,7 @@ const ConflictResolutionTestPage: React.FC = () => {
           resolvedCode: autoResolveResult.data.resolvedCode
         })
       } else {
-        // 如果自动解决失败，打开手动解决模态框
+        // If automatic resolution fails, open manual resolution modal
         setShowComplexModal(true)
       }
     } catch (error) {
@@ -215,7 +215,7 @@ const ConflictResolutionTestPage: React.FC = () => {
               </button>
               <div className="flex items-center">
                 <GitMerge className="w-6 h-6 text-orange-500 mr-2" />
-                <h1 className="text-xl font-semibold text-gray-900">冲突解决测试</h1>
+                <h1 className="text-xl font-semibold text-gray-900">Conflict Resolution Test</h1>
               </div>
             </div>
             <div className="flex items-center space-x-2">
@@ -231,7 +231,7 @@ const ConflictResolutionTestPage: React.FC = () => {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Test Scenario Selection */}
         <div className="mb-8">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">选择测试场景</h2>
+          <h2 className="text-lg font-semibold text-gray-900 mb-4">Select Test Scenario</h2>
           <div className="flex space-x-4">
             <button
               onClick={() => setActiveDemo('simple')}
@@ -241,7 +241,7 @@ const ConflictResolutionTestPage: React.FC = () => {
                   : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
               }`}
             >
-              简单冲突场景
+              Simple Conflict Scenario
             </button>
             <button
               onClick={() => setActiveDemo('complex')}
@@ -251,7 +251,7 @@ const ConflictResolutionTestPage: React.FC = () => {
                   : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
               }`}
             >
-              复杂冲突场景
+              Complex Conflict Scenario
             </button>
             <button
               onClick={() => setActiveDemo('custom')}
@@ -261,7 +261,7 @@ const ConflictResolutionTestPage: React.FC = () => {
                   : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
               }`}
             >
-              自定义冲突
+              Custom Conflict
             </button>
           </div>
         </div>
@@ -272,7 +272,7 @@ const ConflictResolutionTestPage: React.FC = () => {
             <div className="bg-white rounded-lg shadow p-6">
               <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
                 <FileText className="w-5 h-5 mr-2 text-blue-500" />
-                简单冲突解决演示
+                Simple Conflict Resolution Demo
               </h3>
               <ConflictResolutionDemo />
             </div>
@@ -286,14 +286,14 @@ const ConflictResolutionTestPage: React.FC = () => {
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-lg font-semibold text-gray-900 flex items-center">
                   <Code className="w-5 h-5 mr-2 text-purple-500" />
-                  复杂冲突场景测试
+                  Complex Conflict Scenario Test
                 </h3>
                 <button
                   onClick={handleTestComplexScenario}
                   className="px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 flex items-center"
                 >
                   <Play className="w-4 h-4 mr-2" />
-                  测试复杂冲突
+                  Test Complex Conflict
                 </button>
               </div>
 
@@ -301,13 +301,13 @@ const ConflictResolutionTestPage: React.FC = () => {
               <div className="mb-6 p-4 bg-orange-50 border border-orange-200 rounded-lg">
                 <div className="flex items-center mb-3">
                   <AlertTriangle className="w-5 h-5 text-orange-500 mr-2" />
-                  <h4 className="font-semibold text-orange-900">复杂冲突场景</h4>
+                  <h4 className="font-semibold text-orange-900">Complex Conflict Scenario</h4>
                 </div>
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
                   <div className="bg-white p-3 rounded border">
                     <h5 className="font-medium text-gray-900 mb-2 flex items-center">
                       <FileText className="w-4 h-4 mr-1" />
-                      原始版本
+                      Original Version
                     </h5>
                     <pre className="text-xs bg-gray-50 p-2 rounded overflow-auto max-h-40">
                       <code>{complexConflictData.originalCode}</code>
@@ -316,7 +316,7 @@ const ConflictResolutionTestPage: React.FC = () => {
                   <div className="bg-white p-3 rounded border">
                     <h5 className="font-medium text-gray-900 mb-2 flex items-center">
                       <GitMerge className="w-4 h-4 mr-1" />
-                      传入版本
+                      Incoming Version
                     </h5>
                     <pre className="text-xs bg-green-50 p-2 rounded overflow-auto max-h-40">
                       <code>{complexConflictData.incomingCode}</code>
@@ -325,7 +325,7 @@ const ConflictResolutionTestPage: React.FC = () => {
                   <div className="bg-white p-3 rounded border">
                     <h5 className="font-medium text-gray-900 mb-2 flex items-center">
                       <AlertTriangle className="w-4 h-4 mr-1" />
-                      当前版本
+                      Current Version
                     </h5>
                     <pre className="text-xs bg-blue-50 p-2 rounded overflow-auto max-h-40">
                       <code>{complexConflictData.currentCode}</code>
@@ -348,13 +348,13 @@ const ConflictResolutionTestPage: React.FC = () => {
                       <XCircle className="w-5 h-5 text-yellow-500 mr-2" />
                     )}
                     <h4 className="font-semibold text-gray-900">
-                      {testResults.autoResolve ? '自动解决成功' : '需要手动解决'}
+                      {testResults.autoResolve ? 'Auto Resolution Successful' : 'Manual Resolution Required'}
                     </h4>
                   </div>
 
                   {testResults.resolvedCode && (
                     <div>
-                      <h5 className="font-medium text-gray-900 mb-2">解决结果:</h5>
+                      <h5 className="font-medium text-gray-900 mb-2">Resolution Result:</h5>
                       <pre className="text-xs bg-white p-3 rounded border overflow-auto max-h-64">
                         <code>{testResults.resolvedCode}</code>
                       </pre>
@@ -372,7 +372,7 @@ const ConflictResolutionTestPage: React.FC = () => {
                           className="px-3 py-1 text-sm text-blue-700 bg-blue-100 rounded hover:bg-blue-200 flex items-center"
                         >
                           <Download className="w-4 h-4 mr-1" />
-                          下载
+                          Download
                         </button>
                       </div>
                     </div>
@@ -389,25 +389,25 @@ const ConflictResolutionTestPage: React.FC = () => {
             <div className="bg-white rounded-lg shadow p-6">
               <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
                 <Settings className="w-5 h-5 mr-2 text-green-500" />
-                自定义冲突测试
+                Custom Conflict Test
               </h3>
               <div className="text-center py-12">
                 <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
                   <Code className="w-8 h-8 text-green-600" />
                 </div>
-                <h4 className="text-lg font-medium text-gray-900 mb-2">自定义冲突场景</h4>
+                <h4 className="text-lg font-medium text-gray-900 mb-2">Custom Conflict Scenario</h4>
                 <p className="text-gray-600 mb-4">
-                  上传您自己的代码文件来测试冲突解决功能
+                  Upload your own code files to test conflict resolution functionality
                 </p>
                 <div className="flex justify-center space-x-3">
                   <button className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700">
-                    上传原始文件
+                    Upload Original File
                   </button>
                   <button className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700">
-                    上传传入文件
+                    Upload Incoming File
                   </button>
                   <button className="px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700">
-                    上传当前文件
+                    Upload Current File
                   </button>
                 </div>
               </div>
@@ -421,9 +421,9 @@ const ConflictResolutionTestPage: React.FC = () => {
             <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center mb-4">
               <GitMerge className="w-6 h-6 text-blue-600" />
             </div>
-            <h3 className="text-lg font-semibold text-gray-900 mb-2">三向差异比较</h3>
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">Three-Way Diff Comparison</h3>
             <p className="text-gray-600 text-sm">
-              直观显示原始版本、传入版本和当前版本之间的差异，帮助快速识别冲突点。
+              Intuitively display differences between original, incoming, and current versions to help quickly identify conflict points.
             </p>
           </div>
 
@@ -431,9 +431,9 @@ const ConflictResolutionTestPage: React.FC = () => {
             <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center mb-4">
               <Play className="w-6 h-6 text-green-600" />
             </div>
-            <h3 className="text-lg font-semibold text-gray-900 mb-2">自动冲突解决</h3>
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">Automatic Conflict Resolution</h3>
             <p className="text-gray-600 text-sm">
-              智能算法自动检测并解决简单冲突，减少手动操作，提高解决效率。
+              Intelligent algorithms automatically detect and resolve simple conflicts, reducing manual operations and improving resolution efficiency.
             </p>
           </div>
 
@@ -441,9 +441,9 @@ const ConflictResolutionTestPage: React.FC = () => {
             <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center mb-4">
               <Eye className="w-6 h-6 text-purple-600" />
             </div>
-            <h3 className="text-lg font-semibold text-gray-900 mb-2">可视化解决</h3>
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">Visual Resolution</h3>
             <p className="text-gray-600 text-sm">
-              提供可视化界面进行手动冲突解决，支持自定义编辑和实时预览。
+              Provides a visual interface for manual conflict resolution with support for custom editing and real-time preview.
             </p>
           </div>
         </div>

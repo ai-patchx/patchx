@@ -38,7 +38,7 @@ export default function Home() {
                   onClick={handleLogout}
                   className={`${theme === 'dark' ? 'bg-red-600 hover:bg-red-700' : 'bg-red-600 hover:bg-red-700'} text-white px-3 py-1 rounded-lg text-sm transition-colors duration-200`}
                 >
-                  退出登录
+                  Sign Out
                 </button>
               ) : (
                 <>
@@ -47,14 +47,14 @@ export default function Home() {
                     className={`${theme === 'dark' ? 'btn-gradient' : 'bg-blue-600 hover:bg-blue-700 text-white'} px-3 py-1 rounded-lg text-sm transition-colors duration-200 flex items-center`}
                   >
                     <LogIn className="w-4 h-4 mr-1" />
-                    登录
+                    Login
                   </button>
                   <button
                     onClick={() => handleAuthAction()}
                     className={`${theme === 'dark' ? 'bg-green-600 hover:bg-green-700' : 'bg-green-600 hover:bg-green-700'} text-white px-3 py-1 rounded-lg text-sm transition-colors duration-200 flex items-center`}
                   >
                     <UserPlus className="w-4 h-4 mr-1" />
-                    注册
+                    Register
                   </button>
                 </>
               )}
@@ -68,14 +68,14 @@ export default function Home() {
           </div>
 
           <div className="text-center mb-6">
-            <h1 className={`text-3xl font-bold mb-2 ${theme === 'dark' ? 'text-gradient-primary' : 'text-gray-900'}`}>Git 提交作者配置</h1>
-            <p className={`${theme === 'dark' ? 'text-gradient-secondary' : 'text-gray-600'}`}>配置你的 Git 提交作者信息</p>
+            <h1 className={`text-3xl font-bold mb-2 ${theme === 'dark' ? 'text-gradient-primary' : 'text-gray-900'}`}>Git Commit Author Configuration</h1>
+            <p className={`${theme === 'dark' ? 'text-gradient-secondary' : 'text-gray-600'}`}>Configure your Git commit author information</p>
           </div>
 
           <div className="space-y-6">
             <div>
               <label htmlFor="authorName" className={`block text-sm font-medium mb-2 ${theme === 'dark' ? 'text-gradient-primary' : 'text-gray-700'}`}>
-                作者名称
+                Author Name
               </label>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -87,14 +87,14 @@ export default function Home() {
                   value={authorName}
                   onChange={(e) => setAuthorName(e.target.value)}
                   className={`${inputBase} ${theme === 'dark' ? inputDark : inputLight}`}
-                  placeholder="请输入名称"
+                  placeholder="Enter name"
                 />
               </div>
             </div>
 
             <div>
               <label htmlFor="authorEmail" className={`block text-sm font-medium mb-2 ${theme === 'dark' ? 'text-gradient-primary' : 'text-gray-700'}`}>
-                作者邮箱
+                Author Email
               </label>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -106,16 +106,16 @@ export default function Home() {
                   value={authorEmail}
                   onChange={(e) => setAuthorEmail(e.target.value)}
                   className={`${inputBase} ${theme === 'dark' ? inputDark : inputLight}`}
-                  placeholder="请输入邮箱"
+                  placeholder="Enter email"
                 />
               </div>
             </div>
 
             <div className={`${theme === 'dark' ? 'bg-gradient-dark-subtle border border-gray-700/40' : 'bg-blue-50 border border-blue-200'} rounded-md p-4`}>
-              <h3 className={`text-sm font-medium mb-2 ${theme === 'dark' ? 'text-gradient-primary' : 'text-blue-900'}`}>当前配置</h3>
+              <h3 className={`text-sm font-medium mb-2 ${theme === 'dark' ? 'text-gradient-primary' : 'text-blue-900'}`}>Current Configuration</h3>
               <div className={`text-sm ${theme === 'dark' ? 'text-gradient-secondary' : 'text-blue-800'}`}>
-                <p>名称：{authorName || '未设置'}</p>
-                <p>邮箱：{authorEmail || '未设置'}</p>
+                <p>Name: {authorName || 'Not set'}</p>
+                <p>Email: {authorEmail || 'Not set'}</p>
               </div>
             </div>
           </div>

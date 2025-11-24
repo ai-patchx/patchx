@@ -23,7 +23,7 @@ export default function RegistrationModal({ isOpen, onClose }: RegistrationModal
   const handleEmailAuth = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!isLogin && password !== confirmPassword) {
-      alert('密码不匹配')
+      alert('Passwords do not match')
       return
     }
 
@@ -34,8 +34,8 @@ export default function RegistrationModal({ isOpen, onClose }: RegistrationModal
         navigate('/submit')
       } else {
         await signUp(email, password)
-        // 注册成功后关闭弹窗并提示用户
-        alert('注册成功！请使用新账号登录')
+        // Close modal and notify user after successful registration
+        alert('Registration successful! Please login with your new account')
         onClose()
       }
     } catch (error) {
@@ -62,7 +62,7 @@ export default function RegistrationModal({ isOpen, onClose }: RegistrationModal
           <div className="px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
             <div className="flex justify-between items-center mb-4">
               <h3 className={`text-lg font-medium ${theme === 'dark' ? 'text-gradient-primary' : 'text-gray-900'}`}>
-                {isLogin ? '登录' : '注册'}
+                {isLogin ? 'Login' : 'Register'}
               </h3>
               <button
                 onClick={onClose}
@@ -81,7 +81,7 @@ export default function RegistrationModal({ isOpen, onClose }: RegistrationModal
             <form onSubmit={handleEmailAuth} className="space-y-4">
               <div>
                 <label htmlFor="email" className={`block text-sm font-medium mb-2 ${theme === 'dark' ? 'text-gradient-primary' : 'text-gray-700'}`}>
-                  邮箱地址
+                  Email Address
                 </label>
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -93,7 +93,7 @@ export default function RegistrationModal({ isOpen, onClose }: RegistrationModal
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     className={`${inputBase} ${theme === 'dark' ? inputDark : inputLight}`}
-                    placeholder="请输入邮箱地址"
+                    placeholder="Enter email address"
                     required
                   />
                 </div>
@@ -101,7 +101,7 @@ export default function RegistrationModal({ isOpen, onClose }: RegistrationModal
 
               <div>
                 <label htmlFor="password" className={`block text-sm font-medium mb-2 ${theme === 'dark' ? 'text-gradient-primary' : 'text-gray-700'}`}>
-                  密码
+                  Password
                 </label>
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -113,7 +113,7 @@ export default function RegistrationModal({ isOpen, onClose }: RegistrationModal
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     className={`${inputBase} ${theme === 'dark' ? inputDark : inputLight}`}
-                    placeholder="请输入密码"
+                    placeholder="Enter password"
                     required
                   />
                 </div>
@@ -122,7 +122,7 @@ export default function RegistrationModal({ isOpen, onClose }: RegistrationModal
               {!isLogin && (
                 <div>
                   <label htmlFor="confirmPassword" className={`block text-sm font-medium mb-2 ${theme === 'dark' ? 'text-gradient-primary' : 'text-gray-700'}`}>
-                    确认密码
+                    Confirm Password
                   </label>
                   <div className="relative">
                     <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -134,7 +134,7 @@ export default function RegistrationModal({ isOpen, onClose }: RegistrationModal
                       value={confirmPassword}
                       onChange={(e) => setConfirmPassword(e.target.value)}
                       className={`${inputBase} ${theme === 'dark' ? inputDark : inputLight}`}
-                      placeholder="请再次输入密码"
+                      placeholder="Enter password again"
                       required
                     />
                   </div>
@@ -152,7 +152,7 @@ export default function RegistrationModal({ isOpen, onClose }: RegistrationModal
                       : 'bg-blue-600 hover:bg-blue-700'
                 } focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500`}
               >
-                {loading ? '处理中...' : (isLogin ? '登录' : '注册')}
+                {loading ? 'Processing...' : (isLogin ? 'Login' : 'Register')}
               </button>
             </form>
 
@@ -162,7 +162,7 @@ export default function RegistrationModal({ isOpen, onClose }: RegistrationModal
                 onClick={() => setIsLogin(!isLogin)}
                 className={`text-sm ${theme === 'dark' ? 'text-blue-400 hover:text-blue-300' : 'text-blue-600 hover:text-blue-500'}`}
               >
-                {isLogin ? '没有账号？点击注册' : '已有账号？点击登录'}
+                {isLogin ? 'No account? Click to register' : 'Already have an account? Click to login'}
               </button>
             </div>
           </div>

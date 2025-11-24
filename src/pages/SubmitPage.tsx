@@ -45,13 +45,13 @@ const SubmitPage: React.FC = () => {
   }, [loadFromStorage])
 
   const handleFileSelect = async (selectedFile: File) => {
-    // 这里可以添加文件预览逻辑
+    // File preview logic can be added here
     console.log('Selected file:', selectedFile)
   }
 
   const addConsoleOutput = (message: string, type: 'info' | 'success' | 'error' | 'warning' = 'info') => {
-    const timestamp = new Date().toLocaleTimeString('zh-CN')
-    const prefix = type === 'error' ? '[错误]' : type === 'success' ? '[成功]' : type === 'warning' ? '[警告]' : '[信息]'
+    const timestamp = new Date().toLocaleTimeString('en-US')
+    const prefix = type === 'error' ? '[Error]' : type === 'success' ? '[Success]' : type === 'warning' ? '[Warning]' : '[Info]'
     setConsoleOutput(prev => [...prev, `[${timestamp}] ${prefix} ${message}`])
   }
 
@@ -87,7 +87,7 @@ const SubmitPage: React.FC = () => {
     e.preventDefault()
 
     if (!file || !selectedProject || !subject) {
-      setError('请填写所有必填字段')
+      setError('Please fill in all required fields')
       return
     }
 
@@ -97,9 +97,9 @@ const SubmitPage: React.FC = () => {
     clearConsole()
 
     try {
-      addConsoleOutput('开始提交流程...', 'info')
-      setCurrentProcess('文件上传')
-      addConsoleOutput('正在上传文件到服务器...', 'info')
+      addConsoleOutput('Starting submission process...', 'info')
+      setCurrentProcess('File Upload')
+      addConsoleOutput('Uploading file to server...', 'info')
 
       // 1. 上传文件
       const formData = new FormData()
@@ -112,33 +112,33 @@ const SubmitPage: React.FC = () => {
       })
 
       if (!uploadResponse.ok) {
-        throw new Error('文件上传失败')
+        throw new Error('File upload failed')
       }
 
       const uploadResult: { uploadId: string } = await uploadResponse.json()
       const uploadId = uploadResult.uploadId
       setUploadId(uploadId)
-      addConsoleOutput(`文件上传成功，上传ID: ${uploadId}`, 'success')
+      addConsoleOutput(`File uploaded successfully, Upload ID: ${uploadId}`, 'success')
 
-      // 2. 冲突检测和解决
-      setCurrentProcess('冲突检测')
-      addConsoleOutput('正在检测潜在的冲突...', 'info')
+      // 2. Conflict detection and resolution
+      setCurrentProcess('Conflict Detection')
+      addConsoleOutput('Detecting potential conflicts...', 'info')
 
-      // 模拟冲突检测过程
+      // Simulate conflict detection process
       await new Promise(resolve => setTimeout(resolve, 1000))
-      addConsoleOutput('冲突检测完成，未发现冲突', 'success')
+      addConsoleOutput('Conflict detection completed, no conflicts found', 'success')
 
-      // 3. 生成单据
-      setCurrentProcess('单据生成')
-      addConsoleOutput('正在生成提交单据...', 'info')
+      // 3. Generate submission record
+      setCurrentProcess('Submission Record Generation')
+      addConsoleOutput('Generating submission record...', 'info')
 
-      // 模拟单据生成过程
+      // Simulate submission record generation process
       await new Promise(resolve => setTimeout(resolve, 800))
-      addConsoleOutput('单据生成成功', 'success')
+      addConsoleOutput('Submission record generated successfully', 'success')
 
-      // 4. 提交patch
-      setCurrentProcess('Patch提交')
-      addConsoleOutput('正在提交Patch到Gerrit...', 'info')
+      // 4. Submit patch
+      setCurrentProcess('Patch Submission')
+      addConsoleOutput('Submitting patch to Gerrit...', 'info')
 
       const submitResponse = await fetch('/api/submit', {
         method: 'POST',
@@ -154,7 +154,7 @@ const SubmitPage: React.FC = () => {
       })
 
       if (!submitResponse.ok) {
-        throw new Error('Patch 提交失败')
+        throw new Error('Patch submission failed')
       }
 
       type SubmitResponse = {
@@ -166,13 +166,13 @@ const SubmitPage: React.FC = () => {
         }
       }
       const submitResult: SubmitResponse = await submitResponse.json()
-      addConsoleOutput('Patch提交成功', 'success')
+      addConsoleOutput('Patch submitted successfully', 'success')
       const submissionId = submitResult.data?.submissionId || submitResult.data?.changeId || null
-      addConsoleOutput(`提交ID: ${submissionId || 'N/A'}`, 'success')
+      addConsoleOutput(`Submission ID: ${submissionId || 'N/A'}`, 'success')
 
-      // 5. 完成
-      setCurrentProcess('完成')
-      addConsoleOutput('所有流程已完成，正在跳转到状态页面...', 'success')
+      // 5. Complete
+      setCurrentProcess('Complete')
+      addConsoleOutput('All processes completed, redirecting to status page...', 'success')
 
       // 跳转到状态页面（优先使用 submissionId）
       setTimeout(() => {
@@ -181,10 +181,10 @@ const SubmitPage: React.FC = () => {
       }, 1500)
 
     } catch (error) {
-      console.error('提交失败:', error)
-      setError(error instanceof Error ? error.message : '提交失败')
+      console.error('Submission failed:', error)
+      setError(error instanceof Error ? error.message : 'Submission failed')
       setUploadStatus('error')
-      addConsoleOutput(`错误: ${error instanceof Error ? error.message : '提交失败'}`, 'error')
+      addConsoleOutput(`Error: ${error instanceof Error ? error.message : 'Submission failed'}`, 'error')
     } finally {
       setIsSubmitting(false)
       setCurrentProcess('')
@@ -231,33 +231,33 @@ const SubmitPage: React.FC = () => {
               PatchX
             </h1>
             <p className={theme === 'dark' ? 'text-gradient-secondary' : 'text-gray-600'}>
-              上传您的 Git patch 文件，我们将帮您提交到 AOSP Gerrit 进行代码审查
+              Upload your Git patch file, and we'll help you submit it to AOSP Gerrit for code review
             </p>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-8">
-            {/* 文件上传 */}
+            {/* File Upload */}
             <div>
               <label className={`block text-sm font-medium mb-4 ${
                 theme === 'dark' ? 'text-gradient-primary' : 'text-gray-700'
               }`}>
                 <div className="flex items-center space-x-2">
                   <FileText className="w-5 h-5" />
-                  <span>Patch 文件</span>
+                  <span>Patch File</span>
                   <span className="text-red-500">*</span>
                 </div>
               </label>
               <FileUpload onFileSelect={handleFileSelect} />
             </div>
 
-            {/* 项目选择 */}
+            {/* Project Selection */}
             <div>
               <label className={`block text-sm font-medium mb-2 ${
                 theme === 'dark' ? 'text-gradient-primary' : 'text-gray-700'
               }`}>
                 <div className="flex items-center space-x-2">
                   <Settings className="w-5 h-5" />
-                  <span>目标项目</span>
+                  <span>Target Project</span>
                   <span className="text-red-500">*</span>
                 </div>
               </label>
@@ -271,7 +271,7 @@ const SubmitPage: React.FC = () => {
                 }`}
                 required
               >
-                <option value="">请选择 AOSP 项目</option>
+                <option value="">Please select an AOSP project</option>
                 {AOSP_PROJECTS.map((project) => (
                   <option key={project.value} value={project.value}>
                     {project.label}
@@ -280,12 +280,12 @@ const SubmitPage: React.FC = () => {
               </select>
             </div>
 
-            {/* 分支选择 */}
+            {/* Branch Selection */}
             <div>
               <label className={`block text-sm font-medium mb-2 ${
                 theme === 'dark' ? 'text-gradient-primary' : 'text-gray-700'
               }`}>
-                目标分支
+                Target Branch
               </label>
               <select
                 value={selectedBranch}
@@ -304,13 +304,13 @@ const SubmitPage: React.FC = () => {
               </select>
             </div>
 
-            {/* 提交主题 */}
+            {/* Commit Subject */}
             <div>
               <label className={`block text-sm font-medium mb-2 ${
                 theme === 'dark' ? 'text-gradient-primary' : 'text-gray-700'
               }`}>
                 <div className="flex items-center space-x-2">
-                  <span>提交主题</span>
+                  <span>Commit Subject</span>
                   <span className="text-red-500">*</span>
                 </div>
               </label>
@@ -318,7 +318,7 @@ const SubmitPage: React.FC = () => {
                 type="text"
                 value={subject}
                 onChange={(e) => setSubject(e.target.value)}
-                placeholder="简要描述您的更改，例如：Fix memory leak in ActivityManager"
+                placeholder="Briefly describe your changes, e.g.: Fix memory leak in ActivityManager"
                 className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent ${
                   theme === 'dark'
                     ? 'input-gradient border-gradient-accent'
@@ -328,17 +328,17 @@ const SubmitPage: React.FC = () => {
               />
             </div>
 
-            {/* 详细描述 */}
+            {/* Detailed Description */}
             <div>
               <label className={`block text-sm font-medium mb-2 ${
                 theme === 'dark' ? 'text-gradient-primary' : 'text-gray-700'
               }`}>
-                详细描述
+                Detailed Description
               </label>
               <textarea
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
-                placeholder="详细描述您的更改内容、原因和影响..."
+                placeholder="Describe your changes in detail, including reasons and impact..."
                 rows={4}
                 className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent ${
                   theme === 'dark'
@@ -388,7 +388,7 @@ const SubmitPage: React.FC = () => {
                 `}
               >
                 <Eye className="w-5 h-5" />
-                <span>{showPreview ? '隐藏预览' : '预览 Commit'}</span>
+                <span>{showPreview ? 'Hide Preview' : 'Preview Commit'}</span>
               </button>
               <button
                 type="submit"
@@ -408,11 +408,11 @@ const SubmitPage: React.FC = () => {
                 `}
               >
                 <Send className="w-5 h-5" />
-                <span>{isSubmitting ? '提交中...' : '提交 Patch'}</span>
+                <span>{isSubmitting ? 'Submitting...' : 'Submit Patch'}</span>
               </button>
             </div>
 
-            {/* 控制台输出 */}
+            {/* Console Output */}
             {(consoleOutput.length > 0 || isSubmitting) && (
               <div className={`border rounded-md mt-6 ${
                 theme === 'dark'
@@ -429,12 +429,12 @@ const SubmitPage: React.FC = () => {
                     <span className={`text-sm font-medium ${
                       theme === 'dark' ? 'text-gradient-primary' : 'text-gray-700'
                     }`}>
-                      控制台输出
+                      Console Output
                       {currentProcess && (
                         <span className={`ml-2 text-xs ${
                           theme === 'dark' ? 'text-gradient-secondary' : 'text-gray-500'
                         }`}>
-                          当前进程: {currentProcess}
+                          Current Process: {currentProcess}
                         </span>
                       )}
                     </span>
@@ -448,7 +448,7 @@ const SubmitPage: React.FC = () => {
                         : 'text-gray-500 hover:text-gray-700 hover:bg-gray-200'
                     }`}
                   >
-                    清空
+                    Clear
                   </button>
                 </div>
                 <div className={`p-4 max-h-64 overflow-y-auto font-mono text-sm ${
@@ -458,7 +458,7 @@ const SubmitPage: React.FC = () => {
                     <div className={`text-center py-8 ${
                       theme === 'dark' ? 'text-gradient-secondary opacity-50' : 'text-gray-400'
                     }`}>
-                      正在等待提交流程开始...
+                      Waiting for submission process to start...
                     </div>
                   ) : (
                     <div className="space-y-1">
@@ -471,7 +471,7 @@ const SubmitPage: React.FC = () => {
                         <div className={`animate-pulse ${
                           theme === 'dark' ? 'text-gradient-secondary' : 'text-gray-400'
                         }`}>
-                          处理中...
+                          Processing...
                         </div>
                       )}
                     </div>
@@ -488,9 +488,9 @@ const SubmitPage: React.FC = () => {
       <div className={`text-xs space-y-1 ${
           theme === 'dark' ? 'text-gradient-secondary opacity-70' : 'text-gray-500'
         }`}>
-          <div>版本: v{packageInfo.version}</div>
-          <div>提交: {import.meta.env.GIT_HASH}</div>
-          <div>构建时间: {new Date(import.meta.env.BUILD_TIME).toLocaleString('zh-CN')}</div>
+          <div>Version: v{packageInfo.version}</div>
+          <div>Commit: {import.meta.env.GIT_HASH}</div>
+          <div>Build Time: {new Date(import.meta.env.BUILD_TIME).toLocaleString('en-US')}</div>
         </div>
       </div>
     </div>

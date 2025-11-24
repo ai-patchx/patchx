@@ -181,46 +181,46 @@ const ConflictResolutionDemo: React.FC = () => {
       <div className="mb-6">
         <h2 className="text-2xl font-bold text-gray-900 mb-2 flex items-center">
           <GitMerge className="w-6 h-6 mr-2 text-orange-500" />
-          补丁冲突解决演示
+          Patch Conflict Resolution Demo
         </h2>
         <p className="text-gray-600">
-          演示三向差异比较和冲突解决功能。系统会首先尝试自动解决简单冲突，
-          如果无法自动解决，将打开交互式冲突解决界面。
+          Demonstrates three-way diff comparison and conflict resolution functionality. The system will first attempt to automatically resolve simple conflicts,
+          and if automatic resolution is not possible, it will open an interactive conflict resolution interface.
         </p>
       </div>
 
-      {/* 冲突概览 */}
+      {/* Conflict Overview */}
       <div className="mb-6 p-4 bg-orange-50 border border-orange-200 rounded-lg">
         <div className="flex items-center mb-3">
           <AlertTriangle className="w-5 h-5 text-orange-500 mr-2" />
-          <h3 className="text-lg font-semibold text-orange-900">检测到冲突</h3>
+          <h3 className="text-lg font-semibold text-orange-900">Conflicts Detected</h3>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div className="bg-white p-3 rounded border">
-            <h4 className="font-medium text-gray-900 mb-2">原始版本</h4>
+            <h4 className="font-medium text-gray-900 mb-2">Original Version</h4>
             <pre className="text-xs bg-gray-50 p-2 rounded overflow-auto max-h-32">
               <code>{mockConflictData.originalCode}</code>
             </pre>
           </div>
           <div className="bg-white p-3 rounded border">
-            <h4 className="font-medium text-gray-900 mb-2">传入版本</h4>
+            <h4 className="font-medium text-gray-900 mb-2">Incoming Version</h4>
             <pre className="text-xs bg-green-50 p-2 rounded overflow-auto max-h-32">
               <code>{mockConflictData.incomingCode}</code>
             </pre>
           </div>
           <div className="bg-white p-3 rounded border">
-            <h4 className="font-medium text-gray-900 mb-2">当前版本</h4>
+            <h4 className="font-medium text-gray-900 mb-2">Current Version</h4>
             <pre className="text-xs bg-blue-50 p-2 rounded overflow-auto max-h-32">
               <code>{mockConflictData.currentCode}</code>
             </pre>
           </div>
         </div>
         <div className="mt-3 text-sm text-orange-800">
-          冲突数量: {mockConflictData.conflicts.length} 个
+          Number of conflicts: {mockConflictData.conflicts.length}
         </div>
       </div>
 
-      {/* 操作按钮 */}
+      {/* Action Buttons */}
       <div className="flex space-x-3 mb-6">
         <button
           onClick={handleTestConflictResolution}
@@ -230,12 +230,12 @@ const ConflictResolutionDemo: React.FC = () => {
           {isLoading ? (
             <>
               <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />
-              处理中...
+              Processing...
             </>
           ) : (
             <>
               <Play className="w-4 h-4 mr-2" />
-              自动解决冲突
+              Auto Resolve Conflicts
             </>
           )}
         </button>
@@ -244,11 +244,11 @@ const ConflictResolutionDemo: React.FC = () => {
           className="px-4 py-2 bg-orange-600 text-white rounded-md hover:bg-orange-700 flex items-center"
         >
           <GitMerge className="w-4 h-4 mr-2" />
-          手动解决冲突
+          Manual Resolve Conflicts
         </button>
       </div>
 
-      {/* 解决结果 */}
+      {/* Resolution Result */}
       {resolutionResult && (
         <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-lg">
           <div className="flex items-center justify-between mb-3">
@@ -256,14 +256,14 @@ const ConflictResolutionDemo: React.FC = () => {
               <div className="w-5 h-5 bg-green-500 rounded-full flex items-center justify-center mr-2">
                 <span className="text-white text-xs">✓</span>
               </div>
-              <h3 className="text-lg font-semibold text-green-900">冲突已解决</h3>
+              <h3 className="text-lg font-semibold text-green-900">Conflicts Resolved</h3>
             </div>
             <button
               onClick={downloadResolvedCode}
               className="px-3 py-1 text-sm text-green-700 bg-green-100 rounded hover:bg-green-200 flex items-center"
             >
               <Download className="w-4 h-4 mr-1" />
-              下载解决结果
+              Download Resolution
             </button>
           </div>
           <pre className="text-xs bg-white p-3 rounded border overflow-auto max-h-64">
@@ -272,35 +272,35 @@ const ConflictResolutionDemo: React.FC = () => {
         </div>
       )}
 
-      {/* 冲突详情 */}
+      {/* Conflict Details */}
       <div className="mb-6">
         <h3 className="text-lg font-semibold text-gray-900 mb-3 flex items-center">
           <Eye className="w-5 h-5 mr-2 text-gray-500" />
-          冲突详情
+          Conflict Details
         </h3>
         <div className="space-y-3">
           {mockConflictData.conflicts.map((conflict, index) => (
             <div key={index} className="p-3 bg-gray-50 border border-gray-200 rounded">
               <div className="flex items-center justify-between mb-2">
                 <span className="text-sm font-medium text-gray-900">
-                  第 {conflict.lineNumber} 行 - {conflict.type}
+                  Line {conflict.lineNumber} - {conflict.type}
                 </span>
                 <span className="px-2 py-1 text-xs bg-red-100 text-red-800 rounded">
-                  冲突
+                  Conflict
                 </span>
               </div>
               <p className="text-sm text-gray-600 mb-2">{conflict.description}</p>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-2 text-xs">
                 <div>
-                  <span className="font-medium text-gray-700">原始:</span>
+                  <span className="font-medium text-gray-700">Original:</span>
                   <pre className="bg-red-50 p-2 rounded mt-1">{conflict.original}</pre>
                 </div>
                 <div>
-                  <span className="font-medium text-gray-700">传入:</span>
+                  <span className="font-medium text-gray-700">Incoming:</span>
                   <pre className="bg-green-50 p-2 rounded mt-1">{conflict.incoming}</pre>
                 </div>
                 <div>
-                  <span className="font-medium text-gray-700">当前:</span>
+                  <span className="font-medium text-gray-700">Current:</span>
                   <pre className="bg-blue-50 p-2 rounded mt-1">{conflict.current}</pre>
                 </div>
               </div>

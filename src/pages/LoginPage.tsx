@@ -31,7 +31,7 @@ export default function LoginPage() {
       navigate('/submit')
     } catch (err) {
       console.error('Login error:', err)
-      setError(err instanceof Error ? err.message : '登录失败，请重试')
+      setError(err instanceof Error ? err.message : 'Login failed, please try again')
     } finally {
       setIsLoading(false)
     }
@@ -73,12 +73,12 @@ export default function LoginPage() {
             <h1 className={`text-3xl font-bold mb-2 text-center ${
               theme === 'dark' ? 'text-gradient-primary' : 'text-gray-900'
             }`}>
-              用户登录
+              User Login
             </h1>
             <p className={`text-center ${
               theme === 'dark' ? 'text-gradient-secondary' : 'text-gray-600'
             }`}>
-              使用您的账号登录 PatchX
+              Login to PatchX with your account
             </p>
           </div>
 
@@ -87,7 +87,7 @@ export default function LoginPage() {
               <label htmlFor="username" className={`block text-sm font-medium mb-2 ${
                 theme === 'dark' ? 'text-gradient-primary' : 'text-gray-700'
               }`}>
-                用户名
+                Username
               </label>
               <input
                 id="username"
@@ -99,7 +99,7 @@ export default function LoginPage() {
                     ? 'input-gradient border-gradient-accent'
                     : 'border-gray-300 bg-white'
                 }`}
-                placeholder="用户名"
+                placeholder="Username"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
               />
@@ -109,7 +109,7 @@ export default function LoginPage() {
               <label htmlFor="password" className={`block text-sm font-medium mb-2 ${
                 theme === 'dark' ? 'text-gradient-primary' : 'text-gray-700'
               }`}>
-                密码
+                Password
               </label>
               <input
                 id="password"
@@ -121,7 +121,7 @@ export default function LoginPage() {
                     ? 'input-gradient border-gradient-accent'
                     : 'border-gray-300 bg-white'
                 }`}
-                placeholder="密码"
+                placeholder="Password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
               />
@@ -153,7 +153,7 @@ export default function LoginPage() {
                   }
                 `}
               >
-                {isLoading ? '登录中...' : '登录'}
+                {isLoading ? 'Logging in...' : 'Login'}
               </button>
 
               <div className="relative">
@@ -172,7 +172,7 @@ export default function LoginPage() {
                     ? { background: 'rgba(26, 26, 46, 0.8)' }
                     : { background: '#ffffff' }
                   }>
-                    或者
+                    Or
                   </span>
                 </div>
               </div>
@@ -191,7 +191,7 @@ export default function LoginPage() {
                 `}
               >
                 <Mail className="w-4 h-4 mr-2" />
-                邮箱注册
+                Email Registration
               </button>
             </div>
           </form>

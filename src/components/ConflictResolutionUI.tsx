@@ -74,7 +74,7 @@ const ConflictResolutionUI: React.FC<ConflictResolutionUIProps> = ({
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-3">
               <AlertTriangle className="w-6 h-6 text-yellow-500" />
-              <h2 className="text-xl font-semibold text-gray-900">代码冲突解决</h2>
+              <h2 className="text-xl font-semibold text-gray-900">Code Conflict Resolution</h2>
             </div>
             <button
               onClick={onCancel}
@@ -84,20 +84,20 @@ const ConflictResolutionUI: React.FC<ConflictResolutionUIProps> = ({
             </button>
           </div>
           <p className="text-sm text-gray-600 mt-2">
-            文件: {conflictData.filePath} | 检测到 {conflictData.conflicts.length} 个冲突
+            File: {conflictData.filePath} | {conflictData.conflicts.length} conflicts detected
           </p>
         </div>
 
         <div className="flex h-[calc(90vh-120px)]">
-          {/* 左侧: 控制面板 */}
+          {/* Left: Control Panel */}
           <div className="w-80 border-r border-gray-200 p-4 bg-gray-50">
             <div className="space-y-4">
-              {/* AI提供商选择 */}
+              {/* AI Provider Selection */}
               {isAIEnabled && (
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     <Bot className="w-4 h-4 inline mr-2" />
-                    AI提供商
+                    AI Provider
                   </label>
                   <select
                     value={selectedProvider}
@@ -113,7 +113,7 @@ const ConflictResolutionUI: React.FC<ConflictResolutionUIProps> = ({
                 </div>
               )}
 
-              {/* 多提供商模式 */}
+              {/* Multiple Provider Mode */}
               {isAIEnabled && aiProviders.length > 1 && (
                 <div className="flex items-center">
                   <input
@@ -124,21 +124,21 @@ const ConflictResolutionUI: React.FC<ConflictResolutionUIProps> = ({
                     className="mr-2"
                   />
                   <label htmlFor="multipleProviders" className="text-sm text-gray-700">
-                    使用多个AI提供商对比结果
+                    Use multiple AI providers to compare results
                   </label>
                 </div>
               )}
 
-              {/* 冲突列表 */}
+              {/* Conflict List */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   <AlertTriangle className="w-4 h-4 inline mr-2" />
-                  冲突详情
+                  Conflict Details
                 </label>
                 <div className="space-y-2 max-h-40 overflow-y-auto">
                   {conflictData.conflicts.map((conflict, index) => (
                     <div key={index} className="p-2 bg-white border border-gray-200 rounded text-xs">
-                      <div className="font-medium text-gray-700">行 {conflict.lineNumber}</div>
+                      <div className="font-medium text-gray-700">Line {conflict.lineNumber}</div>
                       <div className="text-gray-600">{conflict.type}</div>
                       <div className="text-gray-500 mt-1">{conflict.description}</div>
                     </div>
@@ -146,7 +146,7 @@ const ConflictResolutionUI: React.FC<ConflictResolutionUIProps> = ({
                 </div>
               </div>
 
-              {/* AI解决按钮 */}
+              {/* AI Resolution Button */}
               {isAIEnabled && !resolution && (
                 <button
                   onClick={handleAIResolve}
@@ -156,18 +156,18 @@ const ConflictResolutionUI: React.FC<ConflictResolutionUIProps> = ({
                   {isResolving ? (
                     <>
                       <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
-                      AI解决中...
+                      AI Resolving...
                     </>
                   ) : (
                     <>
                       <Bot className="w-4 h-4 mr-2" />
-                      使用AI解决冲突
+                      Use AI to Resolve Conflicts
                     </>
                   )}
                 </button>
               )}
 
-              {/* 操作按钮 */}
+              {/* Action Buttons */}
               {resolution && (
                 <div className="space-y-2">
                   <button
@@ -176,58 +176,58 @@ const ConflictResolutionUI: React.FC<ConflictResolutionUIProps> = ({
                     className="w-full px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:opacity-50"
                   >
                     <CheckCircle className="w-4 h-4 inline mr-2" />
-                    接受解决方案
+                    Accept Resolution
                   </button>
                   <button
                     onClick={handleRejectResolution}
                     className="w-full px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700"
                   >
                     <XCircle className="w-4 h-4 inline mr-2" />
-                    重新解决
+                    Resolve Again
                   </button>
                 </div>
               )}
             </div>
           </div>
 
-          {/* 右侧: 代码对比 */}
+          {/* Right: Code Comparison */}
           <div className="flex-1 flex">
-            {/* 原始代码 */}
+            {/* Original Code */}
             <div className="flex-1 p-4">
               <div className="flex items-center mb-3">
                 <FileText className="w-4 h-4 mr-2 text-gray-500" />
-                <h3 className="font-medium text-gray-700">原始代码</h3>
+                <h3 className="font-medium text-gray-700">Original Code</h3>
               </div>
               <pre className="bg-gray-100 p-4 rounded-md text-sm overflow-auto h-[calc(100%-60px)]">
                 <code>{conflictData.originalCode}</code>
               </pre>
             </div>
 
-            {/* 传入代码 */}
+            {/* Incoming Code */}
             <div className="flex-1 p-4 border-l border-gray-200">
               <div className="flex items-center mb-3">
                 <FileText className="w-4 h-4 mr-2 text-gray-500" />
-                <h3 className="font-medium text-gray-700">传入代码 (Patch)</h3>
+                <h3 className="font-medium text-gray-700">Incoming Code (Patch)</h3>
               </div>
               <pre className="bg-gray-100 p-4 rounded-md text-sm overflow-auto h-[calc(100%-60px)]">
                 <code>{conflictData.incomingCode}</code>
               </pre>
             </div>
 
-            {/* 解决结果 */}
+            {/* Resolution Result */}
             {resolution && (
               <div className="flex-1 p-4 border-l border-gray-200">
                 <div className="flex items-center justify-between mb-3">
                   <div className="flex items-center">
                     <Code className="w-4 h-4 mr-2 text-gray-500" />
-                    <h3 className="font-medium text-gray-700">解决结果</h3>
+                    <h3 className="font-medium text-gray-700">Resolution Result</h3>
                   </div>
                   <div className={`px-2 py-1 rounded text-xs ${
                     resolution.requiresManualReview
                       ? 'bg-yellow-100 text-yellow-800'
                       : 'bg-green-100 text-green-800'
                   }`}>
-                    {resolution.requiresManualReview ? '需人工审查' : 'AI已解决'}
+                    {resolution.requiresManualReview ? 'Requires Manual Review' : 'AI Resolved'}
                   </div>
                 </div>
 
@@ -237,11 +237,11 @@ const ConflictResolutionUI: React.FC<ConflictResolutionUIProps> = ({
                   </pre>
 
                   <div className="bg-gray-50 p-4 rounded-md h-1/2 overflow-auto">
-                    <h4 className="font-medium text-gray-700 mb-2">解决说明</h4>
+                    <h4 className="font-medium text-gray-700 mb-2">Resolution Explanation</h4>
                     <p className="text-sm text-gray-600 mb-3">{resolution.explanation}</p>
 
                     <div className="flex items-center mb-2">
-                      <span className="text-sm text-gray-600">置信度:</span>
+                      <span className="text-sm text-gray-600">Confidence:</span>
                       <div className="ml-2 bg-gray-200 rounded-full h-2 flex-1 max-w-20">
                         <div
                           className="bg-blue-500 h-2 rounded-full"
@@ -255,7 +255,7 @@ const ConflictResolutionUI: React.FC<ConflictResolutionUIProps> = ({
 
                     {resolution.suggestions.length > 0 && (
                       <div>
-                        <h5 className="font-medium text-gray-700 mb-1">建议:</h5>
+                        <h5 className="font-medium text-gray-700 mb-1">Suggestions:</h5>
                         <ul className="text-sm text-gray-600 space-y-1">
                           {resolution.suggestions.map((suggestion, index) => (
                             <li key={index} className="flex items-start">

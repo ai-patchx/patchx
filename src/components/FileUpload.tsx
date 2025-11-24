@@ -19,11 +19,11 @@ const FileUpload: React.FC<FileUploadProps> = ({
 
   const validateFile = (file: File): string | null => {
     if (!file.name.match(/\.(patch|diff)$/i)) {
-      return '请上传 .patch 或 .diff 格式的文件'
+      return 'Please upload a .patch or .diff file'
     }
 
     if (file.size > maxSize) {
-      return `文件大小不能超过 ${maxSize / 1024 / 1024}MB`
+      return `File size cannot exceed ${maxSize / 1024 / 1024}MB`
     }
 
     return null
@@ -125,10 +125,10 @@ const FileUpload: React.FC<FileUploadProps> = ({
           ) : (
             <div className="space-y-2">
               <p className="text-lg font-medium text-gray-700">
-                拖拽文件到此处或点击选择
+                Drag and drop a file here or click to select
               </p>
               <p className="text-sm text-gray-500">
-                支持 .patch 和 .diff 格式，最大 {maxSize / 1024 / 1024}MB
+                Supports .patch and .diff formats, maximum {maxSize / 1024 / 1024}MB
               </p>
             </div>
           )}

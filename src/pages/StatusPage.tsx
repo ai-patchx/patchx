@@ -24,15 +24,15 @@ const StatusPage: React.FC = () => {
       if (response.success && response.data) {
         setStatus(response.data)
 
-        // 如果状态是已完成或失败，停止自动刷新
+        // If status is completed or failed, stop auto refresh
         if (response.data.status === 'completed' || response.data.status === 'failed') {
           setAutoRefresh(false)
         }
       } else {
-        setError(response.error || '获取状态失败')
+        setError(response.error || 'Failed to get status')
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : '获取状态失败')
+      setError(err instanceof Error ? err.message : 'Failed to get status')
     } finally {
       setLoading(false)
     }
@@ -47,7 +47,7 @@ const StatusPage: React.FC = () => {
 
     const interval = setInterval(() => {
       fetchStatus()
-    }, 3000) // 每3秒刷新一次
+    }, 3000) // Refresh every 3 seconds
 
     return () => clearInterval(interval)
   }, [autoRefresh, fetchStatus])
@@ -70,15 +70,15 @@ const StatusPage: React.FC = () => {
   const getStatusText = () => {
     switch (status?.status) {
       case 'pending':
-        return '等待处理'
+        return 'Pending'
       case 'processing':
-        return '正在处理'
+        return 'Processing'
       case 'completed':
-        return '提交成功'
+        return 'Submitted Successfully'
       case 'failed':
-        return '提交失败'
+        return 'Submission Failed'
       default:
-        return '未知状态'
+        return 'Unknown Status'
     }
   }
 
@@ -115,7 +115,7 @@ const StatusPage: React.FC = () => {
             theme === 'dark' ? 'text-blue-400' : 'text-blue-500'
           }`} />
           <p className={theme === 'dark' ? 'text-gradient-secondary' : 'text-gray-600'}>
-            正在加载状态...
+            Loading status...
           </p>
         </div>
       </div>
@@ -134,7 +134,7 @@ const StatusPage: React.FC = () => {
             }`} />
             <h2 className={`text-xl font-semibold mb-2 ${
               theme === 'dark' ? 'text-gradient-primary' : 'text-gray-900'
-            }`}>获取状态失败</h2>
+            }`}>Failed to Get Status</h2>
             <p className={`mb-4 ${
               theme === 'dark' ? 'text-gradient-secondary' : 'text-gray-600'
             }`}>{error}</p>
@@ -145,7 +145,7 @@ const StatusPage: React.FC = () => {
                 : 'px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700'
               }
             >
-              重试
+              Retry
             </button>
           </div>
         </div>
@@ -176,7 +176,7 @@ const StatusPage: React.FC = () => {
           <div className="text-center mb-8">
             <h1 className={`text-3xl font-bold mb-4 ${
               theme === 'dark' ? 'text-gradient-primary' : 'text-gray-900'
-            }`}>提交状态</h1>
+            }`}>Submission Status</h1>
 
             <div className="flex justify-center mb-6">
               {getStatusIcon()}
@@ -187,7 +187,7 @@ const StatusPage: React.FC = () => {
             </div>
           </div>
 
-          {/* 状态详情 */}
+          {/* Status Details */}
           <div className={`rounded-lg p-6 mb-6 ${
             theme === 'dark'
               ? 'bg-gradient-start/50 border border-gradient-accent/30'
@@ -195,11 +195,11 @@ const StatusPage: React.FC = () => {
           }`}>
             <h3 className={`text-lg font-semibold mb-4 ${
               theme === 'dark' ? 'text-gradient-primary' : 'text-gray-900'
-            }`}>详细信息</h3>
+            }`}>Details</h3>
             <div className="space-y-3">
               <div className="flex justify-between">
                 <span className={theme === 'dark' ? 'text-gradient-secondary' : 'text-gray-600'}>
-                  提交ID:
+                  Submission ID:
                 </span>
                 <span className={`font-mono text-sm ${
                   theme === 'dark' ? 'text-gradient-primary' : 'text-gray-900'
@@ -207,7 +207,7 @@ const StatusPage: React.FC = () => {
               </div>
               <div className="flex justify-between">
                 <span className={theme === 'dark' ? 'text-gradient-secondary' : 'text-gray-600'}>
-                  状态:
+                  Status:
                 </span>
                 <span className={`font-medium ${getStatusColor().split(' ')[0]}`}>
                   {getStatusText()}
@@ -215,7 +215,7 @@ const StatusPage: React.FC = () => {
               </div>
               <div className="flex justify-between">
                 <span className={theme === 'dark' ? 'text-gradient-secondary' : 'text-gray-600'}>
-                  创建时间:
+                  Created At:
                 </span>
                 <span className={`text-sm ${
                   theme === 'dark' ? 'text-gradient-primary' : 'text-gray-900'
@@ -237,7 +237,7 @@ const StatusPage: React.FC = () => {
             </div>
           </div>
 
-          {/* Gerrit链接 */}
+          {/* Gerrit Link */}
           {status?.changeUrl && (
             <div className={`border rounded-lg p-6 mb-6 ${
               theme === 'dark'
@@ -251,10 +251,10 @@ const StatusPage: React.FC = () => {
                 <div>
                   <p className={`mb-2 ${
                     theme === 'dark' ? 'text-green-300' : 'text-green-700'
-                  }`}>您的patch已成功提交到AOSP Gerrit</p>
+                  }`}>Your patch has been successfully submitted to AOSP Gerrit</p>
                   <p className={`text-sm ${
                     theme === 'dark' ? 'text-green-400' : 'text-green-600'
-                  }`}>点击链接查看详细信息并跟踪审核进度</p>
+                  }`}>Click the link to view details and track review progress</p>
                 </div>
                 <a
                   href={status.changeUrl}
@@ -265,14 +265,14 @@ const StatusPage: React.FC = () => {
                     : 'inline-flex items-center px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700'
                   }
                 >
-                  <span>查看Change</span>
+                  <span>View Change</span>
                   <ExternalLink className="w-4 h-4 ml-2" />
                 </a>
               </div>
             </div>
           )}
 
-          {/* 错误信息 */}
+          {/* Error Message */}
           {status?.error && (
             <div className={`border rounded-lg p-6 mb-6 ${
               theme === 'dark'
@@ -281,14 +281,14 @@ const StatusPage: React.FC = () => {
             }`}>
               <h3 className={`text-lg font-semibold mb-4 ${
                 theme === 'dark' ? 'text-red-400' : 'text-red-900'
-              }`}>错误信息</h3>
+              }`}>Error Message</h3>
               <p className={theme === 'dark' ? 'text-red-300' : 'text-red-700'}>
                 {status.error}
               </p>
             </div>
           )}
 
-          {/* 操作按钮 */}
+          {/* Action Buttons */}
           <div className="flex justify-center space-x-4">
             <button
               onClick={fetchStatus}
@@ -302,7 +302,7 @@ const StatusPage: React.FC = () => {
               `}
             >
               <RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
-              <span>刷新状态</span>
+              <span>Refresh Status</span>
             </button>
 
             <a
@@ -315,7 +315,7 @@ const StatusPage: React.FC = () => {
                 }
               `}
             >
-              返回首页
+              Back to Home
             </a>
           </div>
         </div>
