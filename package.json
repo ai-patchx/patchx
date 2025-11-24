@@ -14,7 +14,7 @@
     "check": "tsc -b --noEmit",
     "db:reset": "bash scripts/reset-db.sh",
     "db:reset:confirm": "bash scripts/reset-db.sh --confirm",
-    "deploy": "npm run build:worker && wrangler deploy"
+    "deploy": "npm run build:worker && npx wrangler deploy"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.83.0",
@@ -49,6 +49,7 @@
     "typescript-eslint": "^8.30.1",
     "vite": "^6.3.5",
     "vite-plugin-trae-solo-badge": "^1.0.0",
-    "vite-tsconfig-paths": "^5.1.4"
+    "vite-tsconfig-paths": "^5.1.4",
+    "wrangler": "^4.50.0"
   }
 }
