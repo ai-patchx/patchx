@@ -21,6 +21,8 @@ export default defineConfig({
     'import.meta.env.GIT_HASH': JSON.stringify(gitHash),
     'import.meta.env.BUILD_TIME': JSON.stringify(new Date().toISOString()),
     'import.meta.env.TEST_USER_PASSWORD': JSON.stringify(process.env.TEST_USER_PASSWORD || 'patchx'),
+    'import.meta.env.SUPABASE_URL': JSON.stringify(process.env.SUPABASE_URL || ''),
+    'import.meta.env.SUPABASE_ANON_KEY': JSON.stringify(process.env.SUPABASE_ANON_KEY || ''),
   },
   server: {
     proxy: {

@@ -50,13 +50,13 @@ while [[ $# -gt 0 ]]; do
       echo "  --project-ref REF      Supabase project reference ID"
       echo "  --db-url URL          Direct database connection URL"
       echo "  --supabase-url URL     Supabase project URL"
-      echo "  --service-role-key KEY Supabase service role key (required for API reset)"
+      echo "  --service-role-key KEY Supabase anon key (required for API reset)"
       echo "  -h, --help            Show this help message"
       echo ""
       echo "Environment variables:"
       echo "  SUPABASE_PROJECT_REF   Supabase project reference ID"
       echo "  SUPABASE_URL          Supabase project URL"
-      echo "  SUPABASE_SERVICE_ROLE_KEY  Supabase service role key"
+      echo "  SUPABASE_ANON_KEY      Supabase anon key"
       echo "  DATABASE_URL          Direct database connection URL"
       exit 0
       ;;
@@ -75,8 +75,8 @@ fi
 
 # Use environment variables if not provided via arguments
 PROJECT_REF=${PROJECT_REF:-$SUPABASE_PROJECT_REF}
-SUPABASE_URL=${SUPABASE_URL:-$VITE_SUPABASE_URL:-$SUPABASE_URL}
-SERVICE_ROLE_KEY=${SERVICE_ROLE_KEY:-$SUPABASE_SERVICE_ROLE_KEY}
+SUPABASE_URL=${SUPABASE_URL:-$SUPABASE_URL}
+SERVICE_ROLE_KEY=${SERVICE_ROLE_KEY:-$SUPABASE_ANON_KEY}
 DB_URL=${DB_URL:-$DATABASE_URL}
 
 # Check if Supabase CLI is installed
@@ -107,9 +107,9 @@ reset_with_cli() {
 # Function to reset using API (requires service role key)
 reset_with_api() {
   if [ -z "$SUPABASE_URL" ] || [ -z "$SERVICE_ROLE_KEY" ]; then
-    echo -e "${RED}Error: SUPABASE_URL and SERVICE_ROLE_KEY are required for API-based reset.${NC}"
+    echo -e "${RED}Error: SUPABASE_URL and SUPABASE_ANON_KEY are required for API-based reset.${NC}"
     echo "Provide them via:"
-    echo "  - Environment variables: SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY"
+    echo "  - Environment variables: SUPABASE_URL and SUPABASE_ANON_KEY"
     echo "  - Command line: --supabase-url and --service-role-key"
     exit 1
   fi

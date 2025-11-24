@@ -67,8 +67,8 @@ wrangler secret put TEST_USER_PASSWORD
 - 仅支持邮箱注册（基于 Supabase）
 - 在 `.env.local` 配置以下变量：
 ```bash
-VITE_SUPABASE_URL=https://your-supabase-project.supabase.co
-VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
+SUPABASE_URL=https://your-supabase-project.supabase.co
+SUPABASE_ANON_KEY=your_supabase_anon_key
 ```
 
 在 Supabase 中启用 GitHub OAuth：
@@ -170,20 +170,20 @@ npm run db:reset:confirm
 # 使用环境变量（推荐）
 export SUPABASE_PROJECT_REF=your_project_ref
 export SUPABASE_URL=https://your-project.supabase.co
-export SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
+export SUPABASE_ANON_KEY=your_supabase_anon_key
 ./scripts/reset-db.sh
 ```
 
 **要求：**
 - 安装 Supabase CLI：`npm install -g supabase`（推荐）
-- 或提供 `SUPABASE_URL` 和 `SUPABASE_SERVICE_ROLE_KEY` 环境变量
+- 或提供 `SUPABASE_URL` 和 `SUPABASE_ANON_KEY` 环境变量
 
 **环境变量：**
 创建 `.env.local` 文件或导出以下变量：
 ```bash
 SUPABASE_PROJECT_REF=your_project_ref
 SUPABASE_URL=https://your-project.supabase.co
-SUPABASE_SERVICE_ROLE_KEY=your_service_role_key  # 仅 API 方式重置时需要
+SUPABASE_ANON_KEY=your_supabase_anon_key  # 仅 API 方式重置时需要
 ```
 
 **重要提示：**
@@ -249,8 +249,8 @@ CUSTOM_AI_TEMPERATURE=0.1
 TEST_USER_PASSWORD=your-secure-password
 
 # Supabase（前端）
-VITE_SUPABASE_URL=https://your-supabase-project.supabase.co
-VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
+SUPABASE_URL=https://your-supabase-project.supabase.co
+SUPABASE_ANON_KEY=your_supabase_anon_key
 ```
 
 ### 前端环境变量（Vite）
@@ -269,8 +269,8 @@ VITE_WORKER_BASE_URL=https://patchx-service.angersax.workers.dev
 
 1. 进入 Cloudflare Pages → 选择项目 → Settings → Environment variables
 2. 在 "Production" 与 "Preview"（按需）添加以下变量：
-   - `VITE_SUPABASE_URL` → `https://<your-project>.supabase.co`
-   - `VITE_SUPABASE_ANON_KEY` → `<your_anon_key>`
+   - `SUPABASE_URL` → `https://<your-project>.supabase.co`
+   - `SUPABASE_ANON_KEY` → `<your_anon_key>`
 3. 重新部署 Pages 项目使新的环境变量生效。
 
 说明：
@@ -291,7 +291,7 @@ SUPABASE_URL = "https://<your-project>.supabase.co"
 SUPABASE_ANON_KEY = "<your_anon_key>"
 ```
 2. Worker 提供公共配置端点 `/api/config/public`，返回 `{ supabaseUrl, supabaseAnonKey }`。
-3. 前端采用惰性初始化 Supabase，当未设置 `VITE_SUPABASE_*` 时将回退到该端点。
+3. 前端采用惰性初始化 Supabase，当未设置 `SUPABASE_*` 时将回退到该端点。
 
 ### Gerrit 配置
 

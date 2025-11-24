@@ -9,8 +9,8 @@ const create = (url: string, key: string) => {
 
 export const getSupabaseClient = async (): Promise<SupabaseClient> => {
   if (client) return client
-  const url = import.meta.env.VITE_SUPABASE_URL || ''
-  const key = import.meta.env.VITE_SUPABASE_ANON_KEY || ''
+  const url = import.meta.env.SUPABASE_URL || ''
+  const key = import.meta.env.SUPABASE_ANON_KEY || ''
   if (url && key) return create(url, key)
   const res = await fetch('/api/config/public').catch(() => null as unknown as Response)
   if (res) {

@@ -67,8 +67,8 @@ wrangler secret put TEST_USER_PASSWORD
 - Email registration only via Supabase
 - Configure environment variables in `.env.local`:
 ```bash
-VITE_SUPABASE_URL=https://your-supabase-project.supabase.co
-VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
+SUPABASE_URL=https://your-supabase-project.supabase.co
+SUPABASE_ANON_KEY=your_supabase_anon_key
 ```
 
 Legacy test account (for Worker API testing only):
@@ -166,20 +166,20 @@ npm run db:reset:confirm
 # With environment variables (recommended)
 export SUPABASE_PROJECT_REF=your_project_ref
 export SUPABASE_URL=https://your-project.supabase.co
-export SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
+export SUPABASE_ANON_KEY=your_supabase_anon_key
 ./scripts/reset-db.sh
 ```
 
 **Requirements:**
 - Supabase CLI installed: `npm install -g supabase` (recommended)
-- Or provide `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` environment variables
+- Or provide `SUPABASE_URL` and `SUPABASE_ANON_KEY` environment variables
 
 **Environment Variables:**
 Create a `.env.local` file or export these variables:
 ```bash
 SUPABASE_PROJECT_REF=your_project_ref
 SUPABASE_URL=https://your-project.supabase.co
-SUPABASE_SERVICE_ROLE_KEY=your_service_role_key  # Only needed for API-based reset
+SUPABASE_ANON_KEY=your_supabase_anon_key  # Only needed for API-based reset
 ```
 
 **Important:**
@@ -245,8 +245,8 @@ CUSTOM_AI_TEMPERATURE=0.1
 TEST_USER_PASSWORD=your-secure-password
 
 # Supabase (frontend)
-VITE_SUPABASE_URL=https://your-supabase-project.supabase.co
-VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
+SUPABASE_URL=https://your-supabase-project.supabase.co
+SUPABASE_ANON_KEY=your_supabase_anon_key
 ```
 
 ### Frontend environment (Vite)
@@ -265,8 +265,8 @@ Configure Supabase environment variables for the frontend build in your Cloudfla
 
 1. Go to Cloudflare Pages → your project → Settings → Environment variables
 2. Add the following variables under both "Production" and "Preview" (as needed):
-   - `VITE_SUPABASE_URL` → `https://<your-project>.supabase.co`
-   - `VITE_SUPABASE_ANON_KEY` → `<your_anon_key>`
+   - `SUPABASE_URL` → `https://<your-project>.supabase.co`
+   - `SUPABASE_ANON_KEY` → `<your_anon_key>`
 3. Redeploy the Pages project so the new variables are applied to the build.
 
 Notes:
@@ -287,7 +287,7 @@ SUPABASE_URL = "https://<your-project>.supabase.co"
 SUPABASE_ANON_KEY = "<your_anon_key>"
 ```
 2. The Worker exposes a public config endpoint at `/api/config/public` returning `{ supabaseUrl, supabaseAnonKey }`.
-3. The frontend lazily initializes Supabase and falls back to this endpoint if `VITE_SUPABASE_*` are not set.
+3. The frontend lazily initializes Supabase and falls back to this endpoint if `SUPABASE_*` are not set.
 
 ### Gerrit Configuration
 
