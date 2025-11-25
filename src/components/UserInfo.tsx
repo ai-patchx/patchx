@@ -1,21 +1,23 @@
 import { useAuthStore } from '@/stores/authStore'
 
 export default function UserInfo() {
-  const { user, signOut } = useAuthStore()
+  const { user, workerUser, signOut } = useAuthStore()
 
-  const handleLogout = () => {
-    signOut()
+  const handleLogout = async () => {
+    await signOut()
     window.location.href = '/login'
   }
 
-  if (!user) {
+  if (!user && !workerUser) {
     return null
   }
+
+  const displayName = user?.email || workerUser?.username || 'User'
 
   return (
     <div className="flex items-center space-x-4">
       <div className="text-sm text-gray-700 dark:text-gray-300">
-        Welcome, {user?.email || 'User'}
+        Welcome, {displayName}
       </div>
       <button
         onClick={handleLogout}
