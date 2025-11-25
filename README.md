@@ -173,6 +173,9 @@ The database reset functionality is available as an optional script and is **nev
 
 **Using npm scripts:**
 ```bash
+# Authenticate with Supabase
+npx supabase login
+
 # Reset database with confirmation prompt
 npm run db:reset
 
@@ -180,40 +183,31 @@ npm run db:reset
 npm run db:reset:confirm
 ```
 
-**Using the bash script directly:**
-```bash
-# With confirmation prompt
-./scripts/reset-db.sh
-
-# Skip confirmation
-./scripts/reset-db.sh --confirm
-
-# With specific project reference
-./scripts/reset-db.sh --project-ref YOUR_PROJECT_REF
-
-# With environment variables (recommended)
-export SUPABASE_PROJECT_REF=your_project_ref
-export SUPABASE_URL=https://your-project.supabase.co
-export SUPABASE_ANON_KEY=your_supabase_anon_key
-./scripts/reset-db.sh
-```
-
-**Requirements:**
-- Supabase CLI installed: `npm install -g supabase` (recommended)
-- Or provide `SUPABASE_URL` and `SUPABASE_ANON_KEY` environment variables
-
 **Environment Variables:**
-Create a `.env.local` file or export these variables:
+
+Create a `.env.local` file with your Supabase configuration:
 ```bash
-SUPABASE_PROJECT_REF=your_project_ref
 SUPABASE_URL=https://your-project.supabase.co
-SUPABASE_ANON_KEY=your_supabase_anon_key  # Only needed for API-based reset
+SUPABASE_ANON_KEY=your_supabase_anon_key
 ```
+
+The script automatically extracts the project reference from `SUPABASE_URL`, so you don't need to set `SUPABASE_PROJECT_REF` separately.
+
+**Alternative: Direct Database Connection**
+
+If you prefer not to authenticate, you can use a direct database connection by adding `DATABASE_URL` to `.env.local`:
+
+```bash
+DATABASE_URL=postgresql://postgres:[PASSWORD]@db.[PROJECT_REF].supabase.co:5432/postgres
+```
+
+You can find your database password in the Supabase Dashboard under **Settings** → **Database** → **Connection string**.
 
 **Important:**
 - Database reset is **never** executed during `wrangler deploy` or Cloudflare Pages deployment
 - Always backup your data before resetting
 - The reset script requires explicit confirmation unless `--confirm` is used
+- For remote projects, authentication via `npx supabase login` is required (unless using `DATABASE_URL`)
 
 **Troubleshooting: Can't login after redeploy?**
 
@@ -647,30 +641,6 @@ Alternatively, you can set environment variables in Cloudflare Pages:
 
 ### Automatic redirects
 The frontend uses a `_redirects` file to forward `/api/*` requests to the backend Workers. No frontend code changes are required.
-
-## 💡 Tips
-
-### AI Conflict Resolution Best Practices
-
-1. Enable multiple AI providers for better solutions
-2. Pay attention to confidence scores
-3. Perform human review for complex conflicts
-4. Thoroughly test after applying AI solutions
-
-### Performance Optimization
-
-1. Cache results for similar conflicts
-2. Set reasonable timeouts for AI calls
-3. Limit concurrency for AI requests
-4. Implement smart retry logic
-
-## 🔒 Security Considerations
-
-- API key protection: store all AI provider keys in environment variables
-- Rate limiting: prevent abuse with request limits
-- Content filtering: validate input and output appropriately
-- Audit logs: record all AI conflict resolution operations
-- Production log hygiene: console output (log/debug/info/warn) is disabled automatically in production builds
 
 ## 📄 License
 

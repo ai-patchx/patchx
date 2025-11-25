@@ -177,6 +177,9 @@ npm run deploy
 
 **使用 npm 脚本：**
 ```bash
+# 使用 Supabase 进行身份验证
+npx supabase login
+
 # 带确认提示的重置数据库
 npm run db:reset
 
@@ -184,40 +187,31 @@ npm run db:reset
 npm run db:reset:confirm
 ```
 
-**直接使用 bash 脚本：**
-```bash
-# 带确认提示
-./scripts/reset-db.sh
-
-# 跳过确认
-./scripts/reset-db.sh --confirm
-
-# 指定项目引用
-./scripts/reset-db.sh --project-ref YOUR_PROJECT_REF
-
-# 使用环境变量（推荐）
-export SUPABASE_PROJECT_REF=your_project_ref
-export SUPABASE_URL=https://your-project.supabase.co
-export SUPABASE_ANON_KEY=your_supabase_anon_key
-./scripts/reset-db.sh
-```
-
-**要求：**
-- 安装 Supabase CLI：`npm install -g supabase`（推荐）
-- 或提供 `SUPABASE_URL` 和 `SUPABASE_ANON_KEY` 环境变量
-
 **环境变量：**
-创建 `.env.local` 文件或导出以下变量：
+
+创建 `.env.local` 文件并配置您的 Supabase 信息：
 ```bash
-SUPABASE_PROJECT_REF=your_project_ref
 SUPABASE_URL=https://your-project.supabase.co
-SUPABASE_ANON_KEY=your_supabase_anon_key  # 仅 API 方式重置时需要
+SUPABASE_ANON_KEY=your_supabase_anon_key
 ```
+
+脚本会自动从 `SUPABASE_URL` 中提取项目引用，因此您无需单独设置 `SUPABASE_PROJECT_REF`。
+
+**替代方案：直接数据库连接**
+
+如果您不想进行身份验证，可以通过在 `.env.local` 中添加 `DATABASE_URL` 来使用直接数据库连接：
+
+```bash
+DATABASE_URL=postgresql://postgres:[PASSWORD]@db.[PROJECT_REF].supabase.co:5432/postgres
+```
+
+您可以在 Supabase 仪表板的 **设置** → **数据库** → **连接字符串** 中找到数据库密码。
 
 **重要提示：**
 - 数据库重置在 `wrangler deploy` 或 Cloudflare Pages 部署过程中**永远不会**执行
 - 重置前请务必备份数据
 - 除非使用 `--confirm`，否则重置脚本需要明确确认
+- 对于远程项目，需要通过 `npx supabase login` 进行身份验证（除非使用 `DATABASE_URL`）
 
 **故障排除：重新部署后无法登录？**
 
@@ -665,30 +659,6 @@ Worker 可以通过 `/api/config/public` 暴露 Supabase 配置，前端会自�
 
 ### 自动重定向配置
 前端通过 `_redirects` 文件自动将 `/api/*` 请求转发到后端 Workers，无需修改前端代码。
-
-## 💡 使用建议
-
-### AI 冲突解决最佳实践
-
-1. **多提供商对比**: 启用多个 AI 提供商以获得更好的解决方案
-2. **置信度评估**: 关注 AI 解决方案的置信度评分
-3. **人工审查**: 对于复杂冲突，始终进行人工审查
-4. **测试验证**: 应用 AI 解决方案后，充分测试代码功能
-
-### 性能优化
-
-1. **缓存策略**: 对相似的冲突结果进行缓存
-2. **超时设置**: 为 AI 调用设置合理的超时时间
-3. **并发控制**: 限制同时进行的 AI 请求数量
-4. **错误重试**: 实现智能的错误重试机制
-
-## 🔒 安全考虑
-
-- **API 密钥保护**: 所有 AI 提供商的 API 密钥都存储在环境变量中
-- **请求限制**: 实现速率限制防止滥用
-- **内容过滤**: 对输入和输出进行适当的内容检查
-- **审计日志**: 记录所有 AI 冲突解决操作
-- **生产环境日志**: 生产构建中自动禁用常规控制台输出（log/debug/info/warn），避免日志外泄
 
 ## 📄 许可证
 

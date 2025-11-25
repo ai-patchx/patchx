@@ -29,14 +29,50 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     set({ loading: true, error: null })
     try {
       const supabase = await getSupabaseClient()
+
+      // Get the current origin (production or localhost)
+      const getRedirectUrl = () => {
+        if (typeof window !== 'undefined') {
+          const origin = window.location.origin
+          // Use production URL if available, otherwise use current origin
+          return `${origin}/auth/confirm`
+        }
+        // Fallback for SSR or build time
+        return 'https://patchx.pages.dev/auth/confirm'
+      }
+
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
+        options: {
+          emailRedirectTo: getRedirectUrl(),
+        },
       })
       if (error) throw error
-      set({ user: data.user, loading: false })
+
+      // Check if email confirmation is required
+      if (data.user && !data.session) {
+        // User created but no session - email confirmation required
+        set({
+          user: data.user,
+          loading: false,
+          error: 'Registration successful! Please check your email to confirm your account before logging in.'
+        })
+      } else {
+        set({ user: data.user, loading: false })
+      }
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error)
+      let message = error instanceof Error ? error.message : String(error)
+
+      // Provide more helpful error messages
+      if (message.includes('User already registered')) {
+        message = 'This email is already registered. Please try logging in instead.'
+      } else if (message.includes('Password')) {
+        message = 'Password must be at least 6 characters long.'
+      } else if (message.includes('Invalid email')) {
+        message = 'Please enter a valid email address.'
+      }
+
       set({ error: message, loading: false })
     }
   },
@@ -52,7 +88,19 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       if (error) throw error
       set({ user: data.user, workerUser: null, loading: false })
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error)
+      let message = error instanceof Error ? error.message : String(error)
+
+      // Provide more helpful error messages
+      if (message.includes('Invalid login credentials') || message.includes('Email not confirmed')) {
+        message = 'Invalid email or password. If you just registered, please check your email to confirm your account first.'
+      } else if (message.includes('Email not confirmed')) {
+        message = 'Please check your email and confirm your account before logging in.'
+      } else if (message.includes('Invalid email')) {
+        message = 'Please enter a valid email address.'
+      } else if (message.includes('Password')) {
+        message = 'Invalid password. Please try again.'
+      }
+
       set({ error: message, loading: false })
     }
   },

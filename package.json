@@ -16,6 +16,7 @@
     "db:reset:confirm": "bash scripts/reset-db.sh --confirm",
     "sync:env": "node scripts/sync-env-to-wrangler.js",
     "test:config": "bash scripts/test-config-endpoint.sh",
+    "check:env": "bash scripts/check-env-setup.sh",
     "deploy": "npm run build:worker && npx wrangler deploy --env production",
     "deploy:full": "npm run sync:env && npm run deploy"
   },

@@ -82,24 +82,73 @@ DB_URL=${DB_URL:-$DATABASE_URL}
 # Check if Supabase CLI is installed
 if command -v supabase &> /dev/null; then
   USE_CLI=true
+  SUPABASE_CMD="supabase"
+elif command -v npx &> /dev/null; then
+  USE_CLI=true
+  SUPABASE_CMD="npx supabase"
+  echo -e "${YELLOW}Note: Using npx to run Supabase CLI (not installed globally).${NC}"
 else
   USE_CLI=false
-  echo -e "${YELLOW}Warning: Supabase CLI not found. Will attempt API-based reset.${NC}"
+  echo -e "${YELLOW}Warning: Supabase CLI not found. Will attempt alternative reset methods.${NC}"
 fi
 
 # Function to reset using Supabase CLI
 reset_with_cli() {
   echo -e "${GREEN}Using Supabase CLI to reset database...${NC}"
 
+  # Extract project reference from URL if not provided
+  if [ -z "$PROJECT_REF" ] && [ -n "$SUPABASE_URL" ]; then
+    PROJECT_REF=$(echo "$SUPABASE_URL" | sed -n 's|https://\([^.]*\)\.supabase\.co|\1|p')
+    if [ -n "$PROJECT_REF" ]; then
+      echo "Extracted project reference from URL: $PROJECT_REF"
+    fi
+  fi
+
   if [ -n "$PROJECT_REF" ]; then
     echo "Resetting remote database for project: $PROJECT_REF"
-    supabase db reset --project-ref "$PROJECT_REF" --linked
+
+    # Try to use --db-url if DATABASE_URL is available
+    if [ -n "$DB_URL" ]; then
+      echo "Using direct database connection..."
+      $SUPABASE_CMD db reset --db-url "$DB_URL"
+    else
+      # Check if project is already linked
+      if [ -f supabase/.temp/project-ref ]; then
+        LINKED_REF=$(cat supabase/.temp/project-ref 2>/dev/null)
+        if [ "$LINKED_REF" = "$PROJECT_REF" ]; then
+          echo "Project is already linked. Resetting..."
+          $SUPABASE_CMD db reset --linked
+        else
+          echo -e "${YELLOW}Project is linked to a different ref ($LINKED_REF).${NC}"
+          echo "Linking to project: $PROJECT_REF"
+          $SUPABASE_CMD link --project-ref "$PROJECT_REF" --yes || {
+            echo -e "${RED}Error: Failed to link project.${NC}"
+            echo "You may need to authenticate first: $SUPABASE_CMD login"
+            echo "Or provide DATABASE_URL for direct connection."
+            exit 1
+          }
+          $SUPABASE_CMD db reset --linked
+        fi
+      else
+        echo "Linking project first..."
+        $SUPABASE_CMD link --project-ref "$PROJECT_REF" --yes || {
+          echo -e "${RED}Error: Failed to link project.${NC}"
+          echo ""
+          echo "To fix this, you can:"
+          echo "1. Authenticate with Supabase: $SUPABASE_CMD login"
+          echo "2. Or provide DATABASE_URL in .env.local for direct connection"
+          echo "   (Format: postgresql://postgres:[PASSWORD]@db.[PROJECT_REF].supabase.co:5432/postgres)"
+          exit 1
+        }
+        $SUPABASE_CMD db reset --linked
+      fi
+    fi
   elif [ -f supabase/config.toml ]; then
     echo "Resetting local database..."
-    supabase db reset
+    $SUPABASE_CMD db reset
   else
     echo -e "${RED}Error: No Supabase project found.${NC}"
-    echo "Either provide --project-ref or initialize Supabase locally with 'supabase init'"
+    echo "Either provide --project-ref, set SUPABASE_URL, or initialize Supabase locally with 'supabase init'"
     exit 1
   fi
 }
@@ -136,21 +185,60 @@ reset_with_api() {
   echo -e "${YELLOW}Warning: API-based reset may not be available on all Supabase projects.${NC}"
   echo "Consider using Supabase CLI instead: npm install -g supabase"
 
+  # Alternative: Try using npx if not already tried
+  if command -v npx &> /dev/null; then
+    echo -e "${YELLOW}Trying to use npx supabase as fallback...${NC}"
+    if [ -n "$PROJECT_REF" ]; then
+      echo "Resetting remote database for project: $PROJECT_REF"
+      npx supabase db reset --project-ref "$PROJECT_REF" --linked
+      exit 0
+    elif [ -f supabase/config.toml ]; then
+      echo "Resetting local database..."
+      npx supabase db reset
+      exit 0
+    fi
+  fi
+
   # Alternative: Use psql if DATABASE_URL is provided
   if [ -n "$DB_URL" ]; then
     echo "Attempting to reset via direct database connection..."
     if command -v psql &> /dev/null; then
-      echo "This would require dropping and recreating the database schema."
-      echo -e "${RED}Direct database reset via psql is not implemented for safety.${NC}"
-      echo "Please use Supabase CLI or Supabase Dashboard instead."
-      exit 1
+      echo -e "${YELLOW}Resetting database using psql...${NC}"
+      echo "This will truncate all tables in the public schema."
+
+      # Generate SQL to truncate all tables
+      TRUNCATE_SQL=$(psql "$DB_URL" -t -c "
+        SELECT 'TRUNCATE TABLE ' || string_agg(quote_ident(schemaname)||'.'||quote_ident(tablename), ', ') || ' RESTART IDENTITY CASCADE;'
+        FROM pg_tables
+        WHERE schemaname = 'public';
+      " 2>/dev/null)
+
+      if [ -n "$TRUNCATE_SQL" ] && [ "$TRUNCATE_SQL" != "TRUNCATE TABLE  RESTART IDENTITY CASCADE;" ]; then
+        echo "Executing: $TRUNCATE_SQL"
+        psql "$DB_URL" -c "$TRUNCATE_SQL"
+        echo -e "${GREEN}Database tables truncated successfully.${NC}"
+        exit 0
+      else
+        echo -e "${YELLOW}No tables found to truncate, or error occurred.${NC}"
+        exit 1
+      fi
     else
       echo -e "${RED}Error: psql not found. Cannot reset via direct database connection.${NC}"
+      echo "Install psql with: sudo apt-get install postgresql-client"
       exit 1
     fi
   else
     echo -e "${RED}Error: Cannot reset database without Supabase CLI or direct database access.${NC}"
-    echo "Please install Supabase CLI: npm install -g supabase"
+    echo ""
+    echo "Options to fix this:"
+    echo "1. Install Supabase CLI:"
+    echo "   - Visit: https://github.com/supabase/cli#install-the-cli"
+    echo "   - Or use: npx supabase"
+    echo ""
+    echo "2. Provide DATABASE_URL environment variable for direct database access"
+    echo "   (requires psql: sudo apt-get install postgresql-client)"
+    echo ""
+    echo "3. Use Supabase Dashboard to reset your database manually"
     exit 1
   fi
 }

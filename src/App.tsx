@@ -4,6 +4,7 @@ import SubmitPage from './pages/SubmitPage'
 import StatusPage from './pages/StatusPage'
 import LoginPage from './pages/LoginPage'
 import Home from './pages/Home'
+import EmailConfirmationPage from './pages/EmailConfirmationPage'
 import { useTheme } from './hooks/useTheme'
 import { useAuthStore } from './stores/authStore'
 
@@ -47,6 +48,7 @@ function App() {
       <div className={`min-h-screen ${theme === 'dark' ? 'bg-gradient-dark' : ''}`}>
         <Routes>
           <Route path="/" element={<LoginPage />} />
+          <Route path="/auth/confirm" element={<EmailConfirmationPage />} />
           <Route path="/home" element={(user || workerUser) ? <Home /> : <Navigate to="/" replace />} />
           <Route
             path="/submit"
