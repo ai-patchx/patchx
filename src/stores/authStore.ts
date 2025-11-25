@@ -19,7 +19,7 @@ interface AuthState {
   checkUser: () => Promise<void>
 }
 
-export const useAuthStore = create<AuthState>((set) => ({
+export const useAuthStore = create<AuthState>((set, get) => ({
   user: null,
   workerUser: null,
   loading: false,
@@ -86,8 +86,19 @@ export const useAuthStore = create<AuthState>((set) => ({
 
   signOut: async () => {
     set({ loading: true, error: null })
-    const supabase = await getSupabaseClient()
-    await supabase.auth.signOut().catch(() => undefined)
+    try {
+      // Only call Supabase signOut if we have a regular user
+      // Worker users don't use Supabase, so skip it for them
+      const currentUser = get().user
+      if (currentUser) {
+        const supabase = await getSupabaseClient()
+        await supabase.auth.signOut().catch(() => undefined)
+      }
+    } catch (error) {
+      // Ignore Supabase errors during logout (e.g., if Supabase is not configured)
+      console.warn('Supabase signOut error (ignored):', error)
+    }
+    // Always clear localStorage and state regardless of user type
     localStorage.removeItem('px_token')
     localStorage.removeItem('px_user')
     set({ user: null, workerUser: null, loading: false })
@@ -95,22 +106,40 @@ export const useAuthStore = create<AuthState>((set) => ({
 
   checkUser: async () => {
     try {
-      const supabase = await getSupabaseClient()
-      const { data: { user } } = await supabase.auth.getUser()
-      if (user) {
-        set({ user, workerUser: null })
-        return
-      }
+      // First check localStorage for worker user (faster and more reliable for worker auth)
       const token = localStorage.getItem('px_token')
       const userStr = localStorage.getItem('px_user')
       if (token && userStr) {
-        const wUser = JSON.parse(userStr) as WorkerUser
-        set({ workerUser: wUser, user: null })
+        try {
+          const wUser = JSON.parse(userStr) as WorkerUser
+          set({ workerUser: wUser, user: null })
+          return
+        } catch (parseError) {
+          // If parsing fails, clear invalid data
+          localStorage.removeItem('px_token')
+          localStorage.removeItem('px_user')
+        }
+      }
+
+      // Then check Supabase for regular user
+      const supabase = await getSupabaseClient()
+      const { data: { user }, error } = await supabase.auth.getUser()
+      if (user && !error) {
+        set({ user, workerUser: null })
         return
       }
-      set({ user: null, workerUser: null })
-    } catch {
-      set({ user: null, workerUser: null })
+
+      // Only clear state if we've checked both and found nothing
+      if (!token && !user) {
+        set({ user: null, workerUser: null })
+      }
+    } catch (error) {
+      // Only clear state on error if we don't have valid localStorage data
+      const token = localStorage.getItem('px_token')
+      const userStr = localStorage.getItem('px_user')
+      if (!token || !userStr) {
+        set({ user: null, workerUser: null })
+      }
     }
   }
 }))
