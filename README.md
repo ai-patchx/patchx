@@ -123,7 +123,35 @@ npm install -g wrangler
 
 # Login to Cloudflare
 wrangler login
+```
 
+**Authentication Options:**
+
+For Ubuntu/WSL users, using an API token is recommended (avoids browser interaction):
+
+1. Get your API token from: https://dash.cloudflare.com/profile/api-tokens
+2. Set the environment variable:
+   ```bash
+   export CLOUDFLARE_API_TOKEN='your-api-token-here'
+   ```
+3. Make it persistent (add to your shell config):
+   ```bash
+   # For bash
+   echo 'export CLOUDFLARE_API_TOKEN="your-api-token-here"' >> ~/.bashrc
+   source ~/.bashrc
+
+   # For zsh
+   echo 'export CLOUDFLARE_API_TOKEN="your-api-token-here"' >> ~/.zshrc
+   source ~/.zshrc
+   ```
+4. Verify authentication:
+   ```bash
+   npx wrangler whoami
+   ```
+
+**Note:** Once `CLOUDFLARE_API_TOKEN` is set, wrangler will automatically use it for authentication. You don't need to run `wrangler login` when using the API token method.
+
+```bash
 # Local development (API Worker)
 npm run build:worker
 wrangler dev

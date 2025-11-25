@@ -127,7 +127,35 @@ npm install -g wrangler
 
 # 登录 Cloudflare
 wrangler login
+```
 
+**认证方式：**
+
+对于 Ubuntu/WSL 用户，推荐使用 API Token 方式（无需浏览器交互）：
+
+1. 获取 API Token：访问 https://dash.cloudflare.com/profile/api-tokens
+2. 设置环境变量：
+   ```bash
+   export CLOUDFLARE_API_TOKEN='your-api-token-here'
+   ```
+3. 持久化配置（添加到 shell 配置文件）：
+   ```bash
+   # 对于 bash
+   echo 'export CLOUDFLARE_API_TOKEN="your-api-token-here"' >> ~/.bashrc
+   source ~/.bashrc
+
+   # 对于 zsh
+   echo 'export CLOUDFLARE_API_TOKEN="your-api-token-here"' >> ~/.zshrc
+   source ~/.zshrc
+   ```
+4. 验证认证：
+   ```bash
+   npx wrangler whoami
+   ```
+
+**注意：** 设置 `CLOUDFLARE_API_TOKEN` 后，wrangler 会自动使用该 token 进行认证。使用 API Token 方式时无需运行 `wrangler login`。
+
+```bash
 # 本地开发（API Worker）
 npm run build:worker
 wrangler dev
