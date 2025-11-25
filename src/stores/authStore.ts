@@ -30,16 +30,22 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     try {
       const supabase = await getSupabaseClient()
 
-      // Get the current origin (production or localhost)
-      const getRedirectUrl = () => {
-        if (typeof window !== 'undefined') {
-          const origin = window.location.origin
-          // Use production URL if available, otherwise use current origin
-          return `${origin}/auth/confirm`
+      const getRedirectBaseUrl = () => {
+        const envUrl = import.meta.env.VITE_PUBLIC_SITE_URL?.trim()
+        if (envUrl) {
+          return envUrl
         }
-        // Fallback for SSR or build time
-        return 'https://patchx.pages.dev/auth/confirm'
+        if (typeof window !== 'undefined') {
+          const globalUrl = window.__PX_PUBLIC_SITE_URL
+          if (globalUrl) {
+            return globalUrl
+          }
+          return window.location.origin
+        }
+        return 'https://patchx.pages.dev'
       }
+
+      const getRedirectUrl = () => `${getRedirectBaseUrl().replace(/\/$/, '')}/auth/confirm`
 
       const { data, error } = await supabase.auth.signUp({
         email,
@@ -51,16 +57,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       if (error) throw error
 
       // Check if email confirmation is required
-      if (data.user && !data.session) {
-        // User created but no session - email confirmation required
-        set({
-          user: data.user,
-          loading: false,
-          error: 'Registration successful! Please check your email to confirm your account before logging in.'
-        })
-      } else {
-        set({ user: data.user, loading: false })
-      }
+      set({ user: data.user, loading: false })
     } catch (error) {
       let message = error instanceof Error ? error.message : String(error)
 

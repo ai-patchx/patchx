@@ -15,6 +15,12 @@ if [ -f .env.local ]; then
   else
     echo "   ❌ .env.local missing Supabase variables"
   fi
+  if grep -q "VITE_PUBLIC_SITE_URL" .env.local; then
+    SITE_URL=$(grep "VITE_PUBLIC_SITE_URL" .env.local | cut -d '=' -f2 | tr -d '"' | tr -d "'")
+    echo "   ✅ VITE_PUBLIC_SITE_URL: ${SITE_URL:-'(empty)'}"
+  else
+    echo "   ⚠️  VITE_PUBLIC_SITE_URL not set in .env.local (will fall back to window.origin)"
+  fi
 else
   echo "   ⚠️  .env.local file not found"
 fi
@@ -29,6 +35,12 @@ if grep -q "SUPABASE_URL" wrangler.toml && grep -q "SUPABASE_ANON_KEY" wrangler.
     echo "   ✅ SUPABASE_URL is set (not placeholder)"
   else
     echo "   ⚠️  SUPABASE_URL might be a placeholder"
+  fi
+  if grep -q "VITE_PUBLIC_SITE_URL" wrangler.toml; then
+    CURRENT_SITE=$(grep -m1 "VITE_PUBLIC_SITE_URL" wrangler.toml | cut -d '=' -f2 | tr -d '"' | tr -d "'")
+    echo "   ✅ VITE_PUBLIC_SITE_URL in wrangler.toml: ${CURRENT_SITE:0:40}..."
+  else
+    echo "   ⚠️  VITE_PUBLIC_SITE_URL missing from wrangler.toml"
   fi
 else
   echo "   ❌ wrangler.toml missing Supabase variables"
@@ -47,6 +59,12 @@ if echo "$response" | grep -q "supabaseUrl"; then
   else
     echo "   ❌ Worker endpoint returns empty Supabase URL"
     echo "   Response: $response"
+  fi
+  site_url=$(echo "$response" | jq -r '.data.publicSiteUrl' 2>/dev/null)
+  if [ -n "$site_url" ] && [ "$site_url" != "null" ]; then
+    echo "   ✅ Worker endpoint returns public site URL: ${site_url:0:40}..."
+  else
+    echo "   ⚠️  Worker endpoint public site URL empty"
   fi
 else
   echo "   ❌ Worker endpoint not accessible or invalid response"

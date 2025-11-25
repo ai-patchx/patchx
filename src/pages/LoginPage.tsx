@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Mail, Moon, Sun, Github } from 'lucide-react'
 import { useAuthStore } from '@/stores/authStore'
@@ -15,6 +15,23 @@ export default function LoginPage() {
   const navigate = useNavigate()
   const { signIn, signInWorker } = useAuthStore()
   const { theme, toggleTheme } = useTheme()
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return
+    }
+    const hash = window.location.hash || ''
+    const search = window.location.search || ''
+    const hashParams = new URLSearchParams(hash.startsWith('#') ? hash.slice(1) : hash)
+    const searchParams = new URLSearchParams(search)
+    const hasSupabaseTokens = hashParams.has('access_token') || hashParams.has('refresh_token')
+    const hasSupabaseErrors = hashParams.has('error') || searchParams.has('error')
+    const isSignupFlow = hashParams.get('type') === 'signup' || searchParams.get('type') === 'signup' || searchParams.has('token')
+
+    if (hasSupabaseTokens || hasSupabaseErrors || isSignupFlow) {
+      navigate(`/auth/confirm${search}${hash}`, { replace: true })
+    }
+  }, [navigate])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()

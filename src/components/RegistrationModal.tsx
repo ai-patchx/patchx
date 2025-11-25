@@ -14,6 +14,7 @@ export default function RegistrationModal({ isOpen, onClose }: RegistrationModal
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
   const [isLogin, setIsLogin] = useState(false)
+  const [successMessage, setSuccessMessage] = useState('')
   const { signUp, signIn, loading, error } = useAuthStore()
   const { theme } = useTheme()
   const navigate = useNavigate()
@@ -22,6 +23,8 @@ export default function RegistrationModal({ isOpen, onClose }: RegistrationModal
 
   const handleEmailAuth = async (e: React.FormEvent) => {
     e.preventDefault()
+    setSuccessMessage('')
+
     if (!isLogin && password !== confirmPassword) {
       alert('Passwords do not match')
       return
@@ -34,9 +37,8 @@ export default function RegistrationModal({ isOpen, onClose }: RegistrationModal
         navigate('/submit')
       } else {
         await signUp(email, password)
-        // Close modal and notify user after successful registration
-        alert('Registration successful! Please login with your new account')
-        onClose()
+        setSuccessMessage(`Registration successful! We've sent a confirmation link to ${email}. Please verify your email before logging in.`)
+        setIsLogin(true)
       }
     } catch (error) {
       console.error('Authentication error:', error)
@@ -71,6 +73,12 @@ export default function RegistrationModal({ isOpen, onClose }: RegistrationModal
                 <X className="w-6 h-6" />
               </button>
             </div>
+
+            {successMessage && (
+              <div className="mb-4 p-3 bg-green-100 border border-green-400 text-green-700 rounded">
+                {successMessage}
+              </div>
+            )}
 
             {error && (
               <div className="mb-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded">

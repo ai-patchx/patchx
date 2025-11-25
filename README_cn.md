@@ -65,11 +65,13 @@ wrangler secret put TEST_USER_PASSWORD
 
 - 首页提供登录/注册弹窗
 - 仅支持邮箱注册（基于 Supabase）
-- 在 `.env.local` 配置以下变量：
+- 复制 `.env.example` 为 `.env.local` 并配置以下变量：
 ```bash
 SUPABASE_URL=https://your-supabase-project.supabase.co
 SUPABASE_ANON_KEY=your_supabase_anon_key
+VITE_PUBLIC_SITE_URL=http://localhost:5173
 ```
+`VITE_PUBLIC_SITE_URL` 用于生成 Supabase 发送的邮箱确认链接。本地开发可保持为 `http://localhost:5173`，线上部署时请改为实际站点地址（如 `https://patchx.pages.dev`），避免用户收到指向 localhost 的链接。
 
 在 Supabase 中启用 GitHub OAuth：
 - 在 Auth 设置中开启 GitHub 提供商
@@ -189,10 +191,11 @@ npm run db:reset:confirm
 
 **环境变量：**
 
-创建 `.env.local` 文件并配置您的 Supabase 信息：
+根据 `.env.example` 创建/更新 `.env.local` 并配置：
 ```bash
 SUPABASE_URL=https://your-project.supabase.co
 SUPABASE_ANON_KEY=your_supabase_anon_key
+VITE_PUBLIC_SITE_URL=https://patchx.pages.dev
 ```
 
 脚本会自动从 `SUPABASE_URL` 中提取项目引用，因此您无需单独设置 `SUPABASE_PROJECT_REF`。
@@ -327,6 +330,7 @@ VITE_WORKER_BASE_URL=https://patchx-service.angersax.workers.dev
 2. 在 "Production" 与 "Preview"（按需）添加以下变量：
    - `SUPABASE_URL` → `https://<your-project>.supabase.co`
    - `SUPABASE_ANON_KEY` → `<your_anon_key>`
+   - `VITE_PUBLIC_SITE_URL` → 对外访问地址（如 `https://patchx.pages.dev`）
 3. 重新部署 Pages 项目使新的环境变量生效。
 
 说明：
@@ -645,6 +649,7 @@ Worker 可以通过 `/api/config/public` 暴露 Supabase 配置，前端会自�
 3. 为 **生产环境**（以及 **预览环境**，如需要）添加以下变量：
    - `SUPABASE_URL` - 您的 Supabase 项目 URL（例如：`https://your-project.supabase.co`）
    - `SUPABASE_ANON_KEY` - 您的 Supabase 匿名密钥
+   - `VITE_PUBLIC_SITE_URL` - Supabase 邮件所需的公网跳转地址（例如：`https://patchx.pages.dev`）
 
 **⚠️ 关键提示：** 如果这些环境变量缺失或指向不同的 Supabase 项目，用户在重新部署后将无法登录。数据库重置脚本在部署过程中**永远不会**被调用，因此如果登录失败，请检查：
 

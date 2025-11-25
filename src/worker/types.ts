@@ -9,6 +9,7 @@ export interface Env {
   TEST_USER_PASSWORD?: string
   SUPABASE_URL?: string
   SUPABASE_ANON_KEY?: string
+  VITE_PUBLIC_SITE_URL?: string
   OPENAI_API_KEY?: string
   OPENAI_BASE_URL?: string
   OPENAI_MODEL?: string

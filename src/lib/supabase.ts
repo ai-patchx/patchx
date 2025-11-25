@@ -1,6 +1,18 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js'
 
+declare global {
+  interface Window {
+    __PX_PUBLIC_SITE_URL?: string
+  }
+}
+
 let client: SupabaseClient | null = null
+
+const setPublicSiteUrl = (url?: string) => {
+  if (typeof window !== 'undefined' && url) {
+    window.__PX_PUBLIC_SITE_URL = url.replace(/\/$/, '')
+  }
+}
 
 const create = (url: string, key: string) => {
   client = createClient(url, key)
@@ -13,6 +25,11 @@ export const getSupabaseClient = async (): Promise<SupabaseClient> => {
   // First, try to get from build-time environment variables
   const url = import.meta.env.SUPABASE_URL || ''
   const key = import.meta.env.SUPABASE_ANON_KEY || ''
+  const publicSiteUrl = import.meta.env.VITE_PUBLIC_SITE_URL?.trim()
+  if (publicSiteUrl) {
+    setPublicSiteUrl(publicSiteUrl)
+  }
+
   if (url && key) {
     console.log('✅ Using Supabase config from build-time environment variables')
     return create(url, key)
@@ -29,10 +46,13 @@ export const getSupabaseClient = async (): Promise<SupabaseClient> => {
     })
 
     if (res && res.ok) {
-      const json = await res.json() as { success?: boolean; data?: { supabaseUrl: string; supabaseAnonKey: string } } | null
+      const json = await res.json() as { success?: boolean; data?: { supabaseUrl: string; supabaseAnonKey: string; publicSiteUrl?: string } } | null
       console.log('Worker endpoint response:', json)
       const remoteUrl = json?.data?.supabaseUrl || ''
       const remoteKey = json?.data?.supabaseAnonKey || ''
+      if (json?.data?.publicSiteUrl) {
+        setPublicSiteUrl(json.data.publicSiteUrl)
+      }
       if (remoteUrl && remoteKey) {
         console.log('✅ Using Supabase config from Worker endpoint')
         return create(remoteUrl, remoteKey)

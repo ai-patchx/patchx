@@ -546,7 +546,8 @@ async function handleStatus(path: string, env: Env, corsHeaders: Record<string, 
 async function handlePublicConfig(env: Env, corsHeaders: Record<string, string>): Promise<Response> {
   const data = {
     supabaseUrl: env.SUPABASE_URL || '',
-    supabaseAnonKey: env.SUPABASE_ANON_KEY || ''
+    supabaseAnonKey: env.SUPABASE_ANON_KEY || '',
+    publicSiteUrl: env.VITE_PUBLIC_SITE_URL || ''
   }
 
   return new Response(

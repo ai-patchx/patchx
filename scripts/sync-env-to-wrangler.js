@@ -17,6 +17,7 @@ const rootDir = join(__dirname, '..')
 // Read .env.local
 let supabaseUrl = ''
 let supabaseAnonKey = ''
+let publicSiteUrl = ''
 
 try {
   const envLocalPath = join(rootDir, '.env.local')
@@ -28,6 +29,8 @@ try {
       supabaseUrl = trimmed.split('=')[1].trim().replace(/^["']|["']$/g, '')
     } else if (trimmed.startsWith('SUPABASE_ANON_KEY=')) {
       supabaseAnonKey = trimmed.split('=')[1].trim().replace(/^["']|["']$/g, '')
+    } else if (trimmed.startsWith('VITE_PUBLIC_SITE_URL=')) {
+      publicSiteUrl = trimmed.split('=')[1]?.trim().replace(/^["']|["']$/g, '') || ''
     }
   }
 } catch (error) {
@@ -39,6 +42,10 @@ try {
 if (!supabaseUrl || !supabaseAnonKey) {
   console.error('Error: SUPABASE_URL and SUPABASE_ANON_KEY not found in .env.local')
   process.exit(1)
+}
+
+if (!publicSiteUrl) {
+  console.warn('⚠️  Warning: VITE_PUBLIC_SITE_URL not found in .env.local. Using existing value in wrangler.toml.')
 }
 
 // Read wrangler.toml
@@ -55,12 +62,23 @@ wranglerContent = wranglerContent.replace(
   `SUPABASE_ANON_KEY = "${supabaseAnonKey}"`
 )
 
+if (publicSiteUrl) {
+  wranglerContent = wranglerContent.replace(
+    /VITE_PUBLIC_SITE_URL = ".*"/g,
+    `VITE_PUBLIC_SITE_URL = "${publicSiteUrl}"`
+  )
+}
+
 // Write back
 writeFileSync(wranglerPath, wranglerContent, 'utf-8')
 
 console.log('✅ Successfully synced Supabase environment variables to wrangler.toml')
 console.log(`   SUPABASE_URL: ${supabaseUrl}`)
 console.log(`   SUPABASE_ANON_KEY: ${supabaseAnonKey.substring(0, 20)}...`)
+if (publicSiteUrl) {
+  console.log(`   VITE_PUBLIC_SITE_URL: ${publicSiteUrl}`)
+}
+
 console.log('\n📝 Next steps:')
 console.log('   1. Review wrangler.toml to ensure values are correct')
 console.log('   2. Deploy Worker: npm run deploy')

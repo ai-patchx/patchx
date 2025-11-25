@@ -65,11 +65,13 @@ wrangler secret put TEST_USER_PASSWORD
 
 - Homepage provides Login/Registration modal
 - Email registration only via Supabase
-- Configure environment variables in `.env.local`:
+- Copy `.env.example` to `.env.local` and set:
 ```bash
 SUPABASE_URL=https://your-supabase-project.supabase.co
 SUPABASE_ANON_KEY=your_supabase_anon_key
+VITE_PUBLIC_SITE_URL=http://localhost:5173
 ```
+`VITE_PUBLIC_SITE_URL` controls the confirmation links Supabase emails send. Point it to your public site (e.g., `https://patchx.pages.dev`) in deployed environments so users never receive `localhost` links.
 
 Legacy test account (for Worker API testing only):
 - Default test account: `username=patchx`, `password=patchx`
@@ -185,10 +187,11 @@ npm run db:reset:confirm
 
 **Environment Variables:**
 
-Create a `.env.local` file with your Supabase configuration:
+Create (or update) `.env.local` using `.env.example` as a template and include:
 ```bash
 SUPABASE_URL=https://your-project.supabase.co
 SUPABASE_ANON_KEY=your_supabase_anon_key
+VITE_PUBLIC_SITE_URL=https://patchx.pages.dev
 ```
 
 The script automatically extracts the project reference from `SUPABASE_URL`, so you don't need to set `SUPABASE_PROJECT_REF` separately.
@@ -310,6 +313,7 @@ Configure Supabase environment variables for the frontend build in your Cloudfla
 2. Add the following variables under both "Production" and "Preview" (as needed):
    - `SUPABASE_URL` → `https://<your-project>.supabase.co`
    - `SUPABASE_ANON_KEY` → `<your_anon_key>`
+   - `VITE_PUBLIC_SITE_URL` → public URL of your site (e.g. `https://patchx.pages.dev`)
 3. Redeploy the Pages project so the new variables are applied to the build.
 
 Notes:
@@ -627,6 +631,7 @@ Alternatively, you can set environment variables in Cloudflare Pages:
 3. Add the following variables for **Production** (and **Preview** if needed):
    - `SUPABASE_URL` - Your Supabase project URL (e.g., `https://your-project.supabase.co`)
    - `SUPABASE_ANON_KEY` - Your Supabase anonymous key
+   - `VITE_PUBLIC_SITE_URL` - Public URL that Supabase should redirect to (e.g., `https://patchx.pages.dev`)
 
 **⚠️ Critical:** If these environment variables are missing or point to a different Supabase project, users will not be able to login after redeployment. The database reset script is **never** called during deployment, so if login fails, check:
 
