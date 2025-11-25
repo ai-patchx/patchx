@@ -211,9 +211,30 @@ SUPABASE_ANON_KEY=your_supabase_anon_key  # Only needed for API-based reset
 ```
 
 **Important:**
-- Database reset is **never** executed during `wrangler deploy`
+- Database reset is **never** executed during `wrangler deploy` or Cloudflare Pages deployment
 - Always backup your data before resetting
 - The reset script requires explicit confirmation unless `--confirm` is used
+
+**Troubleshooting: Can't login after redeploy?**
+
+If users can't login after redeploying to Cloudflare, check:
+
+1. **Environment Variables in Cloudflare Pages:**
+   - Go to Cloudflare Pages dashboard → Your project → Settings → Environment Variables
+   - Verify `SUPABASE_URL` and `SUPABASE_ANON_KEY` are set for Production environment
+   - Ensure they point to the **same** Supabase project where users registered
+
+2. **Supabase Project:**
+   - Check if the Supabase project was reset manually in Supabase dashboard
+   - Verify the project URL and keys haven't changed
+   - Confirm the user account exists in the Supabase Auth users table
+
+3. **Environment Variable Mismatch:**
+   - Local development uses `.env.local` file
+   - Cloudflare Pages uses environment variables set in the dashboard
+   - These must match the same Supabase project
+
+**Note:** The database reset script (`scripts/reset-db.sh`) is **never** automatically called during deployment. If login fails, it's almost always an environment variable configuration issue.
 
 ## 🔄 Dev Servers
 
@@ -582,6 +603,43 @@ npm run build
 # Deploy to Cloudflare Pages
 wrangler pages deploy dist --project-name=patchx
 ```
+
+**IMPORTANT: Environment Variables for Deployment**
+
+You have **two options** for configuring Supabase environment variables:
+
+### Option 1: Use Worker's Config Endpoint (Recommended - Automatic)
+
+The Worker can expose Supabase config via `/api/config/public`, and the frontend will automatically use it as a fallback. This means you don't need to set environment variables in Cloudflare Pages dashboard.
+
+**Steps:**
+1. Ensure your `.env.local` has `SUPABASE_URL` and `SUPABASE_ANON_KEY`
+2. Sync them to `wrangler.toml`:
+   ```bash
+   npm run sync:env
+   ```
+3. Deploy the Worker:
+   ```bash
+   npm run deploy
+   ```
+4. The frontend will automatically fetch config from the Worker's `/api/config/public` endpoint
+
+### Option 2: Set in Cloudflare Pages Dashboard (Manual)
+
+Alternatively, you can set environment variables in Cloudflare Pages:
+
+1. Go to your Cloudflare Pages project dashboard
+2. Navigate to **Settings** → **Environment Variables**
+3. Add the following variables for **Production** (and **Preview** if needed):
+   - `SUPABASE_URL` - Your Supabase project URL (e.g., `https://your-project.supabase.co`)
+   - `SUPABASE_ANON_KEY` - Your Supabase anonymous key
+
+**⚠️ Critical:** If these environment variables are missing or point to a different Supabase project, users will not be able to login after redeployment. The database reset script is **never** called during deployment, so if login fails, check:
+
+1. Environment variables are set correctly (either in Worker via `wrangler.toml` or in Cloudflare Pages dashboard)
+2. Environment variables point to the correct Supabase project
+3. The Supabase project hasn't been reset manually through Supabase dashboard
+4. The Supabase project URL and keys haven't changed
 
 ### Post‑deployment URLs
 - Frontend (Cloudflare Pages): `https://patchx.pages.dev`

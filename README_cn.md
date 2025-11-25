@@ -215,9 +215,30 @@ SUPABASE_ANON_KEY=your_supabase_anon_key  # 仅 API 方式重置时需要
 ```
 
 **重要提示：**
-- 数据库重置在 `wrangler deploy` 过程中**永远不会**执行
+- 数据库重置在 `wrangler deploy` 或 Cloudflare Pages 部署过程中**永远不会**执行
 - 重置前请务必备份数据
 - 除非使用 `--confirm`，否则重置脚本需要明确确认
+
+**故障排除：重新部署后无法登录？**
+
+如果用户在重新部署到 Cloudflare 后无法登录，请检查：
+
+1. **Cloudflare Pages 中的环境变量：**
+   - 进入 Cloudflare Pages 仪表板 → 您的项目 → 设置 → 环境变量
+   - 验证 `SUPABASE_URL` 和 `SUPABASE_ANON_KEY` 是否已为生产环境设置
+   - 确保它们指向用户注册的**同一个** Supabase 项目
+
+2. **Supabase 项目：**
+   - 检查 Supabase 项目是否在 Supabase 仪表板中被手动重置
+   - 验证项目 URL 和密钥是否已更改
+   - 确认用户账户存在于 Supabase Auth 用户表中
+
+3. **环境变量不匹配：**
+   - 本地开发使用 `.env.local` 文件
+   - Cloudflare Pages 使用仪表板中设置的环境变量
+   - 这些必须指向同一个 Supabase 项目
+
+**注意：** 数据库重置脚本（`scripts/reset-db.sh`）在部署过程中**永远不会**自动调用。如果登录失败，几乎总是环境变量配置问题。
 
 ## 🔄 开发服务器说明
 
@@ -293,7 +314,20 @@ VITE_WORKER_BASE_URL=https://patchx-service.angersax.workers.dev
 
 #### Cloudflare Pages：Supabase 环境变量配置
 
-在 Cloudflare Pages 项目中为前端构建配置 Supabase 环境变量：
+**推荐方式：使用 Worker 配置端点（自动）**
+
+最简单的方式是让 Worker 通过 `/api/config/public` 端点提供 Supabase 配置：
+
+1. 确保 `.env.local` 包含 `SUPABASE_URL` 和 `SUPABASE_ANON_KEY`
+2. 运行同步脚本将环境变量同步到 `wrangler.toml`：
+   ```bash
+   npm run sync:env
+   ```
+3. 部署 Worker 后，前端会自动从 `/api/config/public` 端点获取配置
+
+**替代方式：在 Cloudflare Pages 仪表板中手动设置**
+
+如果您更喜欢在 Cloudflare Pages 中直接设置：
 
 1. 进入 Cloudflare Pages → 选择项目 → Settings → Environment variables
 2. 在 "Production" 与 "Preview"（按需）添加以下变量：
@@ -303,12 +337,13 @@ VITE_WORKER_BASE_URL=https://patchx-service.angersax.workers.dev
 
 说明：
 - Vite 仅会将以 `VITE_` 开头的变量暴露到前端代码；Supabase 的 anon key 设计为公开可在前端使用。请勿在前端使用 service role key。
+- 如果未在 Cloudflare Pages 中设置环境变量，前端会自动回退到 Worker 的 `/api/config/public` 端点。
 
 #### Cloudflare Workers：通过 `wrangler.toml` 配置 Supabase
 
-也可以在 Workers 端配置 Supabase，并由前端在运行时拉取：
+在 Workers 端配置 Supabase，并由前端在运行时拉取：
 
-1. 在 `wrangler.toml` 增加变量：
+1. 在 `wrangler.toml` 增加变量（或使用 `npm run sync:env` 自动同步）：
 ```toml
 [env.production.vars]
 SUPABASE_URL = "https://<your-project>.supabase.co"
@@ -586,6 +621,43 @@ npm run build
 # 部署到 Cloudflare Pages
 wrangler pages deploy dist --project-name=patchx
 ```
+
+**重要提示：部署时的环境变量配置**
+
+您有**两种选择**来配置 Supabase 环境变量：
+
+#### 选项 1：使用 Worker 的配置端点（推荐 - 自动）
+
+Worker 可以通过 `/api/config/public` 暴露 Supabase 配置，前端会自动将其作为后备方案使用。这意味着您无需在 Cloudflare Pages 仪表板中设置环境变量。
+
+**步骤：**
+1. 确保您的 `.env.local` 包含 `SUPABASE_URL` 和 `SUPABASE_ANON_KEY`
+2. 将它们同步到 `wrangler.toml`：
+   ```bash
+   npm run sync:env
+   ```
+3. 部署 Worker：
+   ```bash
+   npm run deploy
+   ```
+4. 前端将自动从 Worker 的 `/api/config/public` 端点获取配置
+
+#### 选项 2：在 Cloudflare Pages 仪表板中设置（手动）
+
+或者，您可以在 Cloudflare Pages 中设置环境变量：
+
+1. 进入您的 Cloudflare Pages 项目仪表板
+2. 导航到 **设置** → **环境变量**
+3. 为 **生产环境**（以及 **预览环境**，如需要）添加以下变量：
+   - `SUPABASE_URL` - 您的 Supabase 项目 URL（例如：`https://your-project.supabase.co`）
+   - `SUPABASE_ANON_KEY` - 您的 Supabase 匿名密钥
+
+**⚠️ 关键提示：** 如果这些环境变量缺失或指向不同的 Supabase 项目，用户在重新部署后将无法登录。数据库重置脚本在部署过程中**永远不会**被调用，因此如果登录失败，请检查：
+
+1. 环境变量设置正确（通过 Worker 的 `wrangler.toml` 或在 Cloudflare Pages 仪表板中）
+2. 环境变量指向正确的 Supabase 项目
+3. Supabase 项目未通过 Supabase 仪表板手动重置
+4. Supabase 项目 URL 和密钥未更改
 
 ### 部署后的服务地址
 - **前端（Cloudflare Pages）**: `https://patchx.pages.dev`

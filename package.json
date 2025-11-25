@@ -14,7 +14,10 @@
     "check": "tsc -b --noEmit",
     "db:reset": "bash scripts/reset-db.sh",
     "db:reset:confirm": "bash scripts/reset-db.sh --confirm",
-    "deploy": "npm run build:worker && npx wrangler deploy"
+    "sync:env": "node scripts/sync-env-to-wrangler.js",
+    "test:config": "bash scripts/test-config-endpoint.sh",
+    "deploy": "npm run build:worker && npx wrangler deploy --env production",
+    "deploy:full": "npm run sync:env && npm run deploy"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.83.0",

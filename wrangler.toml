@@ -19,6 +19,17 @@ kv_namespaces = [
 # Database reset is available separately via: npm run db:reset
 command = "npm run build:worker"
 
+# Default environment variables (used when no --env is specified)
+# These can be overridden by [env.production.vars] or [env.staging.vars]
+[vars]
+GERRIT_BASE_URL = "https://android-review.googlesource.com"
+MAX_FILE_SIZE = "10485760"
+RATE_LIMIT_WINDOW = "900000"
+RATE_LIMIT_MAX = "10"
+TEST_USER_PASSWORD = "patchx"
+SUPABASE_URL = "https://your-project.supabase.co"
+SUPABASE_ANON_KEY = "your_supabase_anon_key"
+
 # 环境变量配置
 [env.production.vars]
 GERRIT_BASE_URL = "https://android-review.googlesource.com"
@@ -53,8 +64,8 @@ MAX_FILE_SIZE = "10485760"
 RATE_LIMIT_WINDOW = "900000"
 RATE_LIMIT_MAX = "10"
 TEST_USER_PASSWORD = "patchx"
-SUPABASE_URL = "https://your-project.supabase.co"
-SUPABASE_ANON_KEY = "your_supabase_anon_key"
+SUPABASE_URL = "https://njypwpixukqmgjlxxcwe.supabase.co"
+SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5qeXB3cGl4dWtxbWdqbHh4Y3dlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjM2MjE3NjYsImV4cCI6MjA3OTE5Nzc2Nn0.oR_9We_Vdb3T-Y11oHogNJ5-wuPob5pT6fQDPyPslmc"
 
 # AI提供商配置 - OpenAI
 OPENAI_BASE_URL = "https://api.openai.com/v1"
