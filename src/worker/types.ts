@@ -25,6 +25,8 @@ export interface Env {
   CUSTOM_AI_MODEL?: string
   CUSTOM_AI_MAX_TOKENS?: string
   CUSTOM_AI_TEMPERATURE?: string
+  LITELLM_BASE_URL?: string
+  LITELLM_API_KEY?: string
 }
 
 export interface Upload {
@@ -49,6 +51,7 @@ export interface Submission {
   changeId?: string
   changeUrl?: string
   error?: string
+  model?: string
   createdAt: string
   updatedAt: string
 }

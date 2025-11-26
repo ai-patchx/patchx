@@ -30,6 +30,8 @@ TEST_USER_PASSWORD = "patchx"
 SUPABASE_URL = "https://your-project.supabase.co"
 SUPABASE_ANON_KEY = "your_supabase_anon_key"
 VITE_PUBLIC_SITE_URL = "https://patchx.pages.dev"
+LITELLM_BASE_URL=https://your-litellm-server.com
+LITELLM_API_KEY=your-litellm-api-key
 
 # 环境变量配置
 [env.production.vars]
@@ -41,6 +43,8 @@ TEST_USER_PASSWORD = "patchx"
 SUPABASE_URL = "https://your-project.supabase.co"
 SUPABASE_ANON_KEY = "your_supabase_anon_key"
 VITE_PUBLIC_SITE_URL = "https://patchx.pages.dev"
+LITELLM_BASE_URL=https://your-litellm-server.com
+LITELLM_API_KEY=your-litellm-api-key
 
 # AI提供商配置 - OpenAI
 OPENAI_BASE_URL = "https://api.openai.com/v1"
@@ -69,6 +73,8 @@ TEST_USER_PASSWORD = "patchx"
 SUPABASE_URL = "https://your-project.supabase.co"
 SUPABASE_ANON_KEY = "your_supabase_anon_key"
 VITE_PUBLIC_SITE_URL = "https://patchx.pages.dev"
+LITELLM_BASE_URL=https://your-litellm-server.com
+LITELLM_API_KEY=your-litellm-api-key
 
 # AI提供商配置 - OpenAI
 OPENAI_BASE_URL = "https://api.openai.com/v1"

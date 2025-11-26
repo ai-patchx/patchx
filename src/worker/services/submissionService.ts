@@ -18,7 +18,8 @@ export class SubmissionService {
     uploadId: string,
     subject: string,
     description: string,
-    branch: string
+    branch: string,
+    model?: string
   ): Promise<Submission> {
     // 获取上传的文件
     const upload = await this.uploadService.getUpload(uploadId)
@@ -40,6 +41,7 @@ export class SubmissionService {
       description,
       branch,
       status: 'pending',
+      model,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
     }

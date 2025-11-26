@@ -1,8 +1,8 @@
 #!/bin/bash
 
-# Script to check if Supabase environment variables are properly configured
+# Script to check if Supabase and LiteLLM environment variables are properly configured
 
-echo "🔍 Checking Supabase Environment Variables Setup"
+echo "🔍 Checking Environment Variables Setup"
 echo ""
 
 # Check .env.local
@@ -20,6 +20,13 @@ if [ -f .env.local ]; then
     echo "   ✅ VITE_PUBLIC_SITE_URL: ${SITE_URL:-'(empty)'}"
   else
     echo "   ⚠️  VITE_PUBLIC_SITE_URL not set in .env.local (will fall back to window.origin)"
+  fi
+  if grep -q "LITELLM_BASE_URL" .env.local && grep -q "LITELLM_API_KEY" .env.local; then
+    echo "   ✅ .env.local has LiteLLM variables"
+    LITELLM_URL=$(grep "LITELLM_BASE_URL" .env.local | cut -d '=' -f2 | tr -d '"' | tr -d "'")
+    echo "   LITELLM_BASE_URL: ${LITELLM_URL:0:30}..."
+  else
+    echo "   ⚠️  .env.local missing LiteLLM variables (model selection feature will not be available)"
   fi
 else
   echo "   ⚠️  .env.local file not found"
@@ -41,6 +48,11 @@ if grep -q "SUPABASE_URL" wrangler.toml && grep -q "SUPABASE_ANON_KEY" wrangler.
     echo "   ✅ VITE_PUBLIC_SITE_URL in wrangler.toml: ${CURRENT_SITE:0:40}..."
   else
     echo "   ⚠️  VITE_PUBLIC_SITE_URL missing from wrangler.toml"
+  fi
+  if grep -q "LITELLM_BASE_URL" wrangler.toml && grep -q "LITELLM_API_KEY" wrangler.toml; then
+    echo "   ✅ wrangler.toml has LiteLLM variables"
+  else
+    echo "   ⚠️  wrangler.toml missing LiteLLM variables"
   fi
 else
   echo "   ❌ wrangler.toml missing Supabase variables"
@@ -79,6 +91,8 @@ echo "1. Go to Cloudflare Dashboard → Pages → Your project → Settings → 
 echo "2. Add for Production:"
 echo "   - SUPABASE_URL = (your Supabase URL)"
 echo "   - SUPABASE_ANON_KEY = (your Supabase anon key)"
+echo "   - LITELLM_BASE_URL = (your LiteLLM server URL) [optional]"
+echo "   - LITELLM_API_KEY = (your LiteLLM API key) [optional]"
 echo "3. Save and trigger a new deployment"
 echo ""
 echo "To sync from .env.local to wrangler.toml:"

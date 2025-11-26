@@ -79,6 +79,8 @@ wrangler secret put TEST_USER_PASSWORD
 SUPABASE_URL=https://your-supabase-project.supabase.co
 SUPABASE_ANON_KEY=your_supabase_anon_key
 VITE_PUBLIC_SITE_URL=http://localhost:5173
+LITELLM_BASE_URL=https://your-litellm-server.com
+LITELLM_API_KEY=your-litellm-api-key
 ```
 `VITE_PUBLIC_SITE_URL` 用于邮箱验证。本地开发可保持为 `http://localhost:5173`，线上部署时请设置为实际站点地址（如 `https://patchx.pages.dev`）。
 
@@ -306,6 +308,10 @@ TEST_USER_PASSWORD=your-secure-password
 # Supabase（前端）
 SUPABASE_URL=https://your-supabase-project.supabase.co
 SUPABASE_ANON_KEY=your_supabase_anon_key
+
+# LiteLLM（用于补丁冲突解决中的模型选择）
+LITELLM_BASE_URL=https://your-litellm-server.com
+LITELLM_API_KEY=your-litellm-api-key
 ```
 
 ### 前端环境变量（Vite）
@@ -324,7 +330,7 @@ VITE_WORKER_BASE_URL=https://patchx-service.angersax.workers.dev
 
 最简单的方式是让 Worker 通过 `/api/config/public` 端点提供 Supabase 配置：
 
-1. 确保 `.env.local` 包含 `SUPABASE_URL` 和 `SUPABASE_ANON_KEY`
+1. 确保 `.env.local` 包含 `SUPABASE_URL`、`SUPABASE_ANON_KEY`，以及可选的 `LITELLM_BASE_URL` 和 `LITELLM_API_KEY`
 2. 运行同步脚本将环境变量同步到 `wrangler.toml`：
    ```bash
    npm run sync:env
@@ -340,6 +346,8 @@ VITE_WORKER_BASE_URL=https://patchx-service.angersax.workers.dev
    - `SUPABASE_URL` → `https://<your-project>.supabase.co`
    - `SUPABASE_ANON_KEY` → `<your_anon_key>`
    - `VITE_PUBLIC_SITE_URL` → 对外访问地址（如 `https://patchx.pages.dev`）
+   - `LITELLM_BASE_URL` → `https://<your-litellm-server>.com`（可选，用于模型选择功能）
+   - `LITELLM_API_KEY` → `<your-litellm-api-key>`（可选，用于模型选择功能）
 3. 重新部署 Pages 项目使新的环境变量生效。
 
 说明：
@@ -355,10 +363,14 @@ VITE_WORKER_BASE_URL=https://patchx-service.angersax.workers.dev
 [env.production.vars]
 SUPABASE_URL = "https://<your-project>.supabase.co"
 SUPABASE_ANON_KEY = "<your_anon_key>"
+LITELLM_BASE_URL = "https://<your-litellm-server>.com"
+LITELLM_API_KEY = "<your-litellm-api-key>"
 
 [env.staging.vars]
 SUPABASE_URL = "https://<your-project>.supabase.co"
 SUPABASE_ANON_KEY = "<your_anon_key>"
+LITELLM_BASE_URL = "https://<your-litellm-server>.com"
+LITELLM_API_KEY = "<your-litellm-api-key>"
 ```
 2. Worker 提供公共配置端点 `/api/config/public`，返回 `{ supabaseUrl, supabaseAnonKey }`。
 3. 前端采用惰性初始化 Supabase，当未设置 `SUPABASE_*` 时将回退到该端点。
@@ -638,7 +650,7 @@ wrangler pages deploy dist --project-name=patchx
 Worker 可以通过 `/api/config/public` 暴露 Supabase 配置，前端会自动将其作为后备方案使用。这意味着您无需在 Cloudflare Pages 仪表板中设置环境变量。
 
 **步骤：**
-1. 确保您的 `.env.local` 包含 `SUPABASE_URL` 和 `SUPABASE_ANON_KEY`
+1. 确保您的 `.env.local` 包含 `SUPABASE_URL`、`SUPABASE_ANON_KEY`，以及可选的 `LITELLM_BASE_URL` 和 `LITELLM_API_KEY`
 2. 将它们同步到 `wrangler.toml`：
    ```bash
    npm run sync:env
@@ -659,6 +671,8 @@ Worker 可以通过 `/api/config/public` 暴露 Supabase 配置，前端会自�
    - `SUPABASE_URL` - 您的 Supabase 项目 URL（例如：`https://your-project.supabase.co`）
    - `SUPABASE_ANON_KEY` - 您的 Supabase 匿名密钥
    - `VITE_PUBLIC_SITE_URL` - 您的站点公网地址（例如：`https://patchx.pages.dev`）
+   - `LITELLM_BASE_URL` - 您的 LiteLLM 服务器 URL（可选，用于模型选择功能）
+   - `LITELLM_API_KEY` - 您的 LiteLLM API 密钥（可选，用于模型选择功能）
 
 **⚠️ 关键提示：** 如果这些环境变量缺失或指向不同的 Supabase 项目，用户在重新部署后将无法登录。数据库重置脚本在部署过程中**永远不会**被调用，因此如果登录失败，请检查：
 

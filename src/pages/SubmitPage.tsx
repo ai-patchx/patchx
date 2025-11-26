@@ -33,6 +33,9 @@ const SubmitPage: React.FC = () => {
 
   const [selectedProject, setSelectedProject] = useState('')
   const [selectedBranch, setSelectedBranch] = useState('main')
+  const [selectedModel, setSelectedModel] = useState('')
+  const [models, setModels] = useState<Array<{ id: string; name: string; provider: string }>>([])
+  const [isLoadingModels, setIsLoadingModels] = useState(false)
   const [subject, setSubject] = useState('')
   const [description, setDescription] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -42,7 +45,47 @@ const SubmitPage: React.FC = () => {
 
   useEffect(() => {
     loadFromStorage()
+    fetchModels()
   }, [loadFromStorage])
+
+  const fetchModels = async () => {
+    setIsLoadingModels(true)
+    try {
+      const response = await fetch('/api/models')
+      if (!response.ok) {
+        throw new Error(`Failed to fetch models: ${response.status} ${response.statusText}`)
+      }
+
+      // Check if response is JSON before parsing
+      const contentType = response.headers.get('content-type') || ''
+      if (!contentType.includes('application/json')) {
+        const text = await response.text()
+        throw new Error(`Server returned non-JSON response. Content-Type: ${contentType}. Response: ${text.substring(0, 200)}`)
+      }
+
+      type ModelsResponse = {
+        success: boolean
+        data?: Array<{ id: string; name: string; provider: string }>
+        error?: string
+      }
+      const result: ModelsResponse = await response.json()
+      if (result.success && result.data) {
+        setModels(result.data)
+        // Set default model if available
+        if (result.data.length > 0 && !selectedModel) {
+          setSelectedModel(result.data[0].id)
+        }
+      } else if (result.error) {
+        throw new Error(result.error)
+      }
+    } catch (error) {
+      console.error('Error fetching models:', error)
+      const errorMessage = error instanceof Error ? error.message : 'Failed to load models from LiteLLM'
+      addConsoleOutput(`Failed to load models: ${errorMessage}`, 'warning')
+    } finally {
+      setIsLoadingModels(false)
+    }
+  }
 
   const handleFileSelect = async (selectedFile: File) => {
     // File preview logic can be added here
@@ -149,7 +192,8 @@ const SubmitPage: React.FC = () => {
           uploadId,
           subject,
           description,
-          branch: selectedBranch
+          branch: selectedBranch,
+          model: selectedModel || undefined
         })
       })
 
@@ -302,6 +346,50 @@ const SubmitPage: React.FC = () => {
                   </option>
                 ))}
               </select>
+            </div>
+
+            {/* Model Selection for Patch Conflict Resolution */}
+            <div>
+              <label className={`block text-sm font-medium mb-2 ${
+                theme === 'dark' ? 'text-gradient-primary' : 'text-gray-700'
+              }`}>
+                <div className="flex items-center space-x-2">
+                  <Settings className="w-5 h-5" />
+                  <span>AI Model for Conflict Resolution</span>
+                </div>
+              </label>
+              <select
+                value={selectedModel}
+                onChange={(e) => setSelectedModel(e.target.value)}
+                disabled={isLoadingModels || models.length === 0}
+                className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent ${
+                  theme === 'dark'
+                    ? 'input-gradient border-gradient-accent'
+                    : 'border-gray-300 bg-white'
+                } ${isLoadingModels || models.length === 0 ? 'opacity-50 cursor-not-allowed' : ''}`}
+              >
+                {isLoadingModels ? (
+                  <option value="">Loading models...</option>
+                ) : models.length === 0 ? (
+                  <option value="">No models available</option>
+                ) : (
+                  <>
+                    <option value="">Select a model (optional)</option>
+                    {models.map((model) => (
+                      <option key={model.id} value={model.id}>
+                        {model.name} {model.provider !== 'unknown' ? `(${model.provider})` : ''}
+                      </option>
+                    ))}
+                  </>
+                )}
+              </select>
+              {models.length === 0 && !isLoadingModels && (
+                <p className={`text-xs mt-1 ${
+                  theme === 'dark' ? 'text-gradient-secondary opacity-70' : 'text-gray-500'
+                }`}>
+                  Models will be fetched from LiteLLM. Make sure LITELLM_BASE_URL and LITELLM_API_KEY are configured.
+                </p>
+              )}
             </div>
 
             {/* Commit Subject */}

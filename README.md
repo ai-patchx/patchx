@@ -79,6 +79,8 @@ Copy `.env.example` to `.env.local` and set:
 SUPABASE_URL=https://your-supabase-project.supabase.co
 SUPABASE_ANON_KEY=your_supabase_anon_key
 VITE_PUBLIC_SITE_URL=http://localhost:5173
+LITELLM_BASE_URL=https://your-litellm-server.com
+LITELLM_API_KEY=your-litellm-api-key
 ```
 `VITE_PUBLIC_SITE_URL` is used for email verification. For local development, you can keep it as `http://localhost:5173`. In deployed environments, set it to your public site URL (e.g., `https://patchx.pages.dev`).
 
@@ -302,6 +304,10 @@ TEST_USER_PASSWORD=your-secure-password
 # Supabase (frontend)
 SUPABASE_URL=https://your-supabase-project.supabase.co
 SUPABASE_ANON_KEY=your_supabase_anon_key
+
+# LiteLLM (for model selection in patch conflict resolution)
+LITELLM_BASE_URL=https://your-litellm-server.com
+LITELLM_API_KEY=your-litellm-api-key
 ```
 
 ### Frontend environment (Vite)
@@ -323,6 +329,8 @@ Configure Supabase environment variables for the frontend build in your Cloudfla
    - `SUPABASE_URL` → `https://<your-project>.supabase.co`
    - `SUPABASE_ANON_KEY` → `<your_anon_key>`
    - `VITE_PUBLIC_SITE_URL` → public URL of your site (e.g. `https://patchx.pages.dev`)
+   - `LITELLM_BASE_URL` → `https://<your-litellm-server>.com` (optional, for model selection)
+   - `LITELLM_API_KEY` → `<your-litellm-api-key>` (optional, for model selection)
 3. Redeploy the Pages project so the new variables are applied to the build.
 
 Notes:
@@ -337,10 +345,14 @@ You can configure Supabase values on the Worker side and have the frontend fetch
 [env.production.vars]
 SUPABASE_URL = "https://<your-project>.supabase.co"
 SUPABASE_ANON_KEY = "<your_anon_key>"
+LITELLM_BASE_URL = "https://<your-litellm-server>.com"
+LITELLM_API_KEY = "<your-litellm-api-key>"
 
 [env.staging.vars]
 SUPABASE_URL = "https://<your-project>.supabase.co"
 SUPABASE_ANON_KEY = "<your_anon_key>"
+LITELLM_BASE_URL = "https://<your-litellm-server>.com"
+LITELLM_API_KEY = "<your-litellm-api-key>"
 ```
 2. The Worker exposes a public config endpoint at `/api/config/public` returning `{ supabaseUrl, supabaseAnonKey }`.
 3. The frontend lazily initializes Supabase and falls back to this endpoint if `SUPABASE_*` are not set.
@@ -620,7 +632,7 @@ You have **two options** for configuring Supabase environment variables:
 The Worker can expose Supabase config via `/api/config/public`, and the frontend will automatically use it as a fallback. This means you don't need to set environment variables in Cloudflare Pages dashboard.
 
 **Steps:**
-1. Ensure your `.env.local` has `SUPABASE_URL` and `SUPABASE_ANON_KEY`
+1. Ensure your `.env.local` has `SUPABASE_URL`, `SUPABASE_ANON_KEY`, and optionally `LITELLM_BASE_URL` and `LITELLM_API_KEY`
 2. Sync them to `wrangler.toml`:
    ```bash
    npm run sync:env
@@ -641,6 +653,8 @@ Alternatively, you can set environment variables in Cloudflare Pages:
    - `SUPABASE_URL` - Your Supabase project URL (e.g., `https://your-project.supabase.co`)
    - `SUPABASE_ANON_KEY` - Your Supabase anonymous key
    - `VITE_PUBLIC_SITE_URL` - Public URL of your site (e.g., `https://patchx.pages.dev`)
+   - `LITELLM_BASE_URL` - Your LiteLLM server URL (optional, for model selection feature)
+   - `LITELLM_API_KEY` - Your LiteLLM API key (optional, for model selection feature)
 
 **⚠️ Critical:** If these environment variables are missing or point to a different Supabase project, users will not be able to login after redeployment. The database reset script is **never** called during deployment, so if login fails, check:
 

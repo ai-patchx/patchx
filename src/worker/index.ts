@@ -37,7 +37,8 @@ export default {
               login: '/api/auth/login',
               aiResolveConflict: '/api/ai/resolve-conflict',
               aiProviders: '/api/ai/providers',
-              aiTestProviders: '/api/ai/test-providers'
+              aiTestProviders: '/api/ai/test-providers',
+              models: '/api/models'
             },
             documentation: 'https://github.com/your-repo/aosp-patch-service'
           }),
@@ -74,6 +75,8 @@ export default {
         return await handleAITestProviders(env, corsHeaders)
       } else if (path === '/api/config/public' && method === 'GET') {
         return await handlePublicConfig(env, corsHeaders)
+      } else if (path === '/api/models' && method === 'GET') {
+        return await handleModels(env, corsHeaders)
       }
 
       else {
@@ -433,8 +436,8 @@ async function handleUpload(request: Request, env: Env, corsHeaders: Record<stri
 }
 
 async function handleSubmit(request: Request, env: Env, corsHeaders: Record<string, string>): Promise<Response> {
-  const body = await request.json() as { uploadId: string; subject: string; description: string; branch: string }
-  const { uploadId, subject, description, branch } = body
+  const body = await request.json() as { uploadId: string; subject: string; description: string; branch: string; model?: string }
+  const { uploadId, subject, description, branch, model } = body
 
   if (!uploadId || !subject || !branch) {
     return new Response(
@@ -457,7 +460,8 @@ async function handleSubmit(request: Request, env: Env, corsHeaders: Record<stri
       uploadId,
       subject,
       description || '',
-      branch
+      branch,
+      model
     )
 
     // 异步提交到Gerrit（不等待完成）
@@ -559,4 +563,130 @@ async function handlePublicConfig(env: Env, corsHeaders: Record<string, string>)
       }
     }
   )
+}
+
+async function handleModels(env: Env, corsHeaders: Record<string, string>): Promise<Response> {
+  try {
+    // Check if litellm is configured
+    if (!env.LITELLM_BASE_URL || !env.LITELLM_API_KEY) {
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: 'LiteLLM is not configured. Please set LITELLM_BASE_URL and LITELLM_API_KEY in environment variables.'
+        }),
+        {
+          status: 400,
+          headers: {
+            'Content-Type': 'application/json',
+            ...corsHeaders
+          }
+        }
+      )
+    }
+
+    // Fetch models from litellm
+    const baseUrl = env.LITELLM_BASE_URL.replace(/\/$/, '') // Remove trailing slash
+    const modelsUrl = `${baseUrl}/models`
+
+    const response = await fetch(modelsUrl, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${env.LITELLM_API_KEY}`,
+        'Content-Type': 'application/json'
+      }
+    })
+
+    if (!response.ok) {
+      const errorText = await response.text()
+      throw new Error(`Failed to fetch models from LiteLLM: ${response.status} ${errorText}`)
+    }
+
+    // Check if response is JSON before parsing
+    const contentType = response.headers.get('content-type') || ''
+    if (!contentType.includes('application/json')) {
+      const text = await response.text()
+      throw new Error(`LiteLLM returned non-JSON response (${contentType}). Response: ${text.substring(0, 200)}`)
+    }
+
+    const data = await response.json()
+
+    // Handle different response formats from LiteLLM
+    // LiteLLM /models endpoint may return:
+    // - { data: [{ id, ... }] } (OpenAI-compatible format)
+    // - [{ id, ... }] (direct array)
+    // - { models: [{ id, ... }] } (alternative format)
+    let modelsArray = []
+
+    if (Array.isArray(data)) {
+      modelsArray = data
+    } else if (data.data && Array.isArray(data.data)) {
+      modelsArray = data.data
+    } else if (data.models && Array.isArray(data.models)) {
+      modelsArray = data.models
+    }
+
+    // Extract model IDs and format them
+    // Provider can be extracted from model ID (e.g., "ollama-deepseek-v3.1" -> "ollama")
+    const extractProvider = (modelId: string, ownedBy?: string): string => {
+      if (ownedBy && ownedBy !== 'openai') {
+        return ownedBy
+      }
+      // Extract provider from model ID prefix (e.g., "ollama-", "openrouter-", "claude-")
+      const parts = modelId.split('-')
+      if (parts.length > 1) {
+        const provider = parts[0]
+        // Map common prefixes to readable names
+        const providerMap: Record<string, string> = {
+          'ollama': 'Ollama',
+          'openrouter': 'OpenRouter',
+          'claude': 'Anthropic Claude',
+          'cloudflare': 'Cloudflare',
+          'qiniu': 'Qiniu',
+          'siliconflow': 'SiliconFlow',
+          'vercel': 'Vercel',
+          'volcengine': 'VolcEngine',
+          'cerebras': 'Cerebras'
+        }
+        return providerMap[provider.toLowerCase()] || provider
+      }
+      return ownedBy || 'unknown'
+    }
+
+    const models = modelsArray.map((model: any) => {
+      const modelId = model.id || model.model_id || model.name || String(model)
+      return {
+        id: modelId,
+        name: modelId,
+        provider: extractProvider(modelId, model.owned_by || model.provider)
+      }
+    })
+
+    return new Response(
+      JSON.stringify({
+        success: true,
+        data: models
+      }),
+      {
+        headers: {
+          'Content-Type': 'application/json',
+          ...corsHeaders
+        }
+      }
+    )
+  } catch (error) {
+    console.error('Error fetching models from LiteLLM:', error)
+    return new Response(
+      JSON.stringify({
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to fetch models from LiteLLM'
+      }),
+      {
+        status: 500,
+        headers: {
+          'Content-Type': 'application/json',
+          ...corsHeaders
+        }
+      }
+    )
+  }
 }
