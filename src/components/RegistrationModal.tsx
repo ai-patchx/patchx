@@ -15,7 +15,9 @@ export default function RegistrationModal({ isOpen, onClose }: RegistrationModal
   const [confirmPassword, setConfirmPassword] = useState('')
   const [isLogin, setIsLogin] = useState(false)
   const [successMessage, setSuccessMessage] = useState('')
-  const { signUp, signIn, loading, error } = useAuthStore()
+  const [verificationCode, setVerificationCode] = useState('')
+  const [showVerificationCode, setShowVerificationCode] = useState(false)
+  const { signUp, verifyEmailCode, signIn, loading, error } = useAuthStore()
   const { theme } = useTheme()
   const navigate = useNavigate()
 
@@ -37,11 +39,34 @@ export default function RegistrationModal({ isOpen, onClose }: RegistrationModal
         navigate('/submit')
       } else {
         await signUp(email, password)
-        setSuccessMessage(`Registration successful! We've sent a confirmation link to ${email}. Please verify your email before logging in.`)
-        setIsLogin(true)
+        setSuccessMessage(`We've sent a verification code to ${email}. Please enter the code below to complete your registration.`)
+        setShowVerificationCode(true)
       }
     } catch (error) {
       console.error('Authentication error:', error)
+    }
+  }
+
+  const handleVerifyCode = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setSuccessMessage('')
+
+    if (!verificationCode || verificationCode.length !== 8) {
+      alert('Please enter a valid 8-digit verification code')
+      return
+    }
+
+    try {
+      await verifyEmailCode(email, verificationCode)
+      setSuccessMessage('Email verified successfully! Redirecting...')
+      setVerificationCode('')
+      // User is automatically logged in after verification, so navigate and close
+      setTimeout(() => {
+        onClose()
+        navigate('/submit')
+      }, 1500)
+    } catch (error) {
+      console.error('Verification error:', error)
     }
   }
 
@@ -86,7 +111,61 @@ export default function RegistrationModal({ isOpen, onClose }: RegistrationModal
               </div>
             )}
 
-            <form onSubmit={handleEmailAuth} className="space-y-4">
+            {showVerificationCode ? (
+              <form onSubmit={handleVerifyCode} className="space-y-4">
+                <div>
+                  <label htmlFor="verificationCode" className={`block text-sm font-medium mb-2 ${theme === 'dark' ? 'text-gradient-primary' : 'text-gray-700'}`}>
+                    Verification Code
+                  </label>
+                  <div className="relative">
+                    <input
+                      type="text"
+                      id="verificationCode"
+                      value={verificationCode}
+                      onChange={(e) => {
+                        const value = e.target.value.replace(/\D/g, '').slice(0, 8)
+                        setVerificationCode(value)
+                      }}
+                      className={`${inputBase} ${theme === 'dark' ? inputDark : inputLight} text-center text-2xl tracking-widest font-mono`}
+                      placeholder="00000000"
+                      maxLength={8}
+                      required
+                      autoFocus
+                    />
+                  </div>
+                  <p className={`mt-2 text-xs ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>
+                    Enter the 8-digit code sent to your email
+                  </p>
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={loading || verificationCode.length !== 8}
+                  className={`w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white ${
+                    loading || verificationCode.length !== 8
+                      ? 'bg-gray-400 cursor-not-allowed'
+                      : theme === 'dark'
+                        ? 'bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700'
+                        : 'bg-blue-600 hover:bg-blue-700'
+                  } focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500`}
+                >
+                  {loading ? 'Verifying...' : 'Verify Code'}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowVerificationCode(false)
+                    setVerificationCode('')
+                    setSuccessMessage('')
+                  }}
+                  className={`w-full text-sm ${theme === 'dark' ? 'text-blue-400 hover:text-blue-300' : 'text-blue-600 hover:text-blue-500'}`}
+                >
+                  Back to registration
+                </button>
+              </form>
+            ) : (
+              <form onSubmit={handleEmailAuth} className="space-y-4">
               <div>
                 <label htmlFor="email" className={`block text-sm font-medium mb-2 ${theme === 'dark' ? 'text-gradient-primary' : 'text-gray-700'}`}>
                   Email Address
@@ -163,6 +242,7 @@ export default function RegistrationModal({ isOpen, onClose }: RegistrationModal
                 {loading ? 'Processing...' : (isLogin ? 'Login' : 'Register')}
               </button>
             </form>
+            )}
 
             <div className="mt-6 text-center">
               <button

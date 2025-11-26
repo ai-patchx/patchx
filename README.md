@@ -65,13 +65,22 @@ wrangler secret put TEST_USER_PASSWORD
 
 - Homepage provides Login/Registration modal
 - Email registration only via Supabase
-- Copy `.env.example` to `.env.local` and set:
+- After registration, users receive an 8-digit verification code via email
+- Enter the verification code in the registration modal to complete account setup
+
+**Important:** To use verification codes instead of confirmation links, you must configure your Supabase email templates:
+1. Go to Supabase Dashboard → Authentication → Email Templates
+2. Edit the "Confirm Signup" template
+3. Replace `{{ .ConfirmationURL }}` with `{{ .Token }}` to display the verification code
+4. See `SUPABASE_EMAIL_TEMPLATE_SETUP.md` for detailed instructions
+
+Copy `.env.example` to `.env.local` and set:
 ```bash
 SUPABASE_URL=https://your-supabase-project.supabase.co
 SUPABASE_ANON_KEY=your_supabase_anon_key
 VITE_PUBLIC_SITE_URL=http://localhost:5173
 ```
-`VITE_PUBLIC_SITE_URL` controls the confirmation links Supabase emails send. Point it to your public site (e.g., `https://patchx.pages.dev`) in deployed environments so users never receive `localhost` links.
+`VITE_PUBLIC_SITE_URL` is used for email verification. For local development, you can keep it as `http://localhost:5173`. In deployed environments, set it to your public site URL (e.g., `https://patchx.pages.dev`).
 
 Legacy test account (for Worker API testing only):
 - Default test account: `username=patchx`, `password=patchx`
@@ -631,7 +640,7 @@ Alternatively, you can set environment variables in Cloudflare Pages:
 3. Add the following variables for **Production** (and **Preview** if needed):
    - `SUPABASE_URL` - Your Supabase project URL (e.g., `https://your-project.supabase.co`)
    - `SUPABASE_ANON_KEY` - Your Supabase anonymous key
-   - `VITE_PUBLIC_SITE_URL` - Public URL that Supabase should redirect to (e.g., `https://patchx.pages.dev`)
+   - `VITE_PUBLIC_SITE_URL` - Public URL of your site (e.g., `https://patchx.pages.dev`)
 
 **⚠️ Critical:** If these environment variables are missing or point to a different Supabase project, users will not be able to login after redeployment. The database reset script is **never** called during deployment, so if login fails, check:
 

@@ -13,6 +13,7 @@ interface AuthState {
   loading: boolean
   error: string | null
   signUp: (email: string, password: string) => Promise<void>
+  verifyEmailCode: (email: string, token: string) => Promise<void>
   signIn: (email: string, password: string) => Promise<void>
   signInWorker: (username: string, password: string) => Promise<void>
   signOut: () => Promise<void>
@@ -30,39 +31,32 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     try {
       const supabase = await getSupabaseClient()
 
-      const getRedirectBaseUrl = () => {
-        const envUrl = import.meta.env.VITE_PUBLIC_SITE_URL?.trim()
-        if (envUrl) {
-          return envUrl
-        }
-        if (typeof window !== 'undefined') {
-          const globalUrl = window.__PX_PUBLIC_SITE_URL
-          if (globalUrl) {
-            return globalUrl
-          }
-          return window.location.origin
-        }
-        return 'https://patchx.pages.dev'
-      }
-
-      const getRedirectUrl = () => `${getRedirectBaseUrl().replace(/\/$/, '')}/auth/confirm`
-
-      const { data, error } = await supabase.auth.signUp({
+      // Use signInWithOtp to send OTP verification code via email
+      // Note: Supabase email template must be configured to use {{ .Token }} instead of {{ .ConfirmationURL }}
+      // Store the password temporarily to set it after email verification
+      const { data, error } = await supabase.auth.signInWithOtp({
         email,
-        password,
         options: {
-          emailRedirectTo: getRedirectUrl(),
+          data: {
+            password: password, // Store password in metadata to set after verification
+          },
+          shouldCreateUser: true,
         },
       })
       if (error) throw error
 
-      // Check if email confirmation is required
-      set({ user: data.user, loading: false })
+      // Store password in sessionStorage temporarily for after verification
+      if (typeof window !== 'undefined') {
+        sessionStorage.setItem('pending_password', password)
+        sessionStorage.setItem('pending_email', email)
+      }
+
+      set({ loading: false })
     } catch (error) {
       let message = error instanceof Error ? error.message : String(error)
 
       // Provide more helpful error messages
-      if (message.includes('User already registered')) {
+      if (message.includes('User already registered') || message.includes('already registered')) {
         message = 'This email is already registered. Please try logging in instead.'
       } else if (message.includes('Password')) {
         message = 'Password must be at least 6 characters long.'
@@ -71,6 +65,54 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       }
 
       set({ error: message, loading: false })
+    }
+  },
+
+  verifyEmailCode: async (email: string, token: string) => {
+    set({ loading: true, error: null })
+    try {
+      const supabase = await getSupabaseClient()
+
+      // Verify the OTP code
+      // When using signInWithOtp with shouldCreateUser: true, the type is 'email'
+      const { data, error } = await supabase.auth.verifyOtp({
+        email,
+        token,
+        type: 'email',
+      })
+      if (error) throw error
+
+      // If verification successful and we have a pending password, update it
+      if (data.user && typeof window !== 'undefined') {
+        const pendingPassword = sessionStorage.getItem('pending_password')
+        if (pendingPassword) {
+          // Update user password
+          const { error: updateError } = await supabase.auth.updateUser({
+            password: pendingPassword,
+          })
+          if (updateError) {
+            console.warn('Failed to set password after verification:', updateError)
+            // Don't throw - user is verified, password can be reset later
+          }
+          // Clean up
+          sessionStorage.removeItem('pending_password')
+          sessionStorage.removeItem('pending_email')
+        }
+      }
+
+      set({ user: data.user, loading: false })
+    } catch (error) {
+      let message = error instanceof Error ? error.message : String(error)
+
+      // Provide more helpful error messages
+      if (message.includes('expired') || message.includes('invalid')) {
+        message = 'The verification code has expired or is invalid. Please register again.'
+      } else if (message.includes('Invalid')) {
+        message = 'Invalid verification code. Please check your email and try again.'
+      }
+
+      set({ error: message, loading: false })
+      throw error
     }
   },
 
@@ -89,9 +131,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
       // Provide more helpful error messages
       if (message.includes('Invalid login credentials') || message.includes('Email not confirmed')) {
-        message = 'Invalid email or password. If you just registered, please check your email to confirm your account first.'
+        message = 'Invalid email or password. If you just registered, please verify your email with the code sent to your email first.'
       } else if (message.includes('Email not confirmed')) {
-        message = 'Please check your email and confirm your account before logging in.'
+        message = 'Please check your email and verify your account with the code before logging in.'
       } else if (message.includes('Invalid email')) {
         message = 'Please enter a valid email address.'
       } else if (message.includes('Password')) {
