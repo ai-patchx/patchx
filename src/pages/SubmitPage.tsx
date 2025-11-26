@@ -52,23 +52,31 @@ const SubmitPage: React.FC = () => {
     setIsLoadingModels(true)
     try {
       const response = await fetch('/api/models')
-      if (!response.ok) {
-        throw new Error(`Failed to fetch models: ${response.status} ${response.statusText}`)
-      }
 
       // Check if response is JSON before parsing
       const contentType = response.headers.get('content-type') || ''
-      if (!contentType.includes('application/json')) {
-        const text = await response.text()
-        throw new Error(`Server returned non-JSON response. Content-Type: ${contentType}. Response: ${text.substring(0, 200)}`)
-      }
+      const isJson = contentType.includes('application/json')
 
       type ModelsResponse = {
         success: boolean
         data?: Array<{ id: string; name: string; provider: string }>
         error?: string
       }
-      const result: ModelsResponse = await response.json()
+
+      let result: ModelsResponse
+
+      if (isJson) {
+        result = await response.json()
+      } else {
+        const text = await response.text()
+        throw new Error(`Server returned non-JSON response. Content-Type: ${contentType}. Response: ${text.substring(0, 200)}`)
+      }
+
+      if (!response.ok) {
+        // If response is not OK, use the error from JSON if available
+        throw new Error(result.error || `Failed to fetch models: ${response.status} ${response.statusText}`)
+      }
+
       if (result.success && result.data) {
         setModels(result.data)
         // Set default model if available
@@ -80,7 +88,17 @@ const SubmitPage: React.FC = () => {
       }
     } catch (error) {
       console.error('Error fetching models:', error)
-      const errorMessage = error instanceof Error ? error.message : 'Failed to load models from LiteLLM'
+      let errorMessage = 'Failed to load models from LiteLLM'
+      if (error instanceof Error) {
+        errorMessage = error.message
+        // Extract error from response if available
+        if (error.message.includes('Failed to fetch models')) {
+          const match = error.message.match(/Failed to fetch models from LiteLLM: (\d+) (.+)/)
+          if (match) {
+            errorMessage = `LiteLLM Error (${match[1]}): ${match[2]}`
+          }
+        }
+      }
       addConsoleOutput(`Failed to load models: ${errorMessage}`, 'warning')
     } finally {
       setIsLoadingModels(false)

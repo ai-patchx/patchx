@@ -586,19 +586,154 @@ async function handleModels(env: Env, corsHeaders: Record<string, string>): Prom
 
     // Fetch models from litellm
     const baseUrl = env.LITELLM_BASE_URL.replace(/\/$/, '') // Remove trailing slash
-    const modelsUrl = `${baseUrl}/models`
+    // Try /models first, fallback to /v1/models for OpenAI compatibility
+    let modelsUrl = `${baseUrl}/models`
 
-    const response = await fetch(modelsUrl, {
+    // Log the request (without sensitive data)
+    console.log(`Fetching models from LiteLLM: ${modelsUrl}`)
+    console.log(`API Key present: ${!!env.LITELLM_API_KEY}, length: ${env.LITELLM_API_KEY?.length || 0}`)
+
+    // Make request exactly like curl - minimal headers, just Authorization
+    // This matches: curl -H "Authorization: Bearer sk-1234" http://litellm.example.com/models
+    let response = await fetch(modelsUrl, {
       method: 'GET',
       headers: {
-        'Authorization': `Bearer ${env.LITELLM_API_KEY}`,
-        'Content-Type': 'application/json'
+        'Authorization': `Bearer ${env.LITELLM_API_KEY}`
       }
     })
 
+    // If 403, try with API key in different formats
+    if (response.status === 403) {
+      console.log(`403 error, trying alternative authentication methods...`)
+
+      // Try without Bearer prefix
+      response = await fetch(modelsUrl, {
+        method: 'GET',
+        headers: {
+          'Authorization': env.LITELLM_API_KEY,
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'User-Agent': 'Mozilla/5.0 (compatible; Cloudflare-Worker/1.0)',
+          'Origin': baseUrl,
+          'Referer': baseUrl
+        }
+      })
+
+      // If still 403, try x-api-key header
+      if (response.status === 403) {
+        response = await fetch(modelsUrl, {
+          method: 'GET',
+          headers: {
+            'x-api-key': env.LITELLM_API_KEY,
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+            'User-Agent': 'Mozilla/5.0 (compatible; Cloudflare-Worker/1.0)',
+            'Origin': baseUrl,
+            'Referer': baseUrl
+          }
+        })
+      }
+
+      // If still 403, try with api-key header (some LiteLLM configs use this)
+      if (response.status === 403) {
+        response = await fetch(modelsUrl, {
+          method: 'GET',
+          headers: {
+            'api-key': env.LITELLM_API_KEY,
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+            'User-Agent': 'Mozilla/5.0 (compatible; Cloudflare-Worker/1.0)',
+            'Origin': baseUrl,
+            'Referer': baseUrl
+          }
+        })
+      }
+
+      // If still 403, try with both Authorization Bearer and x-api-key
+      if (response.status === 403) {
+        response = await fetch(modelsUrl, {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${env.LITELLM_API_KEY}`,
+            'x-api-key': env.LITELLM_API_KEY,
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+            'User-Agent': 'Mozilla/5.0 (compatible; Cloudflare-Worker/1.0)',
+            'Origin': baseUrl,
+            'Referer': baseUrl
+          }
+        })
+      }
+    }
+
+    // If /models returns 400/404, try /v1/models (OpenAI-compatible endpoint)
+    if (!response.ok && (response.status === 400 || response.status === 404)) {
+      console.log(`Trying /v1/models endpoint as fallback...`)
+      modelsUrl = `${baseUrl}/v1/models`
+      response = await fetch(modelsUrl, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${env.LITELLM_API_KEY}`
+        }
+      })
+    }
+
     if (!response.ok) {
-      const errorText = await response.text()
-      throw new Error(`Failed to fetch models from LiteLLM: ${response.status} ${errorText}`)
+      let errorText = ''
+      let errorDetails = ''
+      try {
+        errorText = await response.text()
+        // Try to parse as JSON for better error message
+        try {
+          const errorJson = JSON.parse(errorText)
+          // Extract detailed error information
+          errorDetails = errorJson.error?.message ||
+                        errorJson.message ||
+                        errorJson.detail ||
+                        errorJson.error?.code ||
+                        errorText
+
+          // Include additional context for 403 errors
+          if (response.status === 403) {
+            const errorCode = errorJson.error?.code || errorJson.code || ''
+            const errorType = errorJson.error?.type || errorJson.type || ''
+            errorDetails = `403 Forbidden${errorCode ? ` (code: ${errorCode})` : ''}${errorType ? ` - ${errorType}` : ''}. ${errorDetails}`
+
+            // Provide helpful suggestions for common 403 issues
+            if (errorCode === '1003' || errorText.includes('1003')) {
+              errorDetails += ' This may indicate: invalid API key, insufficient permissions, or IP restrictions. Please verify LITELLM_API_KEY is correct and has proper permissions.'
+            }
+          }
+
+          errorText = errorDetails
+        } catch (e) {
+          // Not JSON, use as-is
+          errorDetails = errorText
+          if (response.status === 403) {
+            errorDetails = `403 Forbidden: ${errorText}. Please verify LITELLM_API_KEY is correct and has proper permissions.`
+          }
+        }
+      } catch (e) {
+        errorText = `Status ${response.status}: ${response.statusText}`
+        errorDetails = errorText
+      }
+      console.error(`LiteLLM API error (${response.status}) at ${modelsUrl}:`, errorDetails)
+      console.error('Full error response:', errorText)
+
+      // Return error response with proper JSON format
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: `Failed to fetch models from LiteLLM: ${errorDetails}`
+        }),
+        {
+          status: response.status,
+          headers: {
+            'Content-Type': 'application/json',
+            ...corsHeaders
+          }
+        }
+      )
     }
 
     // Check if response is JSON before parsing
@@ -608,21 +743,24 @@ async function handleModels(env: Env, corsHeaders: Record<string, string>): Prom
       throw new Error(`LiteLLM returned non-JSON response (${contentType}). Response: ${text.substring(0, 200)}`)
     }
 
-    const data = await response.json()
+    const data = await response.json() as unknown
 
     // Handle different response formats from LiteLLM
     // LiteLLM /models endpoint may return:
     // - { data: [{ id, ... }] } (OpenAI-compatible format)
     // - [{ id, ... }] (direct array)
     // - { models: [{ id, ... }] } (alternative format)
-    let modelsArray = []
+    let modelsArray: any[] = []
 
     if (Array.isArray(data)) {
       modelsArray = data
-    } else if (data.data && Array.isArray(data.data)) {
-      modelsArray = data.data
-    } else if (data.models && Array.isArray(data.models)) {
-      modelsArray = data.models
+    } else if (typeof data === 'object' && data !== null) {
+      const dataObj = data as Record<string, any>
+      if (Array.isArray(dataObj.data)) {
+        modelsArray = dataObj.data
+      } else if (Array.isArray(dataObj.models)) {
+        modelsArray = dataObj.models
+      }
     }
 
     // Extract model IDs and format them
