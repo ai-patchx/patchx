@@ -2,16 +2,19 @@ import { Env, Submission } from '../types'
 import { generateId } from '../utils'
 import { UploadService } from './uploadService'
 import { GerritService } from './gerritService'
+import { EmailService } from './emailService'
 
 export class SubmissionService {
   private env: Env
   private uploadService: UploadService
   private gerritService: GerritService
+  private emailService: EmailService
 
   constructor(env: Env) {
     this.env = env
     this.uploadService = new UploadService(env)
     this.gerritService = new GerritService(env)
+    this.emailService = new EmailService(env)
   }
 
   async createSubmission(
@@ -19,7 +22,9 @@ export class SubmissionService {
     subject: string,
     description: string,
     branch: string,
-    model?: string
+    model?: string,
+    notificationEmails?: string[],
+    notificationCc?: string[]
   ): Promise<Submission> {
     // 获取上传的文件
     const upload = await this.uploadService.getUpload(uploadId)
@@ -42,6 +47,8 @@ export class SubmissionService {
       branch,
       status: 'pending',
       model,
+      notificationEmails: EmailService.normalizeEmails(notificationEmails),
+      notificationCc: EmailService.normalizeEmails(notificationCc),
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
     }
@@ -63,6 +70,7 @@ export class SubmissionService {
       submission.status = 'processing'
       submission.updatedAt = new Date().toISOString()
       await this.env.AOSP_PATCH_KV.put(`submissions:${submissionId}`, JSON.stringify(submission))
+      await this.sendNotification(submission, 'processing')
 
       // 获取上传的文件内容
       const upload = await this.uploadService.getUpload(submission.uploadId)
@@ -87,6 +95,7 @@ export class SubmissionService {
       submission.updatedAt = new Date().toISOString()
 
       await this.env.AOSP_PATCH_KV.put(`submissions:${submissionId}`, JSON.stringify(submission))
+      await this.sendNotification(submission, 'completed')
 
       return submission
     } catch (error) {
@@ -96,6 +105,7 @@ export class SubmissionService {
       submission.updatedAt = new Date().toISOString()
 
       await this.env.AOSP_PATCH_KV.put(`submissions:${submissionId}`, JSON.stringify(submission))
+      await this.sendNotification(submission, 'failed')
 
       throw error
     }
@@ -124,6 +134,14 @@ export class SubmissionService {
       changeUrl: submission.changeUrl,
       createdAt: submission.createdAt,
       error: submission.error
+    }
+  }
+
+  private async sendNotification(submission: Submission, stage: Submission['status']) {
+    try {
+      await this.emailService.sendSubmissionStatusEmail(submission, stage)
+    } catch (error) {
+      console.error('Failed to dispatch email notification:', error)
     }
   }
 }

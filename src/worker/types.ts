@@ -27,6 +27,10 @@ export interface Env {
   CUSTOM_AI_TEMPERATURE?: string
   LITELLM_BASE_URL?: string
   LITELLM_API_KEY?: string
+  MAILCHANNELS_FROM_EMAIL?: string
+  MAILCHANNELS_FROM_NAME?: string
+  MAILCHANNELS_REPLY_TO_EMAIL?: string
+  MAILCHANNELS_API_ENDPOINT?: string
 }
 
 export interface Upload {
@@ -52,6 +56,8 @@ export interface Submission {
   changeUrl?: string
   error?: string
   model?: string
+  notificationEmails?: string[]
+  notificationCc?: string[]
   createdAt: string
   updatedAt: string
 }

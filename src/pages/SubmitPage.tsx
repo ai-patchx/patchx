@@ -26,6 +26,15 @@ const BRANCHES = [
   { value: 'android12-release', label: 'android12-release' }
 ]
 
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/i
+
+const splitEmails = (value: string): string[] => {
+  return value
+    .split(/[,\n;]/)
+    .map(part => part.trim())
+    .filter(Boolean)
+}
+
 const SubmitPage: React.FC = () => {
   const { file, setUploadStatus, setUploadId, setError } = useFileUploadStore()
   const { theme, toggleTheme } = useTheme()
@@ -42,11 +51,20 @@ const SubmitPage: React.FC = () => {
   const [showPreview, setShowPreview] = useState(false)
   const [consoleOutput, setConsoleOutput] = useState<string[]>([])
   const [currentProcess, setCurrentProcess] = useState('')
+  const [notificationReceiversInput, setNotificationReceiversInput] = useState('')
+  const [notificationCcInput, setNotificationCcInput] = useState('')
+  const [emailValidationError, setEmailValidationError] = useState<string | null>(null)
 
   useEffect(() => {
     loadFromStorage()
     fetchModels()
   }, [loadFromStorage])
+
+  useEffect(() => {
+    if (authorEmail && !notificationReceiversInput) {
+      setNotificationReceiversInput(authorEmail)
+    }
+  }, [authorEmail, notificationReceiversInput])
 
   const fetchModels = async () => {
     setIsLoadingModels(true)
@@ -144,6 +162,42 @@ const SubmitPage: React.FC = () => {
     return lines.join('\n')
   }
 
+  const normalizeEmailList = (value: string): string[] => {
+    const normalized = splitEmails(value).map(email => email.toLowerCase())
+    return Array.from(new Set(normalized.filter(email => EMAIL_REGEX.test(email))))
+  }
+
+  const findInvalidEmail = (value: string): string | undefined => {
+    return splitEmails(value).find(email => !EMAIL_REGEX.test(email))
+  }
+
+  const notificationReceivers = normalizeEmailList(notificationReceiversInput)
+  const notificationCc = normalizeEmailList(notificationCcInput).filter(
+    email => !notificationReceivers.includes(email)
+  )
+
+  const renderEmailChips = (emails: string[]) => {
+    if (emails.length === 0) {
+      return null
+    }
+    return (
+      <div className="flex flex-wrap gap-2 mt-2">
+        {emails.map(email => (
+          <span
+            key={email}
+            className={`px-2 py-1 rounded-full text-xs ${
+              theme === 'dark'
+                ? 'bg-gradient-highlight text-gradient-primary'
+                : 'bg-gray-200 text-gray-700'
+            }`}
+          >
+            {email}
+          </span>
+        ))}
+      </div>
+    )
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
@@ -151,6 +205,25 @@ const SubmitPage: React.FC = () => {
       setError('Please fill in all required fields')
       return
     }
+
+    const invalidReceiver = findInvalidEmail(notificationReceiversInput)
+    if (invalidReceiver) {
+      setEmailValidationError(`Invalid receiver email: ${invalidReceiver}`)
+      return
+    }
+
+    const invalidCc = findInvalidEmail(notificationCcInput)
+    if (invalidCc) {
+      setEmailValidationError(`Invalid CC email: ${invalidCc}`)
+      return
+    }
+
+    if (!notificationReceivers.length && notificationCc.length > 0) {
+      setEmailValidationError('Please add at least one email under Receivers to enable notifications.')
+      return
+    }
+
+    setEmailValidationError(null)
 
     setIsSubmitting(true)
     setUploadStatus('uploading')
@@ -211,7 +284,9 @@ const SubmitPage: React.FC = () => {
           subject,
           description,
           branch: selectedBranch,
-          model: selectedModel || undefined
+          model: selectedModel || undefined,
+          notificationEmails: notificationReceivers,
+          notificationCc
         })
       })
 
@@ -453,6 +528,64 @@ const SubmitPage: React.FC = () => {
                 }`}
               />
             </div>
+
+            {/* Notification Emails */}
+            <div>
+              <label className={`block text-sm font-medium mb-2 ${
+                theme === 'dark' ? 'text-gradient-primary' : 'text-gray-700'
+              }`}>
+                Email Notifications
+              </label>
+              <textarea
+                value={notificationReceiversInput}
+                onChange={(e) => setNotificationReceiversInput(e.target.value)}
+                placeholder="Add email receivers, e.g. alice@example.com, bob@example.com"
+                rows={2}
+                className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent ${
+                  theme === 'dark'
+                    ? 'input-gradient border-gradient-accent'
+                    : 'border-gray-300 bg-white'
+                }`}
+              />
+              <p className={`text-xs mt-1 ${
+                theme === 'dark' ? 'text-gradient-secondary opacity-80' : 'text-gray-500'
+              }`}>
+                We will send status updates (processing, completed, failed) to these addresses. Separate multiple emails with commas, semicolons, or line breaks. Add at least one receiver to enable notifications.
+              </p>
+              {renderEmailChips(notificationReceivers)}
+            </div>
+
+            {/* CC List */}
+            <div>
+              <label className={`block text-sm font-medium mb-2 ${
+                theme === 'dark' ? 'text-gradient-primary' : 'text-gray-700'
+              }`}>
+                CC List (optional)
+              </label>
+              <textarea
+                value={notificationCcInput}
+                onChange={(e) => setNotificationCcInput(e.target.value)}
+                placeholder="CC teammates, e.g. reviewer@example.com"
+                rows={2}
+                className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent ${
+                  theme === 'dark'
+                    ? 'input-gradient border-gradient-accent'
+                    : 'border-gray-300 bg-white'
+                }`}
+              />
+              <p className={`text-xs mt-1 ${
+                theme === 'dark' ? 'text-gradient-secondary opacity-80' : 'text-gray-500'
+              }`}>
+                CC recipients will be copied on the same notification emails. At least one receiver above is required for delivery.
+              </p>
+              {renderEmailChips(notificationCc)}
+            </div>
+
+            {emailValidationError && (
+              <div className="text-sm text-red-500">
+                {emailValidationError}
+              </div>
+            )}
 
             {/* Commit Message 预览 */}
             {showPreview && (

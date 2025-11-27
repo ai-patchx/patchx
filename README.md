@@ -310,6 +310,19 @@ LITELLM_BASE_URL=https://your-litellm-server.com
 LITELLM_API_KEY=your-litellm-api-key
 ```
 
+### Email notification setup
+
+Patch submission status emails are sent through [MailChannels](https://mailchannels.com/) directly from the Cloudflare Worker. Configure the following variables in `wrangler.toml` (or the Cloudflare dashboard) for each environment:
+
+```bash
+MAILCHANNELS_FROM_EMAIL=no-reply@your-domain.com
+MAILCHANNELS_FROM_NAME="PatchX Bot"
+MAILCHANNELS_REPLY_TO_EMAIL=patchx@your-domain.com   # optional
+MAILCHANNELS_API_ENDPOINT=https://api.mailchannels.net/tx/v1/send   # optional override
+```
+
+Once configured, the Submit page shows two new fields—**Email Notifications** and **CC List**—so contributors can decide who will receive processing/completed/failed status updates for every patch.
+
 ### Frontend environment (Vite)
 
 Set the frontend base URL for the backend Worker to avoid hardcoded endpoints and enable per‑environment configuration:

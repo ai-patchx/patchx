@@ -314,6 +314,19 @@ LITELLM_BASE_URL=https://your-litellm-server.com
 LITELLM_API_KEY=your-litellm-api-key
 ```
 
+### 邮件通知配置
+
+补丁提交流程通过 [MailChannels](https://mailchannels.com/) 在 Cloudflare Worker 中直接发送状态邮件。请在 `wrangler.toml`（或 Cloudflare 后台）中为各环境设置以下变量：
+
+```bash
+MAILCHANNELS_FROM_EMAIL=no-reply@your-domain.com
+MAILCHANNELS_FROM_NAME="PatchX Bot"
+MAILCHANNELS_REPLY_TO_EMAIL=patchx@your-domain.com   # 可选
+MAILCHANNELS_API_ENDPOINT=https://api.mailchannels.net/tx/v1/send   # 可选覆写
+```
+
+配置完成后，提交页面将显示 **Email Notifications** 与 **CC List** 输入框，允许为每次提交单独指定接收人与抄送名单，并在“处理中 / 成功 / 失败”时收到通知。
+
 ### 前端环境变量（Vite）
 
 为避免端点硬编码并按环境区分配置，请设置前端用于访问后端 Worker 的基地址：

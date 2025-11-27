@@ -30,6 +30,9 @@ export const submitPatch = async (data: {
   subject: string
   description: string
   branch: string
+  model?: string
+  notificationEmails?: string[]
+  notificationCc?: string[]
 }): Promise<ApiResponse<{ submissionId: string; status: string }>> => {
   const response = await fetch(`${API_BASE_URL}/submit`, {
     method: 'POST',

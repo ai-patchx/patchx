@@ -436,7 +436,15 @@ async function handleUpload(request: Request, env: Env, corsHeaders: Record<stri
 }
 
 async function handleSubmit(request: Request, env: Env, corsHeaders: Record<string, string>): Promise<Response> {
-  const body = await request.json() as { uploadId: string; subject: string; description: string; branch: string; model?: string }
+  const body = await request.json() as {
+    uploadId: string
+    subject: string
+    description: string
+    branch: string
+    model?: string
+    notificationEmails?: string[]
+    notificationCc?: string[]
+  }
   const { uploadId, subject, description, branch, model } = body
 
   if (!uploadId || !subject || !branch) {
@@ -453,6 +461,8 @@ async function handleSubmit(request: Request, env: Env, corsHeaders: Record<stri
   }
 
   const submissionService = new SubmissionService(env)
+  const notificationEmails = Array.isArray(body.notificationEmails) ? body.notificationEmails : undefined
+  const notificationCc = Array.isArray(body.notificationCc) ? body.notificationCc : undefined
 
   try {
     // 创建提交记录
@@ -461,7 +471,9 @@ async function handleSubmit(request: Request, env: Env, corsHeaders: Record<stri
       subject,
       description || '',
       branch,
-      model
+      model,
+      notificationEmails,
+      notificationCc
     )
 
     // 异步提交到Gerrit（不等待完成）

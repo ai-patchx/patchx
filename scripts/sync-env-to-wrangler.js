@@ -20,6 +20,10 @@ let supabaseAnonKey = ''
 let publicSiteUrl = ''
 let litellmBaseUrl = ''
 let litellmApiKey = ''
+let mailFromEmail = ''
+let mailFromName = ''
+let mailReplyTo = ''
+let mailApiEndpoint = ''
 
 try {
   const envLocalPath = join(rootDir, '.env.local')
@@ -37,6 +41,14 @@ try {
       litellmBaseUrl = trimmed.split('=')[1]?.trim().replace(/^["']|["']$/g, '') || ''
     } else if (trimmed.startsWith('LITELLM_API_KEY=')) {
       litellmApiKey = trimmed.split('=')[1]?.trim().replace(/^["']|["']$/g, '') || ''
+    } else if (trimmed.startsWith('MAILCHANNELS_FROM_EMAIL=')) {
+      mailFromEmail = trimmed.split('=')[1]?.trim().replace(/^["']|["']$/g, '') || ''
+    } else if (trimmed.startsWith('MAILCHANNELS_FROM_NAME=')) {
+      mailFromName = trimmed.split('=')[1]?.trim().replace(/^["']|["']$/g, '') || ''
+    } else if (trimmed.startsWith('MAILCHANNELS_REPLY_TO_EMAIL=')) {
+      mailReplyTo = trimmed.split('=')[1]?.trim().replace(/^["']|["']$/g, '') || ''
+    } else if (trimmed.startsWith('MAILCHANNELS_API_ENDPOINT=')) {
+      mailApiEndpoint = trimmed.split('=')[1]?.trim().replace(/^["']|["']$/g, '') || ''
     }
   }
 } catch (error) {
@@ -56,6 +68,19 @@ if (!litellmBaseUrl || !litellmApiKey) {
 
 if (!publicSiteUrl) {
   console.warn('⚠️  Warning: VITE_PUBLIC_SITE_URL not found in .env.local. Using existing value in wrangler.toml.')
+}
+
+if (!mailFromEmail) {
+  console.warn('⚠️  Warning: MAILCHANNELS_FROM_EMAIL not found in .env.local. Email notifications may use stale values in wrangler.toml.')
+}
+if (!mailFromName) {
+  console.warn('⚠️  Warning: MAILCHANNELS_FROM_NAME not found in .env.local.')
+}
+if (!mailReplyTo) {
+  console.warn('⚠️  Warning: MAILCHANNELS_REPLY_TO_EMAIL not found in .env.local.')
+}
+if (!mailApiEndpoint) {
+  console.warn('⚠️  Warning: MAILCHANNELS_API_ENDPOINT not found in .env.local. Defaults to the public MailChannels endpoint.')
 }
 
 // Read wrangler.toml
@@ -154,6 +179,21 @@ if (litellmBaseUrl) {
   }
 }
 
+const updateMailVar = (key, value) => {
+  if (!value) {
+    return
+  }
+  const regex = new RegExp(`${key}\\s*=\\s*(?:"[^"]*"|[^\\s]+)`, 'g')
+  if (regex.test(wranglerContent)) {
+    wranglerContent = wranglerContent.replace(regex, `${key} = "${value}"`)
+  }
+}
+
+updateMailVar('MAILCHANNELS_FROM_EMAIL', mailFromEmail)
+updateMailVar('MAILCHANNELS_FROM_NAME', mailFromName)
+updateMailVar('MAILCHANNELS_REPLY_TO_EMAIL', mailReplyTo)
+updateMailVar('MAILCHANNELS_API_ENDPOINT', mailApiEndpoint)
+
 if (litellmApiKey) {
   // Add to default [vars] section after LITELLM_BASE_URL or VITE_PUBLIC_SITE_URL
   const lines = wranglerContent.split('\n')
@@ -240,16 +280,6 @@ if (litellmApiKey) {
 writeFileSync(wranglerPath, wranglerContent, 'utf-8')
 
 console.log('✅ Successfully synced environment variables to wrangler.toml')
-console.log(`   SUPABASE_URL: ${supabaseUrl}`)
-console.log(`   SUPABASE_ANON_KEY: ${supabaseAnonKey.substring(0, 20)}...`)
-if (publicSiteUrl) {
-  console.log(`   VITE_PUBLIC_SITE_URL: ${publicSiteUrl}`)
-}
-if (litellmBaseUrl && litellmApiKey) {
-  console.log(`   LITELLM_BASE_URL: ${litellmBaseUrl}`)
-  console.log(`   LITELLM_API_KEY: ${litellmApiKey.substring(0, 20)}...`)
-}
-
 console.log('\n📝 Next steps:')
 console.log('   1. Review wrangler.toml to ensure values are correct')
 console.log('   2. Deploy Worker: npm run deploy')

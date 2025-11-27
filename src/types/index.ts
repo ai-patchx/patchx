@@ -20,6 +20,8 @@ export interface Submission {
   changeId?: string
   changeUrl?: string
   error?: string
+  notificationEmails?: string[]
+  notificationCc?: string[]
   createdAt: string
   updatedAt: string
 }
