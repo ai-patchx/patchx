@@ -97,10 +97,6 @@ const SubmitPage: React.FC = () => {
 
       if (result.success && result.data) {
         setModels(result.data)
-        // Set default model if available
-        if (result.data.length > 0 && !selectedModel) {
-          setSelectedModel(result.data[0].id)
-        }
       } else if (result.error) {
         throw new Error(result.error)
       }
@@ -441,14 +437,14 @@ const SubmitPage: React.FC = () => {
               </select>
             </div>
 
-            {/* Model Selection for Patch Conflict Resolution */}
+            {/* Model Selection for Commit Generation & Conflict Resolution */}
             <div>
               <label className={`block text-sm font-medium mb-2 ${
                 theme === 'dark' ? 'text-gradient-primary' : 'text-gray-700'
               }`}>
                 <div className="flex items-center space-x-2">
                   <Settings className="w-5 h-5" />
-                  <span>AI Model for Conflict Resolution</span>
+                  <span>AI Model for Commit Generation & Conflict Resolution</span>
                 </div>
               </label>
               <select
@@ -547,11 +543,6 @@ const SubmitPage: React.FC = () => {
                     : 'border-gray-300 bg-white'
                 }`}
               />
-              <p className={`text-xs mt-1 ${
-                theme === 'dark' ? 'text-gradient-secondary opacity-80' : 'text-gray-500'
-              }`}>
-                We will send status updates (processing, completed, failed) to these addresses. Separate multiple emails with commas, semicolons, or line breaks. Add at least one receiver to enable notifications.
-              </p>
               {renderEmailChips(notificationReceivers)}
             </div>
 
@@ -560,7 +551,7 @@ const SubmitPage: React.FC = () => {
               <label className={`block text-sm font-medium mb-2 ${
                 theme === 'dark' ? 'text-gradient-primary' : 'text-gray-700'
               }`}>
-                CC List (optional)
+                CC List
               </label>
               <textarea
                 value={notificationCcInput}
@@ -573,11 +564,6 @@ const SubmitPage: React.FC = () => {
                     : 'border-gray-300 bg-white'
                 }`}
               />
-              <p className={`text-xs mt-1 ${
-                theme === 'dark' ? 'text-gradient-secondary opacity-80' : 'text-gray-500'
-              }`}>
-                CC recipients will be copied on the same notification emails. At least one receiver above is required for delivery.
-              </p>
               {renderEmailChips(notificationCc)}
             </div>
 
