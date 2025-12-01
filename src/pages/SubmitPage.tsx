@@ -573,7 +573,7 @@ const SubmitPage: React.FC = () => {
               </div>
             )}
 
-            {/* Commit Message 预览 */}
+            {/* Commit Message Preview */}
             {showPreview && (
               <div className={`border rounded-md p-4 ${
                 theme === 'dark'
@@ -583,7 +583,7 @@ const SubmitPage: React.FC = () => {
                 <h3 className={`text-sm font-medium mb-2 ${
                   theme === 'dark' ? 'text-gradient-primary' : 'text-gray-700'
                 }`}>
-                  Commit Message 预览：
+                  Commit Message Preview:
                 </h3>
                 <pre className={`text-sm whitespace-pre-wrap ${
                   theme === 'dark' ? 'text-gradient-secondary' : 'text-gray-600'
