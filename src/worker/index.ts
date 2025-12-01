@@ -40,7 +40,8 @@ export default {
               aiProviders: '/api/ai/providers',
               aiTestProviders: '/api/ai/test-providers',
               models: '/api/models',
-              projects: '/api/projects'
+              projects: '/api/projects',
+              projectBranches: '/api/projects/:project/branches'
             },
             documentation: 'https://github.com/your-repo/aosp-patch-service'
           }),
@@ -81,6 +82,8 @@ export default {
         return await handleModels(env, corsHeaders)
       } else if (path === '/api/projects' && method === 'GET') {
         return await handleProjects(request, env, corsHeaders)
+      } else if (path.startsWith('/api/projects/') && path.endsWith('/branches') && method === 'GET') {
+        return await handleProjectBranches(path, env, corsHeaders)
       }
 
       else {
@@ -911,6 +914,83 @@ async function handleProjects(
       JSON.stringify({
         success: false,
         error: error instanceof Error ? error.message : 'Failed to fetch projects from Gerrit'
+      }),
+      {
+        status: 500,
+        headers: {
+          'Content-Type': 'application/json',
+          ...corsHeaders
+        }
+      }
+    )
+  }
+}
+
+async function handleProjectBranches(
+  path: string,
+  env: Env,
+  corsHeaders: Record<string, string>
+): Promise<Response> {
+  try {
+    // Check if Gerrit is configured
+    if (!env.GERRIT_BASE_URL || !env.GERRIT_USERNAME || !env.GERRIT_PASSWORD) {
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: 'Gerrit is not configured. Please set GERRIT_BASE_URL, GERRIT_USERNAME, and GERRIT_PASSWORD in environment variables.'
+        }),
+        {
+          status: 400,
+          headers: {
+            'Content-Type': 'application/json',
+            ...corsHeaders
+          }
+        }
+      )
+    }
+
+    // Extract project name from path: /api/projects/{project}/branches
+    const pathMatch = path.match(/^\/api\/projects\/(.+)\/branches$/)
+    if (!pathMatch || !pathMatch[1]) {
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: 'Invalid project path. Expected format: /api/projects/{project}/branches'
+        }),
+        {
+          status: 400,
+          headers: {
+            'Content-Type': 'application/json',
+            ...corsHeaders
+          }
+        }
+      )
+    }
+
+    // Decode the project name (it's already URL encoded in the path)
+    const projectName = decodeURIComponent(pathMatch[1])
+
+    const gerritService = new GerritService(env)
+    const branches = await gerritService.getBranches(projectName)
+
+    return new Response(
+      JSON.stringify({
+        success: true,
+        data: branches
+      }),
+      {
+        headers: {
+          'Content-Type': 'application/json',
+          ...corsHeaders
+        }
+      }
+    )
+  } catch (error) {
+    console.error('Error fetching branches from Gerrit:', error)
+    return new Response(
+      JSON.stringify({
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to fetch branches from Gerrit'
       }),
       {
         status: 500,

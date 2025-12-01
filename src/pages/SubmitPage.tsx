@@ -7,15 +7,7 @@ import { useTheme } from '../hooks/useTheme'
 import UserInfo from '../components/UserInfo'
 import packageInfo from '../../package.json'
 
-// Projects will be fetched from Gerrit API
-
-const BRANCHES = [
-  { value: 'main', label: 'main' },
-  { value: 'master', label: 'master' },
-  { value: 'android14-release', label: 'android14-release' },
-  { value: 'android13-release', label: 'android13-release' },
-  { value: 'android12-release', label: 'android12-release' }
-]
+// Projects and branches will be fetched from Gerrit API
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/i
 
@@ -38,6 +30,8 @@ const SubmitPage: React.FC = () => {
   const [isLoadingModels, setIsLoadingModels] = useState(false)
   const [projects, setProjects] = useState<Array<{ id: string; name: string; description?: string }>>([])
   const [isLoadingProjects, setIsLoadingProjects] = useState(false)
+  const [branches, setBranches] = useState<Array<{ ref: string; revision: string; name: string }>>([])
+  const [isLoadingBranches, setIsLoadingBranches] = useState(false)
   const [subject, setSubject] = useState('')
   const [description, setDescription] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -53,6 +47,16 @@ const SubmitPage: React.FC = () => {
     fetchModels()
     fetchProjects()
   }, [loadFromStorage])
+
+  useEffect(() => {
+    if (selectedProject) {
+      fetchBranches(selectedProject)
+    } else {
+      // Reset branches when no project is selected
+      setBranches([])
+      setSelectedBranch('main')
+    }
+  }, [selectedProject])
 
   useEffect(() => {
     if (authorEmail && !notificationReceiversInput) {
@@ -113,6 +117,66 @@ const SubmitPage: React.FC = () => {
       setProjects([])
     } finally {
       setIsLoadingProjects(false)
+    }
+  }
+
+  const fetchBranches = async (projectName: string) => {
+    setIsLoadingBranches(true)
+    try {
+      // URL encode the project name for the API call
+      const encodedProjectName = encodeURIComponent(projectName)
+      const response = await fetch(`/api/projects/${encodedProjectName}/branches`)
+
+      // Check if response is JSON before parsing
+      const contentType = response.headers.get('content-type') || ''
+      const isJson = contentType.includes('application/json')
+
+      type BranchesResponse = {
+        success: boolean
+        data?: Array<{ ref: string; revision: string; name: string }>
+        error?: string
+      }
+
+      let result: BranchesResponse
+
+      if (isJson) {
+        result = await response.json()
+      } else {
+        const text = await response.text()
+        throw new Error(`Server returned non-JSON response. Content-Type: ${contentType}. Response: ${text.substring(0, 200)}`)
+      }
+
+      if (!response.ok) {
+        // If response is not OK, use the error from JSON if available
+        throw new Error(result.error || `Failed to fetch branches: ${response.status} ${response.statusText}`)
+      }
+
+      if (result.success && result.data) {
+        setBranches(result.data)
+        // Auto-select the first branch (usually main or master)
+        if (result.data.length > 0) {
+          setSelectedBranch(result.data[0].name)
+        }
+      } else if (result.error) {
+        throw new Error(result.error)
+      }
+    } catch (error) {
+      console.error('Error fetching branches:', error)
+      let errorMessage = 'Failed to load branches from Gerrit'
+      if (error instanceof Error) {
+        errorMessage = error.message
+        // Provide more helpful error messages
+        if (errorMessage.includes('401') || errorMessage.includes('403')) {
+          errorMessage = 'Authentication failed. Please check GERRIT_USERNAME and GERRIT_PASSWORD configuration.'
+        } else if (errorMessage.includes('404')) {
+          errorMessage = 'Project or branches not found. Please check the project name.'
+        }
+      }
+      addConsoleOutput(`Failed to load branches: ${errorMessage}`, 'warning')
+      // Fallback to default branches
+      setBranches([])
+    } finally {
+      setIsLoadingBranches(false)
     }
   }
 
@@ -501,18 +565,36 @@ const SubmitPage: React.FC = () => {
               <select
                 value={selectedBranch}
                 onChange={(e) => setSelectedBranch(e.target.value)}
+                disabled={!selectedProject || isLoadingBranches}
                 className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent ${
                   theme === 'dark'
                     ? 'input-gradient border-gradient-accent'
                     : 'border-gray-300 bg-white'
-                }`}
+                } ${!selectedProject || isLoadingBranches ? 'opacity-50 cursor-not-allowed' : ''}`}
               >
-                {BRANCHES.map((branch) => (
-                  <option key={branch.value} value={branch.value}>
-                    {branch.label}
-                  </option>
-                ))}
+                {!selectedProject ? (
+                  <option value="">Please select a project first</option>
+                ) : isLoadingBranches ? (
+                  <option value="">Loading branches...</option>
+                ) : branches.length === 0 ? (
+                  <option value="">No branches available</option>
+                ) : (
+                  <>
+                    {branches.map((branch) => (
+                      <option key={branch.ref} value={branch.name}>
+                        {branch.name}
+                      </option>
+                    ))}
+                  </>
+                )}
               </select>
+              {selectedProject && branches.length > 0 && (
+                <p className={`text-xs mt-1 ${
+                  theme === 'dark' ? 'text-gradient-secondary opacity-70' : 'text-gray-500'
+                }`}>
+                  {branches.length} branch{branches.length !== 1 ? 'es' : ''} loaded for {selectedProject}
+                </p>
+              )}
             </div>
 
             {/* Model Selection for Commit Generation & Conflict Resolution */}

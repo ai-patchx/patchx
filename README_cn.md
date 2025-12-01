@@ -14,6 +14,8 @@
 - 📱 **响应式设计**: 支持桌面和移动设备
 - 🔐 **用户登录与令牌鉴权**
 - 🧑‍💻 **用户注册**：仅支持邮箱注册（基于 Supabase）
+- 📋 **动态项目列表**: 自动从 Gerrit 获取所有项目
+- 🌿 **动态分支列表**: 自动获取所选项目的所有分支
 
 ## 🛠️ 技术栈
 
@@ -663,14 +665,14 @@ GET /api/projects
 - `regex` - 按正则表达式过滤项目
 - `limit` - 限制结果数量
 - `skip` - 跳过结果数量
-- `all` - 包含隐藏项目（默认：false）
+- `all` - 包含隐藏项目（默认：false，**注意：** 大多数 Gerrit 实例中此选项已被禁用）
 - `state` - 按状态过滤：ACTIVE、READ_ONLY 或 HIDDEN
 - `type` - 按类型过滤：ALL、CODE 或 PERMISSIONS
 - `description` - 包含项目描述（默认：false）
 
 示例：
 ```
-GET /api/projects?all=true&description=true
+GET /api/projects?description=true
 ```
 
 Response:
@@ -691,6 +693,45 @@ Response:
   ]
 }
 ```
+
+#### 获取项目的分支列表
+```
+GET /api/projects/:project/branches
+```
+
+路径参数：
+- `project` - 项目名称（URL 编码，例如：`platform%2Fframeworks%2Fbase`）
+
+示例：
+```
+GET /api/projects/platform%2Fframeworks%2Fbase/branches
+```
+
+Response:
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "ref": "refs/heads/main",
+      "revision": "abc123def456...",
+      "name": "main"
+    },
+    {
+      "ref": "refs/heads/master",
+      "revision": "def456abc123...",
+      "name": "master"
+    },
+    {
+      "ref": "refs/heads/android14-release",
+      "revision": "789ghi012jkl...",
+      "name": "android14-release"
+    }
+  ]
+}
+```
+
+**注意：** 当在提交页面选择项目时，分支会自动获取并显示。在选择项目之前，分支下拉框处于禁用状态。
 
 ## 🚀 部署步骤
 

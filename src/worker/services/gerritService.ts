@@ -209,4 +209,53 @@ export class GerritService {
       throw error
     }
   }
+
+  /**
+   * Fetch all branches for a specific project from Gerrit REST API
+   * According to https://gerrit-review.googlesource.com/Documentation/rest-api-projects.html
+   * GET /projects/{project-name}/branches/ returns a list of branches
+   */
+  async getBranches(projectName: string): Promise<Array<{ ref: string; revision: string; name: string }>> {
+    try {
+      // URL encode the project name (e.g., "platform/frameworks/base" -> "platform%2Fframeworks%2Fbase")
+      const encodedProjectName = encodeURIComponent(projectName)
+      const url = `${this.env.GERRIT_BASE_URL}/a/projects/${encodedProjectName}/branches/`
+
+      const response = await fetch(url, {
+        headers: {
+          'Authorization': `Basic ${btoa(`${this.env.GERRIT_USERNAME}:${this.env.GERRIT_PASSWORD}`)}`
+        }
+      })
+
+      if (!response.ok) {
+        const errorText = await response.text()
+        throw new Error(`Failed to fetch branches: ${errorText}`)
+      }
+
+      // Gerrit API returns JSON with a )]}' prefix that needs to be stripped
+      const text = await response.text()
+      const jsonText = text.replace(/^\)\]\}\'/, '').trim()
+      const branches = JSON.parse(jsonText) as Array<{ ref: string; revision: string }>
+
+      // Extract branch names from refs (e.g., "refs/heads/master" -> "master")
+      return branches.map(branch => ({
+        ref: branch.ref,
+        revision: branch.revision,
+        // Extract short branch name from ref
+        name: branch.ref.replace(/^refs\/heads\//, '')
+      })).sort((a, b) => {
+        // Sort branches: main/master first, then alphabetically
+        const aName = a.name.toLowerCase()
+        const bName = b.name.toLowerCase()
+        if (aName === 'main') return -1
+        if (bName === 'main') return 1
+        if (aName === 'master') return -1
+        if (bName === 'master') return 1
+        return a.name.localeCompare(b.name)
+      })
+    } catch (error) {
+      console.error('Error fetching Gerrit branches:', error)
+      throw error
+    }
+  }
 }

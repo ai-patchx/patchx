@@ -14,6 +14,8 @@ A web service that streamlines contributing code to the Android Open Source Proj
 - 📱 Responsive design: desktop and mobile support
 - 🔐 User login and token‑based authentication
 - 🧑‍💻 User registration: Email only (Supabase)
+- 📋 Dynamic project listing: automatically fetch all projects from Gerrit
+- 🌿 Dynamic branch listing: automatically fetch branches for selected project
 
 ## 🛠️ Tech Stack
 
@@ -645,14 +647,14 @@ Query Parameters (optional):
 - `regex` - Filter projects by regex pattern
 - `limit` - Limit number of results
 - `skip` - Skip number of results
-- `all` - Include hidden projects (default: false)
+- `all` - Include hidden projects (default: false, **Note:** This option is disabled in most Gerrit instances)
 - `state` - Filter by state: ACTIVE, READ_ONLY, or HIDDEN
 - `type` - Filter by type: ALL, CODE, or PERMISSIONS
 - `description` - Include project descriptions (default: false)
 
 Example:
 ```
-GET /api/projects?all=true&description=true
+GET /api/projects?description=true
 ```
 
 Response:
@@ -673,6 +675,45 @@ Response:
   ]
 }
 ```
+
+#### Get branches for a project
+```
+GET /api/projects/:project/branches
+```
+
+Path Parameters:
+- `project` - The project name (URL encoded, e.g., `platform%2Fframeworks%2Fbase`)
+
+Example:
+```
+GET /api/projects/platform%2Fframeworks%2Fbase/branches
+```
+
+Response:
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "ref": "refs/heads/main",
+      "revision": "abc123def456...",
+      "name": "main"
+    },
+    {
+      "ref": "refs/heads/master",
+      "revision": "def456abc123...",
+      "name": "master"
+    },
+    {
+      "ref": "refs/heads/android14-release",
+      "revision": "789ghi012jkl...",
+      "name": "android14-release"
+    }
+  ]
+}
+```
+
+**Note:** Branches are automatically fetched and displayed in the submit page when a project is selected. The branch dropdown is disabled until a project is chosen.
 
 ## 🚀 Deployment Steps
 

@@ -28,6 +28,11 @@ export async function onRequest(context) {
     return proxyToWorker(request, 'https://patchx-service.angersax.workers.dev');
   }
 
+  // Proxy /api/projects/:project/branches to Worker
+  if (pathname.startsWith('/api/projects/') && pathname.endsWith('/branches') && request.method === 'GET') {
+    return proxyToWorker(request, 'https://patchx-service.angersax.workers.dev');
+  }
+
   return context.next();
 }
 
