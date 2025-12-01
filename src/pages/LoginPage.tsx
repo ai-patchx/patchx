@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Mail, Moon, Sun, Github } from 'lucide-react'
+import { Mail, Moon, Sun, Github, Code } from 'lucide-react'
 import { useAuthStore } from '@/stores/authStore'
 import { useTheme } from '@/hooks/useTheme'
 import RegistrationModal from '@/components/RegistrationModal'
@@ -57,7 +57,7 @@ export default function LoginPage() {
   return (
     <div className="min-h-screen py-8 relative">
       <div className="max-w-md mx-auto px-4">
-        {/* Theme toggle and GitHub buttons */}
+        {/* Theme toggle, GitHub and Gerrit buttons */}
         <div className="flex justify-end mb-4 space-x-2">
           <a
             href="https://github.com/ai-patchx/patchx"
@@ -70,6 +70,18 @@ export default function LoginPage() {
             }`}
           >
             <Github className="w-5 h-5" />
+          </a>
+          <a
+            href="https://android-review.googlesource.com/"
+            target="_blank"
+            rel="noopener noreferrer"
+            className={`p-2 rounded-lg transition-colors duration-200 ${
+              theme === 'dark'
+                ? 'bg-gradient-accent text-gradient-primary hover:bg-gradient-highlight'
+                : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+            }`}
+          >
+            <Code className="w-5 h-5" />
           </a>
           <button
             onClick={toggleTheme}
