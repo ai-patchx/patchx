@@ -2,6 +2,7 @@ import { Env } from './types'
 import { UploadService } from './services/uploadService'
 import { SubmissionService } from './services/submissionService'
 import { EnhancedPatchService } from './services/enhancedPatchService'
+import { GerritService } from './services/gerritService'
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
@@ -38,7 +39,8 @@ export default {
               aiResolveConflict: '/api/ai/resolve-conflict',
               aiProviders: '/api/ai/providers',
               aiTestProviders: '/api/ai/test-providers',
-              models: '/api/models'
+              models: '/api/models',
+              projects: '/api/projects'
             },
             documentation: 'https://github.com/your-repo/aosp-patch-service'
           }),
@@ -77,6 +79,8 @@ export default {
         return await handlePublicConfig(env, corsHeaders)
       } else if (path === '/api/models' && method === 'GET') {
         return await handleModels(env, corsHeaders)
+      } else if (path === '/api/projects' && method === 'GET') {
+        return await handleProjects(request, env, corsHeaders)
       }
 
       else {
@@ -829,6 +833,84 @@ async function handleModels(env: Env, corsHeaders: Record<string, string>): Prom
       JSON.stringify({
         success: false,
         error: error instanceof Error ? error.message : 'Failed to fetch models from LiteLLM'
+      }),
+      {
+        status: 500,
+        headers: {
+          'Content-Type': 'application/json',
+          ...corsHeaders
+        }
+      }
+    )
+  }
+}
+
+async function handleProjects(
+  request: Request,
+  env: Env,
+  corsHeaders: Record<string, string>
+): Promise<Response> {
+  try {
+    // Check if Gerrit is configured
+    if (!env.GERRIT_BASE_URL || !env.GERRIT_USERNAME || !env.GERRIT_PASSWORD) {
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: 'Gerrit is not configured. Please set GERRIT_BASE_URL, GERRIT_USERNAME, and GERRIT_PASSWORD in environment variables.'
+        }),
+        {
+          status: 400,
+          headers: {
+            'Content-Type': 'application/json',
+            ...corsHeaders
+          }
+        }
+      )
+    }
+
+    // Parse query parameters for filtering options
+    const url = new URL(request.url)
+    const prefix = url.searchParams.get('prefix') || undefined
+    const substring = url.searchParams.get('substring') || undefined
+    const regex = url.searchParams.get('regex') || undefined
+    const limit = url.searchParams.get('limit') ? parseInt(url.searchParams.get('limit')!) : undefined
+    const skip = url.searchParams.get('skip') ? parseInt(url.searchParams.get('skip')!) : undefined
+    const all = url.searchParams.get('all') === 'true'
+    const state = url.searchParams.get('state') as 'ACTIVE' | 'READ_ONLY' | 'HIDDEN' | undefined
+    const type = url.searchParams.get('type') as 'ALL' | 'CODE' | 'PERMISSIONS' | undefined
+    const description = url.searchParams.get('description') === 'true'
+
+    const gerritService = new GerritService(env)
+    const projects = await gerritService.getProjects({
+      prefix,
+      substring,
+      regex,
+      limit,
+      skip,
+      all,
+      state,
+      type,
+      description
+    })
+
+    return new Response(
+      JSON.stringify({
+        success: true,
+        data: projects
+      }),
+      {
+        headers: {
+          'Content-Type': 'application/json',
+          ...corsHeaders
+        }
+      }
+    )
+  } catch (error) {
+    console.error('Error fetching projects from Gerrit:', error)
+    return new Response(
+      JSON.stringify({
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to fetch projects from Gerrit'
       }),
       {
         status: 500,

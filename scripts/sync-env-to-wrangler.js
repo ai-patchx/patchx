@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 /**
- * Sync Supabase and LiteLLM environment variables from .env.local to wrangler.toml
+ * Sync Supabase, LiteLLM, and Gerrit environment variables from .env.local to wrangler.toml
  * This allows the Worker to expose Supabase config via /api/config/public
  * so the frontend can use it even if Cloudflare Pages env vars aren't set.
  */
@@ -24,6 +24,9 @@ let mailFromEmail = ''
 let mailFromName = ''
 let mailReplyTo = ''
 let mailApiEndpoint = ''
+let gerritBaseUrl = ''
+let gerritUsername = ''
+let gerritPassword = ''
 
 try {
   const envLocalPath = join(rootDir, '.env.local')
@@ -49,6 +52,12 @@ try {
       mailReplyTo = trimmed.split('=')[1]?.trim().replace(/^["']|["']$/g, '') || ''
     } else if (trimmed.startsWith('MAILCHANNELS_API_ENDPOINT=')) {
       mailApiEndpoint = trimmed.split('=')[1]?.trim().replace(/^["']|["']$/g, '') || ''
+    } else if (trimmed.startsWith('GERRIT_BASE_URL=')) {
+      gerritBaseUrl = trimmed.split('=')[1]?.trim().replace(/^["']|["']$/g, '') || ''
+    } else if (trimmed.startsWith('GERRIT_USERNAME=')) {
+      gerritUsername = trimmed.split('=')[1]?.trim().replace(/^["']|["']$/g, '') || ''
+    } else if (trimmed.startsWith('GERRIT_PASSWORD=')) {
+      gerritPassword = trimmed.split('=')[1]?.trim().replace(/^["']|["']$/g, '') || ''
     }
   }
 } catch (error) {
@@ -83,6 +92,14 @@ if (!mailApiEndpoint) {
   console.warn('⚠️  Warning: MAILCHANNELS_API_ENDPOINT not found in .env.local. Defaults to the public MailChannels endpoint.')
 }
 
+if (!gerritBaseUrl) {
+  console.warn('⚠️  Warning: GERRIT_BASE_URL not found in .env.local. Using default: https://android-review.googlesource.com')
+  gerritBaseUrl = 'https://android-review.googlesource.com'
+}
+if (!gerritUsername || !gerritPassword) {
+  console.warn('⚠️  Warning: GERRIT_USERNAME and/or GERRIT_PASSWORD not found in .env.local. Gerrit API features (like project listing) will not work.')
+}
+
 // Read wrangler.toml
 const wranglerPath = join(rootDir, 'wrangler.toml')
 let wranglerContent = readFileSync(wranglerPath, 'utf-8')
@@ -96,6 +113,14 @@ wranglerContent = wranglerContent.replace(
   /SUPABASE_ANON_KEY = ".*"/g,
   `SUPABASE_ANON_KEY = "${supabaseAnonKey}"`
 )
+
+// Update Gerrit variables
+if (gerritBaseUrl) {
+  wranglerContent = wranglerContent.replace(
+    /GERRIT_BASE_URL = ".*"/g,
+    `GERRIT_BASE_URL = "${gerritBaseUrl}"`
+  )
+}
 
 if (publicSiteUrl) {
   wranglerContent = wranglerContent.replace(
@@ -193,6 +218,163 @@ updateMailVar('MAILCHANNELS_FROM_EMAIL', mailFromEmail)
 updateMailVar('MAILCHANNELS_FROM_NAME', mailFromName)
 updateMailVar('MAILCHANNELS_REPLY_TO_EMAIL', mailReplyTo)
 updateMailVar('MAILCHANNELS_API_ENDPOINT', mailApiEndpoint)
+
+// Update Gerrit credentials (similar to LITELLM pattern)
+// First, remove all existing GERRIT_USERNAME and GERRIT_PASSWORD entries to avoid duplicates
+wranglerContent = wranglerContent.replace(/^GERRIT_USERNAME\s*=.*$/gm, '')
+wranglerContent = wranglerContent.replace(/^GERRIT_PASSWORD\s*=.*$/gm, '')
+// Clean up multiple consecutive empty lines
+wranglerContent = wranglerContent.replace(/\n\n\n+/g, '\n\n')
+
+if (gerritUsername) {
+  // Add to default [vars] section after GERRIT_BASE_URL
+  const lines = wranglerContent.split('\n')
+  let inVarsSection = false
+  let varsGerritBaseUrlIndex = -1
+
+  for (let i = 0; i < lines.length; i++) {
+    if (lines[i].trim() === '[vars]') {
+      inVarsSection = true
+    } else if (lines[i].trim().startsWith('[') && lines[i].trim() !== '[vars]') {
+      if (inVarsSection) {
+        break
+      }
+    }
+    if (inVarsSection && lines[i].includes('GERRIT_BASE_URL =')) {
+      varsGerritBaseUrlIndex = i
+    }
+  }
+
+  if (varsGerritBaseUrlIndex >= 0) {
+    lines.splice(varsGerritBaseUrlIndex + 1, 0, `GERRIT_USERNAME = "${gerritUsername}"`)
+    wranglerContent = lines.join('\n')
+  }
+
+  // Add to [env.production.vars] after GERRIT_BASE_URL
+  const lines2 = wranglerContent.split('\n')
+  let inProductionSection = false
+  let productionGerritBaseUrlIndex = -1
+
+  for (let i = 0; i < lines2.length; i++) {
+    if (lines2[i].trim() === '[env.production.vars]') {
+      inProductionSection = true
+    } else if (lines2[i].trim().startsWith('[') && lines2[i].trim() !== '[env.production.vars]') {
+      if (inProductionSection && lines2[i].trim() === '[env.staging.vars]') {
+        break
+      }
+    }
+    if (inProductionSection && lines2[i].includes('GERRIT_BASE_URL =')) {
+      productionGerritBaseUrlIndex = i
+    }
+  }
+
+  if (productionGerritBaseUrlIndex >= 0) {
+    lines2.splice(productionGerritBaseUrlIndex + 1, 0, `GERRIT_USERNAME = "${gerritUsername}"`)
+    wranglerContent = lines2.join('\n')
+  }
+
+  // Add to [env.staging.vars] after GERRIT_BASE_URL
+  const lines3 = wranglerContent.split('\n')
+  let inStagingSection = false
+  let stagingGerritBaseUrlIndex = -1
+
+  for (let i = 0; i < lines3.length; i++) {
+    if (lines3[i].trim() === '[env.staging.vars]') {
+      inStagingSection = true
+    }
+    if (inStagingSection && lines3[i].includes('GERRIT_BASE_URL =')) {
+      stagingGerritBaseUrlIndex = i
+      break
+    }
+  }
+
+  if (stagingGerritBaseUrlIndex >= 0) {
+    lines3.splice(stagingGerritBaseUrlIndex + 1, 0, `GERRIT_USERNAME = "${gerritUsername}"`)
+    wranglerContent = lines3.join('\n')
+  }
+}
+
+if (gerritPassword) {
+  // Add to default [vars] section after GERRIT_USERNAME or GERRIT_BASE_URL
+  const lines = wranglerContent.split('\n')
+  let inVarsSection = false
+  let insertIndex = -1
+
+  for (let i = 0; i < lines.length; i++) {
+    if (lines[i].trim() === '[vars]') {
+      inVarsSection = true
+    } else if (lines[i].trim().startsWith('[') && lines[i].trim() !== '[vars]') {
+      if (inVarsSection) {
+        break
+      }
+    }
+    if (inVarsSection) {
+      if (lines[i].includes('GERRIT_USERNAME =')) {
+        insertIndex = i
+        break
+      } else if (lines[i].includes('GERRIT_BASE_URL =') && insertIndex === -1) {
+        insertIndex = i
+      }
+    }
+  }
+
+  if (insertIndex >= 0) {
+    lines.splice(insertIndex + 1, 0, `GERRIT_PASSWORD = "${gerritPassword}"`)
+    wranglerContent = lines.join('\n')
+  }
+
+  // Add to [env.production.vars] after GERRIT_USERNAME or GERRIT_BASE_URL
+  const lines2 = wranglerContent.split('\n')
+  let inProductionSection = false
+  let insertIndex2 = -1
+
+  for (let i = 0; i < lines2.length; i++) {
+    if (lines2[i].trim() === '[env.production.vars]') {
+      inProductionSection = true
+    } else if (lines2[i].trim().startsWith('[') && lines2[i].trim() !== '[env.production.vars]') {
+      if (inProductionSection && lines2[i].trim() === '[env.staging.vars]') {
+        break
+      }
+    }
+    if (inProductionSection) {
+      if (lines2[i].includes('GERRIT_USERNAME =')) {
+        insertIndex2 = i
+        break
+      } else if (lines2[i].includes('GERRIT_BASE_URL =') && insertIndex2 === -1) {
+        insertIndex2 = i
+      }
+    }
+  }
+
+  if (insertIndex2 >= 0) {
+    lines2.splice(insertIndex2 + 1, 0, `GERRIT_PASSWORD = "${gerritPassword}"`)
+    wranglerContent = lines2.join('\n')
+  }
+
+  // Add to [env.staging.vars] after GERRIT_USERNAME or GERRIT_BASE_URL
+  const lines3 = wranglerContent.split('\n')
+  let inStagingSection = false
+  let insertIndex3 = -1
+
+  for (let i = 0; i < lines3.length; i++) {
+    if (lines3[i].trim() === '[env.staging.vars]') {
+      inStagingSection = true
+    }
+    if (inStagingSection) {
+      if (lines3[i].includes('GERRIT_USERNAME =')) {
+        insertIndex3 = i
+        break
+      } else if (lines3[i].includes('GERRIT_BASE_URL =') && insertIndex3 === -1) {
+        insertIndex3 = i
+      }
+    }
+  }
+
+  if (insertIndex3 >= 0) {
+    lines3.splice(insertIndex3 + 1, 0, `GERRIT_PASSWORD = "${gerritPassword}"`)
+    wranglerContent = lines3.join('\n')
+  }
+}
 
 if (litellmApiKey) {
   // Add to default [vars] section after LITELLM_BASE_URL or VITE_PUBLIC_SITE_URL

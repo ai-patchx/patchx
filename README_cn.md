@@ -81,6 +81,9 @@ SUPABASE_ANON_KEY=your_supabase_anon_key
 VITE_PUBLIC_SITE_URL=http://localhost:5173
 LITELLM_BASE_URL=https://your-litellm-server.com
 LITELLM_API_KEY=your-litellm-api-key
+GERRIT_BASE_URL=https://android-review.googlesource.com
+GERRIT_USERNAME=your-gerrit-username
+GERRIT_PASSWORD=your-gerrit-password-or-token
 ```
 `VITE_PUBLIC_SITE_URL` 用于邮箱验证。本地开发可保持为 `http://localhost:5173`，线上部署时请设置为实际站点地址（如 `https://patchx.pages.dev`）。
 
@@ -390,7 +393,30 @@ LITELLM_API_KEY = "<your-litellm-api-key>"
 
 ### Gerrit 配置
 
-在 Cloudflare Workers 中配置与 AOSP Gerrit 交互所需的环境变量与密钥：
+在 Cloudflare Workers 中配置与 AOSP Gerrit 交互所需的环境变量与密钥。
+
+**选项 1：从 .env.local 同步（推荐）**
+
+1. 在 `.env.local` 中添加 Gerrit 凭据：
+   ```bash
+   GERRIT_BASE_URL=https://android-review.googlesource.com
+   GERRIT_USERNAME=your-gerrit-username
+   GERRIT_PASSWORD=your-gerrit-password-or-token
+   ```
+
+2. 同步到 `wrangler.toml`：
+   ```bash
+   npm run sync:env
+   ```
+
+3. 部署 Worker：
+   ```bash
+   npm run deploy
+   ```
+
+**选项 2：手动配置**
+
+或者，手动配置 Gerrit 凭据：
 
 ```bash
 # Gerrit 基本配置（wrangler.toml 中 vars）
@@ -399,11 +425,16 @@ MAX_FILE_SIZE=10485760           # 10MB
 RATE_LIMIT_WINDOW=900000         # 15分钟（毫秒）
 RATE_LIMIT_MAX=10                # 窗口内最大请求数
 
-# Gerrit 凭据（使用 Wrangler Secrets 存储）
-# 这些是敏感信息，务必使用 secrets 管理
+# Gerrit 凭据（生产环境使用 Wrangler Secrets 存储）
+# 开发环境可以在 wrangler.toml 中使用 vars
+# 生产环境的敏感信息应使用 secrets 管理：
 wrangler secret put GERRIT_USERNAME
 wrangler secret put GERRIT_PASSWORD
+```
 
+**注意：** `sync:env` 脚本会自动将 `GERRIT_USERNAME` 和 `GERRIT_PASSWORD` 作为 vars 添加到 `wrangler.toml`。对于生产环境部署，建议使用 Wrangler secrets 以获得更好的安全性：
+
+```bash
 # AI 提供商密钥（同样使用 secrets 管理）
 wrangler secret put OPENAI_API_KEY
 wrangler secret put ANTHROPIC_API_KEY
@@ -621,6 +652,46 @@ Response:
 }
 ```
 
+#### 获取 Gerrit 项目列表
+```
+GET /api/projects
+```
+
+查询参数（可选）：
+- `prefix` - 按前缀过滤项目（区分大小写）
+- `substring` - 按子字符串过滤项目（不区分大小写）
+- `regex` - 按正则表达式过滤项目
+- `limit` - 限制结果数量
+- `skip` - 跳过结果数量
+- `all` - 包含隐藏项目（默认：false）
+- `state` - 按状态过滤：ACTIVE、READ_ONLY 或 HIDDEN
+- `type` - 按类型过滤：ALL、CODE 或 PERMISSIONS
+- `description` - 包含项目描述（默认：false）
+
+示例：
+```
+GET /api/projects?all=true&description=true
+```
+
+Response:
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "id": "platform/frameworks/base",
+      "name": "platform/frameworks/base",
+      "description": "Android framework base"
+    },
+    {
+      "id": "platform/packages/apps/Settings",
+      "name": "platform/packages/apps/Settings",
+      "description": "Settings app"
+    }
+  ]
+}
+```
+
 ## 🚀 部署步骤
 
 ### 1. 基础配置
@@ -663,7 +734,7 @@ wrangler pages deploy dist --project-name=patchx
 Worker 可以通过 `/api/config/public` 暴露 Supabase 配置，前端会自动将其作为后备方案使用。这意味着您无需在 Cloudflare Pages 仪表板中设置环境变量。
 
 **步骤：**
-1. 确保您的 `.env.local` 包含 `SUPABASE_URL`、`SUPABASE_ANON_KEY`，以及可选的 `LITELLM_BASE_URL` 和 `LITELLM_API_KEY`
+1. 确保您的 `.env.local` 包含 `SUPABASE_URL`、`SUPABASE_ANON_KEY`，可选的 `LITELLM_BASE_URL` 和 `LITELLM_API_KEY`，以及可选的 `GERRIT_USERNAME` 和 `GERRIT_PASSWORD`
 2. 将它们同步到 `wrangler.toml`：
    ```bash
    npm run sync:env

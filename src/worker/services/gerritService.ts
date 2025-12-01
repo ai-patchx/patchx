@@ -114,4 +114,99 @@ export class GerritService {
       throw error
     }
   }
+
+  /**
+   * Fetch all projects from Gerrit REST API
+   * According to https://gerrit-review.googlesource.com/Documentation/rest-api-projects.html
+   * GET /projects/ returns a map of project names to ProjectInfo entries
+   */
+  async getProjects(options?: {
+    prefix?: string
+    substring?: string
+    regex?: string
+    limit?: number
+    skip?: number
+    all?: boolean
+    state?: 'ACTIVE' | 'READ_ONLY' | 'HIDDEN'
+    type?: 'ALL' | 'CODE' | 'PERMISSIONS'
+    description?: boolean
+  }): Promise<Array<{ id: string; name: string; description?: string }>> {
+    try {
+      const params = new URLSearchParams()
+
+      if (options?.prefix) {
+        params.append('p', options.prefix)
+      }
+      if (options?.substring) {
+        params.append('m', options.substring)
+      }
+      if (options?.regex) {
+        params.append('r', options.regex)
+      }
+      if (options?.limit) {
+        params.append('n', options.limit.toString())
+      }
+      if (options?.skip) {
+        params.append('S', options.skip.toString())
+      }
+      if (options?.all) {
+        params.append('all', '')
+      }
+      if (options?.state) {
+        params.append('s', options.state)
+      }
+      if (options?.type) {
+        params.append('type', options.type)
+      }
+      if (options?.description) {
+        params.append('d', '')
+      }
+
+      const queryString = params.toString()
+      const url = `${this.env.GERRIT_BASE_URL}/a/projects${queryString ? `?${queryString}` : ''}`
+
+      const response = await fetch(url, {
+        headers: {
+          'Authorization': `Basic ${btoa(`${this.env.GERRIT_USERNAME}:${this.env.GERRIT_PASSWORD}`)}`
+        }
+      })
+
+      if (!response.ok) {
+        const errorText = await response.text()
+        throw new Error(`Failed to fetch projects: ${errorText}`)
+      }
+
+      // Gerrit API returns JSON with a )]}' prefix that needs to be stripped
+      const text = await response.text()
+      const jsonText = text.replace(/^\)\]\}\'/, '').trim()
+      const projectsMap = JSON.parse(jsonText) as Record<string, { id: string; description?: string }>
+
+      // Convert map to array and format for frontend
+      // The map key is the project name, and the value contains id (URL-encoded) and optional description
+      const projects = Object.entries(projectsMap).map(([key, info]) => {
+        // The key is the project name (may be URL-encoded)
+        // The info.id is also the project name (URL-encoded)
+        // Decode both to get the actual project name
+        const decodedKey = decodeURIComponent(key)
+        const decodedId = decodeURIComponent(info.id)
+
+        // Use the decoded key as the display name (it's usually more readable)
+        // Use the decoded id as the project identifier
+        const projectName = decodedKey || decodedId
+        const projectId = decodedId || decodedKey
+
+        return {
+          id: projectId,
+          name: projectName,
+          description: info.description
+        }
+      })
+
+      // Sort by name for better UX
+      return projects.sort((a, b) => a.name.localeCompare(b.name))
+    } catch (error) {
+      console.error('Error fetching Gerrit projects:', error)
+      throw error
+    }
+  }
 }

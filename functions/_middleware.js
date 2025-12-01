@@ -23,6 +23,11 @@ export async function onRequest(context) {
     return proxyToWorker(request, 'https://patchx-service.angersax.workers.dev');
   }
 
+  // Proxy /api/projects to Worker (Worker has Gerrit env vars configured)
+  if (pathname === '/api/projects' && request.method === 'GET') {
+    return proxyToWorker(request, 'https://patchx-service.angersax.workers.dev');
+  }
+
   return context.next();
 }
 

@@ -81,6 +81,9 @@ SUPABASE_ANON_KEY=your_supabase_anon_key
 VITE_PUBLIC_SITE_URL=http://localhost:5173
 LITELLM_BASE_URL=https://your-litellm-server.com
 LITELLM_API_KEY=your-litellm-api-key
+GERRIT_BASE_URL=https://android-review.googlesource.com
+GERRIT_USERNAME=your-gerrit-username
+GERRIT_PASSWORD=your-gerrit-password-or-token
 ```
 `VITE_PUBLIC_SITE_URL` is used for email verification. For local development, you can keep it as `http://localhost:5173`. In deployed environments, set it to your public site URL (e.g., `https://patchx.pages.dev`).
 
@@ -372,7 +375,30 @@ LITELLM_API_KEY = "<your-litellm-api-key>"
 
 ### Gerrit Configuration
 
-Configure environment variables and secrets needed to interact with AOSP Gerrit in Cloudflare Workers:
+Configure environment variables needed to interact with AOSP Gerrit in Cloudflare Workers.
+
+**Option 1: Sync from .env.local (Recommended)**
+
+1. Add Gerrit credentials to `.env.local`:
+   ```bash
+   GERRIT_BASE_URL=https://android-review.googlesource.com
+   GERRIT_USERNAME=your-gerrit-username
+   GERRIT_PASSWORD=your-gerrit-password-or-token
+   ```
+
+2. Sync to `wrangler.toml`:
+   ```bash
+   npm run sync:env
+   ```
+
+3. Deploy the Worker:
+   ```bash
+   npm run deploy
+   ```
+
+**Option 2: Manual Configuration**
+
+Alternatively, configure Gerrit credentials manually:
 
 ```bash
 # Gerrit basics (vars in wrangler.toml)
@@ -381,11 +407,16 @@ MAX_FILE_SIZE=10485760           # 10MB
 RATE_LIMIT_WINDOW=900000         # 15 minutes (ms)
 RATE_LIMIT_MAX=10                # max requests per window
 
-# Gerrit credentials (store via Wrangler Secrets)
-# Sensitive information must be managed as secrets
+# Gerrit credentials (store via Wrangler Secrets for production)
+# For development, you can use vars in wrangler.toml
+# For production, sensitive information should be managed as secrets:
 wrangler secret put GERRIT_USERNAME
 wrangler secret put GERRIT_PASSWORD
+```
 
+**Note:** The `sync:env` script will automatically add `GERRIT_USERNAME` and `GERRIT_PASSWORD` to `wrangler.toml` as vars. For production deployments, consider using Wrangler secrets for better security:
+
+```bash
 # AI provider secrets (also via secrets)
 wrangler secret put OPENAI_API_KEY
 wrangler secret put ANTHROPIC_API_KEY
@@ -603,6 +634,46 @@ Response:
 }
 ```
 
+#### Get Gerrit projects list
+```
+GET /api/projects
+```
+
+Query Parameters (optional):
+- `prefix` - Filter projects by prefix (case sensitive)
+- `substring` - Filter projects by substring (case insensitive)
+- `regex` - Filter projects by regex pattern
+- `limit` - Limit number of results
+- `skip` - Skip number of results
+- `all` - Include hidden projects (default: false)
+- `state` - Filter by state: ACTIVE, READ_ONLY, or HIDDEN
+- `type` - Filter by type: ALL, CODE, or PERMISSIONS
+- `description` - Include project descriptions (default: false)
+
+Example:
+```
+GET /api/projects?all=true&description=true
+```
+
+Response:
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "id": "platform/frameworks/base",
+      "name": "platform/frameworks/base",
+      "description": "Android framework base"
+    },
+    {
+      "id": "platform/packages/apps/Settings",
+      "name": "platform/packages/apps/Settings",
+      "description": "Settings app"
+    }
+  ]
+}
+```
+
 ## 🚀 Deployment Steps
 
 ### 1. Basics
@@ -645,7 +716,7 @@ You have **two options** for configuring Supabase environment variables:
 The Worker can expose Supabase config via `/api/config/public`, and the frontend will automatically use it as a fallback. This means you don't need to set environment variables in Cloudflare Pages dashboard.
 
 **Steps:**
-1. Ensure your `.env.local` has `SUPABASE_URL`, `SUPABASE_ANON_KEY`, and optionally `LITELLM_BASE_URL` and `LITELLM_API_KEY`
+1. Ensure your `.env.local` has `SUPABASE_URL`, `SUPABASE_ANON_KEY`, optionally `LITELLM_BASE_URL` and `LITELLM_API_KEY`, and optionally `GERRIT_USERNAME` and `GERRIT_PASSWORD`
 2. Sync them to `wrangler.toml`:
    ```bash
    npm run sync:env

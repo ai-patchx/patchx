@@ -7,16 +7,7 @@ import { useTheme } from '../hooks/useTheme'
 import UserInfo from '../components/UserInfo'
 import packageInfo from '../../package.json'
 
-const AOSP_PROJECTS = [
-  { value: 'platform/frameworks/base', label: 'frameworks/base' },
-  { value: 'platform/packages/apps/Settings', label: 'packages/apps/Settings' },
-  { value: 'platform/system/core', label: 'system/core' },
-  { value: 'platform/build', label: 'build' },
-  { value: 'platform/art', label: 'art' },
-  { value: 'platform/bionic', label: 'bionic' },
-  { value: 'platform/dalvik', label: 'dalvik' },
-  { value: 'platform/libcore', label: 'libcore' }
-]
+// Projects will be fetched from Gerrit API
 
 const BRANCHES = [
   { value: 'main', label: 'main' },
@@ -45,6 +36,8 @@ const SubmitPage: React.FC = () => {
   const [selectedModel, setSelectedModel] = useState('')
   const [models, setModels] = useState<Array<{ id: string; name: string; provider: string }>>([])
   const [isLoadingModels, setIsLoadingModels] = useState(false)
+  const [projects, setProjects] = useState<Array<{ id: string; name: string; description?: string }>>([])
+  const [isLoadingProjects, setIsLoadingProjects] = useState(false)
   const [subject, setSubject] = useState('')
   const [description, setDescription] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -58,6 +51,7 @@ const SubmitPage: React.FC = () => {
   useEffect(() => {
     loadFromStorage()
     fetchModels()
+    fetchProjects()
   }, [loadFromStorage])
 
   useEffect(() => {
@@ -65,6 +59,62 @@ const SubmitPage: React.FC = () => {
       setNotificationReceiversInput(authorEmail)
     }
   }, [authorEmail, notificationReceiversInput])
+
+  const fetchProjects = async () => {
+    setIsLoadingProjects(true)
+    try {
+      const response = await fetch('/api/projects?description=true')
+
+      // Check if response is JSON before parsing
+      const contentType = response.headers.get('content-type') || ''
+      const isJson = contentType.includes('application/json')
+
+      type ProjectsResponse = {
+        success: boolean
+        data?: Array<{ id: string; name: string; description?: string }>
+        error?: string
+      }
+
+      let result: ProjectsResponse
+
+      if (isJson) {
+        result = await response.json()
+      } else {
+        const text = await response.text()
+        throw new Error(`Server returned non-JSON response. Content-Type: ${contentType}. Response: ${text.substring(0, 200)}`)
+      }
+
+      if (!response.ok) {
+        // If response is not OK, use the error from JSON if available
+        throw new Error(result.error || `Failed to fetch projects: ${response.status} ${response.statusText}`)
+      }
+
+      if (result.success && result.data) {
+        setProjects(result.data)
+      } else if (result.error) {
+        throw new Error(result.error)
+      }
+    } catch (error) {
+      console.error('Error fetching projects:', error)
+      let errorMessage = 'Failed to load projects from Gerrit'
+      if (error instanceof Error) {
+        errorMessage = error.message
+        // Provide more helpful error messages
+        if (errorMessage.includes('all option is disabled')) {
+          errorMessage = 'Gerrit API: "all" option is disabled. Loading visible projects only.'
+        } else if (errorMessage.includes('401') || errorMessage.includes('403')) {
+          errorMessage = 'Authentication failed. Please check GERRIT_USERNAME and GERRIT_PASSWORD configuration.'
+        } else if (errorMessage.includes('404')) {
+          errorMessage = 'Gerrit API endpoint not found. Please check GERRIT_BASE_URL configuration.'
+        }
+      }
+      addConsoleOutput(`Failed to load projects: ${errorMessage}`, 'warning')
+      // Fallback to empty array - user can still manually type project name
+      setProjects([])
+    } finally {
+      setIsLoadingProjects(false)
+    }
+  }
 
   const fetchModels = async () => {
     setIsLoadingModels(true)
@@ -409,20 +459,36 @@ const SubmitPage: React.FC = () => {
               <select
                 value={selectedProject}
                 onChange={(e) => setSelectedProject(e.target.value)}
+                disabled={isLoadingProjects}
                 className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent ${
                   theme === 'dark'
                     ? 'input-gradient border-gradient-accent'
                     : 'border-gray-300 bg-white'
-                }`}
+                } ${isLoadingProjects ? 'opacity-50 cursor-not-allowed' : ''}`}
                 required
               >
-                <option value="">Please select an AOSP project</option>
-                {AOSP_PROJECTS.map((project) => (
-                  <option key={project.value} value={project.value}>
-                    {project.label}
-                  </option>
-                ))}
+                {isLoadingProjects ? (
+                  <option value="">Loading projects from Gerrit...</option>
+                ) : projects.length === 0 ? (
+                  <option value="">No projects available (check Gerrit configuration)</option>
+                ) : (
+                  <>
+                    <option value="">Please select an AOSP project</option>
+                    {projects.map((project) => (
+                      <option key={project.id} value={project.id}>
+                        {project.name}{project.description ? ` - ${project.description}` : ''}
+                      </option>
+                    ))}
+                  </>
+                )}
               </select>
+              {projects.length > 0 && (
+                <p className={`text-xs mt-1 ${
+                  theme === 'dark' ? 'text-gradient-secondary opacity-70' : 'text-gray-500'
+                }`}>
+                  {projects.length} project{projects.length !== 1 ? 's' : ''} loaded from Gerrit
+                </p>
+              )}
             </div>
 
             {/* Branch Selection */}
