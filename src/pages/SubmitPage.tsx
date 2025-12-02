@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react'
-import { FileText, Settings, Send, Moon, Sun, Eye, Terminal, Github, Code } from 'lucide-react'
+import { FileText, Settings, Send, Moon, Sun, Eye, Terminal, Github, Code, RefreshCw } from 'lucide-react'
 import FileUpload from '../components/FileUpload'
 import useFileUploadStore from '../stores/fileUploadStore'
 import useGitAuthorStore from '../stores/gitAuthorStore'
+import useProjectCacheStore from '../stores/projectCacheStore'
 import { useTheme } from '../hooks/useTheme'
 import UserInfo from '../components/UserInfo'
 import packageInfo from '../../package.json'
@@ -22,6 +23,14 @@ const SubmitPage: React.FC = () => {
   const { file, setUploadStatus, setUploadId, setError } = useFileUploadStore()
   const { theme, toggleTheme } = useTheme()
   const { authorName, authorEmail, loadFromStorage } = useGitAuthorStore()
+  const {
+    getCachedProjects,
+    setCachedProjects,
+    getCachedBranches,
+    setCachedBranches,
+    clearBranchesCache,
+    loadFromStorage: loadCacheFromStorage
+  } = useProjectCacheStore()
 
   const [selectedProject, setSelectedProject] = useState('')
   const [selectedBranch, setSelectedBranch] = useState('main')
@@ -44,19 +53,40 @@ const SubmitPage: React.FC = () => {
 
   useEffect(() => {
     loadFromStorage()
+    loadCacheFromStorage()
+
+    // Try to load projects from cache first
+    const cachedProjects = getCachedProjects()
+    if (cachedProjects) {
+      setProjects(cachedProjects)
+    }
+
     fetchModels()
     fetchProjects()
-  }, [loadFromStorage])
+  }, [loadFromStorage, loadCacheFromStorage, getCachedProjects])
 
   useEffect(() => {
     if (selectedProject) {
-      fetchBranches(selectedProject)
+      // Try to load branches from cache first
+      const cachedBranches = getCachedBranches(selectedProject)
+      if (cachedBranches) {
+        setBranches(cachedBranches)
+        // Auto-select the first branch if available
+        if (cachedBranches.length > 0) {
+          setSelectedBranch(cachedBranches[0].name)
+        }
+        // Still fetch in background to refresh cache if needed, but don't show loading
+        fetchBranches(selectedProject)
+      } else {
+        // No cache, fetch from API
+        fetchBranches(selectedProject)
+      }
     } else {
       // Reset branches when no project is selected
       setBranches([])
       setSelectedBranch('main')
     }
-  }, [selectedProject])
+  }, [selectedProject, getCachedBranches])
 
   useEffect(() => {
     if (authorEmail && !notificationReceiversInput) {
@@ -64,7 +94,17 @@ const SubmitPage: React.FC = () => {
     }
   }, [authorEmail, notificationReceiversInput])
 
-  const fetchProjects = async () => {
+  const fetchProjects = async (forceRefresh: boolean = false) => {
+    // Check cache first unless forcing refresh
+    if (!forceRefresh) {
+      const cachedProjects = getCachedProjects()
+      if (cachedProjects) {
+        setProjects(cachedProjects)
+        setIsLoadingProjects(false)
+        return
+      }
+    }
+
     setIsLoadingProjects(true)
     try {
       const response = await fetch('/api/projects?description=true')
@@ -95,6 +135,8 @@ const SubmitPage: React.FC = () => {
 
       if (result.success && result.data) {
         setProjects(result.data)
+        // Cache the projects
+        setCachedProjects(result.data)
       } else if (result.error) {
         throw new Error(result.error)
       }
@@ -120,7 +162,21 @@ const SubmitPage: React.FC = () => {
     }
   }
 
-  const fetchBranches = async (projectName: string) => {
+  const fetchBranches = async (projectName: string, forceRefresh: boolean = false) => {
+    // Check cache first unless forcing refresh
+    if (!forceRefresh) {
+      const cachedBranches = getCachedBranches(projectName)
+      if (cachedBranches) {
+        setBranches(cachedBranches)
+        // Auto-select the first branch (usually main or master)
+        if (cachedBranches.length > 0) {
+          setSelectedBranch(cachedBranches[0].name)
+        }
+        setIsLoadingBranches(false)
+        return
+      }
+    }
+
     setIsLoadingBranches(true)
     try {
       // URL encode the project name for the API call
@@ -153,6 +209,8 @@ const SubmitPage: React.FC = () => {
 
       if (result.success && result.data) {
         setBranches(result.data)
+        // Cache the branches
+        setCachedBranches(projectName, result.data)
         // Auto-select the first branch (usually main or master)
         if (result.data.length > 0) {
           setSelectedBranch(result.data[0].name)
@@ -511,15 +569,30 @@ const SubmitPage: React.FC = () => {
 
             {/* Project Selection */}
             <div>
-              <label className={`block text-sm font-medium mb-2 ${
-                theme === 'dark' ? 'text-gradient-primary' : 'text-gray-700'
-              }`}>
-                <div className="flex items-center space-x-2">
-                  <Settings className="w-5 h-5" />
-                  <span>Target Project</span>
-                  <span className="text-red-500">*</span>
-                </div>
-              </label>
+              <div className="flex items-center justify-between mb-2">
+                <label className={`block text-sm font-medium ${
+                  theme === 'dark' ? 'text-gradient-primary' : 'text-gray-700'
+                }`}>
+                  <div className="flex items-center space-x-2">
+                    <Settings className="w-5 h-5" />
+                    <span>Target Project</span>
+                    <span className="text-red-500">*</span>
+                  </div>
+                </label>
+                <button
+                  type="button"
+                  onClick={() => fetchProjects(true)}
+                  disabled={isLoadingProjects}
+                  className={`p-1.5 rounded-md transition-colors duration-200 ${
+                    theme === 'dark'
+                      ? 'text-gradient-secondary hover:text-gradient-primary hover:bg-gradient-accent'
+                      : 'text-gray-500 hover:text-gray-700 hover:bg-gray-200'
+                  } ${isLoadingProjects ? 'opacity-50 cursor-not-allowed' : ''}`}
+                  title="Refresh projects list"
+                >
+                  <RefreshCw className={`w-4 h-4 ${isLoadingProjects ? 'animate-spin' : ''}`} />
+                </button>
+              </div>
               <select
                 value={selectedProject}
                 onChange={(e) => setSelectedProject(e.target.value)}
@@ -557,11 +630,28 @@ const SubmitPage: React.FC = () => {
 
             {/* Branch Selection */}
             <div>
-              <label className={`block text-sm font-medium mb-2 ${
-                theme === 'dark' ? 'text-gradient-primary' : 'text-gray-700'
-              }`}>
-                Target Branch
-              </label>
+              <div className="flex items-center justify-between mb-2">
+                <label className={`block text-sm font-medium ${
+                  theme === 'dark' ? 'text-gradient-primary' : 'text-gray-700'
+                }`}>
+                  Target Branch
+                </label>
+                {selectedProject && (
+                  <button
+                    type="button"
+                    onClick={() => fetchBranches(selectedProject, true)}
+                    disabled={isLoadingBranches || !selectedProject}
+                    className={`p-1.5 rounded-md transition-colors duration-200 ${
+                      theme === 'dark'
+                        ? 'text-gradient-secondary hover:text-gradient-primary hover:bg-gradient-accent'
+                        : 'text-gray-500 hover:text-gray-700 hover:bg-gray-200'
+                    } ${isLoadingBranches || !selectedProject ? 'opacity-50 cursor-not-allowed' : ''}`}
+                    title="Refresh branches list"
+                  >
+                    <RefreshCw className={`w-4 h-4 ${isLoadingBranches ? 'animate-spin' : ''}`} />
+                  </button>
+                )}
+              </div>
               <select
                 value={selectedBranch}
                 onChange={(e) => setSelectedBranch(e.target.value)}
