@@ -3,6 +3,7 @@
 name = "patchx-service"
 main = "dist/worker/index.js"
 compatibility_date = "2024-01-01"
+pages_build_output_dir = "dist"
 
 [env.production]
 kv_namespaces = [
@@ -23,6 +24,8 @@ command = "npm run build:worker"
 # These can be overridden by [env.production.vars] or [env.staging.vars]
 [vars]
 GERRIT_BASE_URL = "https://android-review.googlesource.com"
+GERRIT_USERNAME = "your-gerrit-username"
+GERRIT_PASSWORD = "your-gerrit-password-or-token"
 MAX_FILE_SIZE = "10485760"
 RATE_LIMIT_WINDOW = "900000"
 RATE_LIMIT_MAX = "10"
@@ -30,16 +33,19 @@ TEST_USER_PASSWORD = "patchx"
 SUPABASE_URL = "https://your-project.supabase.co"
 SUPABASE_ANON_KEY = "your_supabase_anon_key"
 VITE_PUBLIC_SITE_URL = "https://patchx.pages.dev"
-LITELLM_BASE_URL=https://your-litellm-server.com
-LITELLM_API_KEY=your-litellm-api-key
-MAILCHANNELS_FROM_EMAIL="no-reply@patchx.pages.dev"
-MAILCHANNELS_FROM_NAME="PatchX"
-MAILCHANNELS_REPLY_TO_EMAIL="patchx@patchx.pages.dev"
-MAILCHANNELS_API_ENDPOINT=https://api.mailchannels.net/tx/v1/send
+LITELLM_BASE_URL = "https://your-litellm-server.com"
+LITELLM_API_KEY = "your-litellm-api-key"
+MAILCHANNELS_FROM_EMAIL = "no-reply@patchx.pages.dev"
+MAILCHANNELS_FROM_NAME = "PatchX"
+MAILCHANNELS_REPLY_TO_EMAIL = "patchx@patchx.pages.dev"
+MAILCHANNELS_API_ENDPOINT = "https://api.mailchannels.net/tx/v1/send"
+CACHE_VERSION = "v1"
 
 # 环境变量配置
 [env.production.vars]
 GERRIT_BASE_URL = "https://android-review.googlesource.com"
+GERRIT_USERNAME = "your-gerrit-username"
+GERRIT_PASSWORD = "your-gerrit-password-or-token"
 MAX_FILE_SIZE = "10485760"
 RATE_LIMIT_WINDOW = "900000"
 RATE_LIMIT_MAX = "10"
@@ -47,12 +53,13 @@ TEST_USER_PASSWORD = "patchx"
 SUPABASE_URL = "https://your-project.supabase.co"
 SUPABASE_ANON_KEY = "your_supabase_anon_key"
 VITE_PUBLIC_SITE_URL = "https://patchx.pages.dev"
-LITELLM_BASE_URL=https://your-litellm-server.com
-LITELLM_API_KEY=your-litellm-api-key
-MAILCHANNELS_FROM_EMAIL="no-reply@patchx.pages.dev"
-MAILCHANNELS_FROM_NAME="PatchX"
-MAILCHANNELS_REPLY_TO_EMAIL="patchx@patchx.pages.dev"
-MAILCHANNELS_API_ENDPOINT=https://api.mailchannels.net/tx/v1/send
+LITELLM_BASE_URL = "https://your-litellm-server.com"
+LITELLM_API_KEY = "your-litellm-api-key"
+MAILCHANNELS_FROM_EMAIL = "no-reply@patchx.pages.dev"
+MAILCHANNELS_FROM_NAME = "PatchX"
+MAILCHANNELS_REPLY_TO_EMAIL = "patchx@patchx.pages.dev"
+MAILCHANNELS_API_ENDPOINT = "https://api.mailchannels.net/tx/v1/send"
+CACHE_VERSION = "v1"
 
 # AI提供商配置 - OpenAI
 OPENAI_BASE_URL = "https://api.openai.com/v1"
@@ -74,6 +81,8 @@ CUSTOM_AI_TEMPERATURE = "0.1"
 
 [env.staging.vars]
 GERRIT_BASE_URL = "https://android-review.googlesource.com"
+GERRIT_USERNAME = "your-gerrit-username"
+GERRIT_PASSWORD = "your-gerrit-password-or-token"
 MAX_FILE_SIZE = "10485760"
 RATE_LIMIT_WINDOW = "900000"
 RATE_LIMIT_MAX = "10"
@@ -81,12 +90,13 @@ TEST_USER_PASSWORD = "patchx"
 SUPABASE_URL = "https://your-project.supabase.co"
 SUPABASE_ANON_KEY = "your_supabase_anon_key"
 VITE_PUBLIC_SITE_URL = "https://patchx.pages.dev"
-LITELLM_BASE_URL=https://your-litellm-server.com
-LITELLM_API_KEY=your-litellm-api-key
-MAILCHANNELS_FROM_EMAIL="no-reply@patchx.pages.dev"
-MAILCHANNELS_FROM_NAME="PatchX"
-MAILCHANNELS_REPLY_TO_EMAIL="patchx@patchx.pages.dev"
-MAILCHANNELS_API_ENDPOINT=https://api.mailchannels.net/tx/v1/send
+LITELLM_BASE_URL = "https://your-litellm-server.com"
+LITELLM_API_KEY = "your-litellm-api-key"
+MAILCHANNELS_FROM_EMAIL = "no-reply@patchx.pages.dev"
+MAILCHANNELS_FROM_NAME = "PatchX"
+MAILCHANNELS_REPLY_TO_EMAIL = "patchx@patchx.pages.dev"
+MAILCHANNELS_API_ENDPOINT = "https://api.mailchannels.net/tx/v1/send"
+CACHE_VERSION = "v1"
 
 # AI提供商配置 - OpenAI
 OPENAI_BASE_URL = "https://api.openai.com/v1"

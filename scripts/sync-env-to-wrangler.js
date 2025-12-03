@@ -27,6 +27,7 @@ let mailApiEndpoint = ''
 let gerritBaseUrl = ''
 let gerritUsername = ''
 let gerritPassword = ''
+let cacheVersion = ''
 
 try {
   const envLocalPath = join(rootDir, '.env.local')
@@ -58,6 +59,8 @@ try {
       gerritUsername = trimmed.split('=')[1]?.trim().replace(/^["']|["']$/g, '') || ''
     } else if (trimmed.startsWith('GERRIT_PASSWORD=')) {
       gerritPassword = trimmed.split('=')[1]?.trim().replace(/^["']|["']$/g, '') || ''
+    } else if (trimmed.startsWith('CACHE_VERSION=')) {
+      cacheVersion = trimmed.split('=')[1]?.trim().replace(/^["']|["']$/g, '') || 'v1'
     }
   }
 } catch (error) {
@@ -98,6 +101,11 @@ if (!gerritBaseUrl) {
 }
 if (!gerritUsername || !gerritPassword) {
   console.warn('⚠️  Warning: GERRIT_USERNAME and/or GERRIT_PASSWORD not found in .env.local. Gerrit API features (like project listing) will not work.')
+}
+
+if (!cacheVersion) {
+  console.warn('⚠️  Warning: CACHE_VERSION not found in .env.local. Using default: v1')
+  cacheVersion = 'v1'
 }
 
 // Read wrangler.toml
@@ -455,6 +463,84 @@ if (litellmApiKey) {
   if (insertIndex3 >= 0) {
     lines3.splice(insertIndex3 + 1, 0, `LITELLM_API_KEY = "${litellmApiKey}"`)
     wranglerContent = lines3.join('\n')
+  }
+}
+
+// Update CACHE_VERSION in all sections
+if (cacheVersion) {
+  // Update CACHE_VERSION using regex replacement (works for all sections)
+  wranglerContent = wranglerContent.replace(
+    /CACHE_VERSION\s*=\s*"[^"]*"/g,
+    `CACHE_VERSION = "${cacheVersion}"`
+  )
+
+  // If CACHE_VERSION doesn't exist yet, add it after MAILCHANNELS_API_ENDPOINT in all sections
+  if (!wranglerContent.includes('CACHE_VERSION =')) {
+    // Add to default [vars] section
+    const lines = wranglerContent.split('\n')
+    let inVarsSection = false
+    let varsMailEndpointIndex = -1
+
+    for (let i = 0; i < lines.length; i++) {
+      if (lines[i].trim() === '[vars]') {
+        inVarsSection = true
+      } else if (lines[i].trim().startsWith('[') && lines[i].trim() !== '[vars]') {
+        if (inVarsSection) {
+          break
+        }
+      }
+      if (inVarsSection && lines[i].includes('MAILCHANNELS_API_ENDPOINT =')) {
+        varsMailEndpointIndex = i
+      }
+    }
+
+    if (varsMailEndpointIndex >= 0) {
+      lines.splice(varsMailEndpointIndex + 1, 0, '', `# Cache version - update this to invalidate all caches on deploy`, `CACHE_VERSION = "${cacheVersion}"`)
+      wranglerContent = lines.join('\n')
+    }
+
+    // Add to [env.production.vars] section
+    const lines2 = wranglerContent.split('\n')
+    let inProductionSection = false
+    let productionMailEndpointIndex = -1
+
+    for (let i = 0; i < lines2.length; i++) {
+      if (lines2[i].trim() === '[env.production.vars]') {
+        inProductionSection = true
+      } else if (lines2[i].trim().startsWith('[') && lines2[i].trim() !== '[env.production.vars]') {
+        if (inProductionSection && lines2[i].trim() === '[env.staging.vars]') {
+          break
+        }
+      }
+      if (inProductionSection && lines2[i].includes('MAILCHANNELS_API_ENDPOINT =')) {
+        productionMailEndpointIndex = i
+      }
+    }
+
+    if (productionMailEndpointIndex >= 0) {
+      lines2.splice(productionMailEndpointIndex + 1, 0, '', `# Cache version - update this to invalidate all caches on deploy`, `CACHE_VERSION = "${cacheVersion}"`)
+      wranglerContent = lines2.join('\n')
+    }
+
+    // Add to [env.staging.vars] section
+    const lines3 = wranglerContent.split('\n')
+    let inStagingSection = false
+    let stagingMailEndpointIndex = -1
+
+    for (let i = 0; i < lines3.length; i++) {
+      if (lines3[i].trim() === '[env.staging.vars]') {
+        inStagingSection = true
+      }
+      if (inStagingSection && lines3[i].includes('MAILCHANNELS_API_ENDPOINT =')) {
+        stagingMailEndpointIndex = i
+        break
+      }
+    }
+
+    if (stagingMailEndpointIndex >= 0) {
+      lines3.splice(stagingMailEndpointIndex + 1, 0, '', `# Cache version - update this to invalidate all caches on deploy`, `CACHE_VERSION = "${cacheVersion}"`)
+      wranglerContent = lines3.join('\n')
+    }
   }
 }
 

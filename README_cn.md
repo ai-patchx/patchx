@@ -87,6 +87,7 @@ LITELLM_API_KEY=your-litellm-api-key
 GERRIT_BASE_URL=https://android-review.googlesource.com
 GERRIT_USERNAME=your-gerrit-username
 GERRIT_PASSWORD=your-gerrit-password-or-token
+CACHE_VERSION=v1
 ```
 `VITE_PUBLIC_SITE_URL` 用于邮箱验证。本地开发可保持为 `http://localhost:5173`，线上部署时请设置为实际站点地址（如 `https://patchx.pages.dev`）。
 
@@ -400,11 +401,12 @@ LITELLM_API_KEY = "<your-litellm-api-key>"
 
 **选项 1：从 .env.local 同步（推荐）**
 
-1. 在 `.env.local` 中添加 Gerrit 凭据：
+1. 在 `.env.local` 中添加 Gerrit 凭据和缓存版本：
    ```bash
    GERRIT_BASE_URL=https://android-review.googlesource.com
    GERRIT_USERNAME=your-gerrit-username
    GERRIT_PASSWORD=your-gerrit-password-or-token
+   CACHE_VERSION=v1
    ```
 
 2. 同步到 `wrangler.toml`：
@@ -416,6 +418,8 @@ LITELLM_API_KEY = "<your-litellm-api-key>"
    ```bash
    npm run deploy
    ```
+
+**注意：** `sync:env` 脚本也会将 `CACHE_VERSION` 从 `.env.local` 同步到 `wrangler.toml`。更新 `CACHE_VERSION`（例如改为 `v2`）并重新部署，可以清除所有项目和分支的缓存响应。
 
 **选项 2：手动配置**
 
@@ -734,7 +738,9 @@ Response:
 
 **注意：** 当在提交页面选择项目时，分支会自动获取并显示。在选择项目之前，分支下拉框处于禁用状态。
 
-**缓存机制：** 项目和分支数据会在浏览器本地缓存 10 分钟，以提升性能。用户可以通过"目标项目"和"目标分支"下拉框旁边的刷新按钮（🔄）手动刷新缓存。缓存数据通过 localStorage 持久化，页面刷新后仍然有效。
+**缓存机制：**
+- **客户端缓存：** 项目和分支数据会在浏览器本地缓存 10 分钟，以提升性能。用户可以通过"目标项目"和"目标分支"下拉框旁边的刷新按钮（🔄）手动刷新缓存。缓存数据通过 localStorage 持久化，页面刷新后仍然有效。
+- **服务端缓存：** Worker 也会缓存 API 响应 10 分钟，以减少对 Gerrit 的调用。要在部署时清除所有服务端缓存，请在 `.env.local` 中更新 `CACHE_VERSION`（例如从 `v1` 改为 `v2`），运行 `npm run sync:env`，然后重新部署。
 
 ## 🚀 部署步骤
 
@@ -778,7 +784,7 @@ wrangler pages deploy dist --project-name=patchx
 Worker 可以通过 `/api/config/public` 暴露 Supabase 配置，前端会自动将其作为后备方案使用。这意味着您无需在 Cloudflare Pages 仪表板中设置环境变量。
 
 **步骤：**
-1. 确保您的 `.env.local` 包含 `SUPABASE_URL`、`SUPABASE_ANON_KEY`，可选的 `LITELLM_BASE_URL` 和 `LITELLM_API_KEY`，以及可选的 `GERRIT_USERNAME` 和 `GERRIT_PASSWORD`
+1. 确保您的 `.env.local` 包含 `SUPABASE_URL`、`SUPABASE_ANON_KEY`，可选的 `LITELLM_BASE_URL` 和 `LITELLM_API_KEY`，可选的 `GERRIT_USERNAME` 和 `GERRIT_PASSWORD`，以及可选的 `CACHE_VERSION`（默认为 `v1`）
 2. 将它们同步到 `wrangler.toml`：
    ```bash
    npm run sync:env
@@ -788,6 +794,8 @@ Worker 可以通过 `/api/config/public` 暴露 Supabase 配置，前端会自�
    npm run deploy
    ```
 4. 前端将自动从 Worker 的 `/api/config/public` 端点获取配置
+
+**注意：** 要在部署时清除服务端缓存，请在 `.env.local` 中更新 `CACHE_VERSION`（例如改为 `v2`），运行 `npm run sync:env`，然后重新部署。
 
 #### 选项 2：在 Cloudflare Pages 仪表板中设置（手动）
 

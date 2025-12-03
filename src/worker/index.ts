@@ -4,6 +4,32 @@ import { SubmissionService } from './services/submissionService'
 import { EnhancedPatchService } from './services/enhancedPatchService'
 import { GerritService } from './services/gerritService'
 
+// Cache configuration
+const CACHE_TTL = 3600 // 1 hour in seconds for projects (they don't change often)
+const BRANCHES_CACHE_TTL = 1800 // 30 minutes for branches
+const CACHE_VERSION = 'v1' // Update this to invalidate all caches on deploy
+
+// Helper function to create cache key with version
+function createCacheKey(request: Request, env?: Env): Request {
+  const url = new URL(request.url)
+  // Add cache version to query params for cache key differentiation
+  // This allows cache invalidation by updating CACHE_VERSION
+  const cacheVersion = env?.CACHE_VERSION || CACHE_VERSION
+  const cacheKeyUrl = new URL(url.toString())
+  cacheKeyUrl.searchParams.set('_cache_version', cacheVersion)
+  return new Request(cacheKeyUrl.toString(), request)
+}
+
+// Helper function to get cache key string for KV
+function getCacheKeyString(path: string, queryParams: string, env?: Env): string {
+  const cacheVersion = env?.CACHE_VERSION || CACHE_VERSION
+  // Remove leading ? from queryParams if present
+  const cleanQuery = queryParams.startsWith('?') ? queryParams.slice(1) : queryParams
+  const params = new URLSearchParams(cleanQuery)
+  params.set('_cache_version', cacheVersion)
+  return `cache:${path}:${params.toString()}`
+}
+
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url)
@@ -83,7 +109,7 @@ export default {
       } else if (path === '/api/projects' && method === 'GET') {
         return await handleProjects(request, env, corsHeaders)
       } else if (path.startsWith('/api/projects/') && path.endsWith('/branches') && method === 'GET') {
-        return await handleProjectBranches(path, env, corsHeaders)
+        return await handleProjectBranches(path, env, corsHeaders, request)
       }
 
       else {
@@ -871,6 +897,52 @@ async function handleProjects(
       )
     }
 
+    // Check cache first - try both Worker cache and KV cache
+    const cacheKey = createCacheKey(request, env)
+    const cache = (caches as any).default as Cache
+    let cachedResponse = await cache.match(cacheKey)
+    let cacheSource = 'worker'
+
+    // If not in Worker cache, try KV cache (for longer persistence)
+    if (!cachedResponse && env.AOSP_PATCH_KV) {
+      const url = new URL(request.url)
+      const kvKey = getCacheKeyString(url.pathname, url.search, env)
+      try {
+        const kvData = await env.AOSP_PATCH_KV.get(kvKey, 'json')
+        if (kvData && typeof kvData === 'object' && 'data' in kvData && 'timestamp' in kvData) {
+          const kvCache = kvData as { data: any; timestamp: number }
+          const age = Date.now() - kvCache.timestamp
+          // KV cache valid for 1 hour
+          if (age < CACHE_TTL * 1000) {
+            cachedResponse = new Response(JSON.stringify(kvCache.data), {
+              status: 200,
+              headers: { 'Content-Type': 'application/json' }
+            })
+            cacheSource = 'kv'
+          }
+        }
+      } catch (err) {
+        console.warn('KV cache read error:', err)
+      }
+    }
+
+    if (cachedResponse) {
+      // Return cached response with CORS headers
+      const cachedData = await cachedResponse.clone().json()
+      return new Response(
+        JSON.stringify(cachedData),
+        {
+          status: cachedResponse.status,
+          headers: {
+            'Content-Type': 'application/json',
+            'Cache-Control': `public, max-age=${CACHE_TTL}, s-maxage=${CACHE_TTL}`, // 1 hour, also cache at edge
+            'X-Cache': `HIT-${cacheSource.toUpperCase()}`,
+            ...corsHeaders
+          }
+        }
+      )
+    }
+
     // Parse query parameters for filtering options
     const url = new URL(request.url)
     const prefix = url.searchParams.get('prefix') || undefined
@@ -896,18 +968,42 @@ async function handleProjects(
       description
     })
 
-    return new Response(
-      JSON.stringify({
-        success: true,
-        data: projects
-      }),
+    const responseData = {
+      success: true,
+      data: projects
+    }
+
+    // Create response with cache headers
+    const response = new Response(
+      JSON.stringify(responseData),
       {
         headers: {
           'Content-Type': 'application/json',
+          'Cache-Control': `public, max-age=${CACHE_TTL}, s-maxage=${CACHE_TTL}`, // 1 hour, also cache at edge
+          'X-Cache': 'MISS',
           ...corsHeaders
         }
       }
     )
+
+    // Store in both Worker cache and KV cache (async, don't wait)
+    cache.put(cacheKey, response.clone()).catch(err => {
+      console.error('Failed to cache projects response in Worker cache:', err)
+    })
+
+    // Also store in KV for longer persistence
+    if (env.AOSP_PATCH_KV) {
+      const url = new URL(request.url)
+      const kvKey = getCacheKeyString(url.pathname, url.search, env)
+      env.AOSP_PATCH_KV.put(kvKey, JSON.stringify({
+        data: responseData,
+        timestamp: Date.now()
+      })).catch(err => {
+        console.error('Failed to cache projects response in KV:', err)
+      })
+    }
+
+    return response
   } catch (error) {
     console.error('Error fetching projects from Gerrit:', error)
     return new Response(
@@ -929,7 +1025,8 @@ async function handleProjects(
 async function handleProjectBranches(
   path: string,
   env: Env,
-  corsHeaders: Record<string, string>
+  corsHeaders: Record<string, string>,
+  request?: Request
 ): Promise<Response> {
   try {
     // Check if Gerrit is configured
@@ -970,21 +1067,97 @@ async function handleProjectBranches(
     // Decode the project name (it's already URL encoded in the path)
     const projectName = decodeURIComponent(pathMatch[1])
 
+    // Check cache first if request is available
+    if (request) {
+      const cacheKey = createCacheKey(request, env)
+      const cache = (caches as any).default as Cache
+      let cachedResponse = await cache.match(cacheKey)
+      let cacheSource = 'worker'
+
+      // If not in Worker cache, try KV cache
+      if (!cachedResponse && env.AOSP_PATCH_KV) {
+        const url = new URL(request.url)
+        const kvKey = getCacheKeyString(url.pathname, url.search, env)
+        try {
+          const kvData = await env.AOSP_PATCH_KV.get(kvKey, 'json')
+          if (kvData && typeof kvData === 'object' && 'data' in kvData && 'timestamp' in kvData) {
+            const kvCache = kvData as { data: any; timestamp: number }
+            const age = Date.now() - kvCache.timestamp
+            // KV cache valid for 30 minutes for branches
+            if (age < BRANCHES_CACHE_TTL * 1000) {
+              cachedResponse = new Response(JSON.stringify(kvCache.data), {
+                status: 200,
+                headers: { 'Content-Type': 'application/json' }
+              })
+              cacheSource = 'kv'
+            }
+          }
+        } catch (err) {
+          console.warn('KV cache read error:', err)
+        }
+      }
+
+      if (cachedResponse) {
+        // Return cached response with CORS headers
+        const cachedData = await cachedResponse.clone().json()
+        return new Response(
+          JSON.stringify(cachedData),
+          {
+            status: cachedResponse.status,
+            headers: {
+              'Content-Type': 'application/json',
+              'Cache-Control': `public, max-age=${BRANCHES_CACHE_TTL}, s-maxage=${BRANCHES_CACHE_TTL}`, // 30 minutes, also cache at edge
+              'X-Cache': `HIT-${cacheSource.toUpperCase()}`,
+              ...corsHeaders
+            }
+          }
+        )
+      }
+    }
+
     const gerritService = new GerritService(env)
     const branches = await gerritService.getBranches(projectName)
 
-    return new Response(
-      JSON.stringify({
-        success: true,
-        data: branches
-      }),
+    const responseData = {
+      success: true,
+      data: branches
+    }
+
+    // Create response with cache headers
+    const response = new Response(
+      JSON.stringify(responseData),
       {
         headers: {
           'Content-Type': 'application/json',
+          'Cache-Control': `public, max-age=${BRANCHES_CACHE_TTL}, s-maxage=${BRANCHES_CACHE_TTL}`, // 30 minutes, also cache at edge
+          'X-Cache': 'MISS',
           ...corsHeaders
         }
       }
     )
+
+    // Store in both Worker cache and KV cache if request is available (async, don't wait)
+    if (request) {
+      const cacheKey = createCacheKey(request, env)
+      const cache = (caches as any).default as Cache
+      cache.put(cacheKey, response.clone()).catch(err => {
+        console.error('Failed to cache branches response in Worker cache:', err)
+      })
+
+      // Also store in KV for longer persistence
+      if (env.AOSP_PATCH_KV) {
+        const url = new URL(request.url)
+        const kvKey = getCacheKeyString(url.pathname, url.search, env)
+        env.AOSP_PATCH_KV.put(kvKey, JSON.stringify({
+          data: responseData,
+          timestamp: Date.now()
+        })).catch(err => {
+          console.error('Failed to cache branches response in KV:', err)
+        })
+      }
+    }
+
+    return response
   } catch (error) {
     console.error('Error fetching branches from Gerrit:', error)
     return new Response(

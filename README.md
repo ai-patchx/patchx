@@ -87,6 +87,7 @@ LITELLM_API_KEY=your-litellm-api-key
 GERRIT_BASE_URL=https://android-review.googlesource.com
 GERRIT_USERNAME=your-gerrit-username
 GERRIT_PASSWORD=your-gerrit-password-or-token
+CACHE_VERSION=v1
 ```
 `VITE_PUBLIC_SITE_URL` is used for email verification. For local development, you can keep it as `http://localhost:5173`. In deployed environments, set it to your public site URL (e.g., `https://patchx.pages.dev`).
 
@@ -382,11 +383,12 @@ Configure environment variables needed to interact with AOSP Gerrit in Cloudflar
 
 **Option 1: Sync from .env.local (Recommended)**
 
-1. Add Gerrit credentials to `.env.local`:
+1. Add Gerrit credentials and cache version to `.env.local`:
    ```bash
    GERRIT_BASE_URL=https://android-review.googlesource.com
    GERRIT_USERNAME=your-gerrit-username
    GERRIT_PASSWORD=your-gerrit-password-or-token
+   CACHE_VERSION=v1
    ```
 
 2. Sync to `wrangler.toml`:
@@ -398,6 +400,8 @@ Configure environment variables needed to interact with AOSP Gerrit in Cloudflar
    ```bash
    npm run deploy
    ```
+
+**Note:** The `sync:env` script also syncs `CACHE_VERSION` from `.env.local` to `wrangler.toml`. Update `CACHE_VERSION` (e.g., to `v2`) and redeploy to invalidate all cached responses for projects and branches.
 
 **Option 2: Manual Configuration**
 
@@ -716,7 +720,9 @@ Response:
 
 **Note:** Branches are automatically fetched and displayed in the submit page when a project is selected. The branch dropdown is disabled until a project is chosen.
 
-**Caching:** Both projects and branches are cached locally in the browser for 10 minutes to improve performance. Users can manually refresh the cache using the refresh button (🔄) next to the "Target Project" and "Target Branch" dropdowns. The cache persists across page reloads using localStorage.
+**Caching:**
+- **Client-side:** Both projects and branches are cached locally in the browser for 10 minutes to improve performance. Users can manually refresh the cache using the refresh button (🔄) next to the "Target Project" and "Target Branch" dropdowns. The cache persists across page reloads using localStorage.
+- **Server-side:** The Worker also caches API responses for 10 minutes to reduce calls to Gerrit. To invalidate all server-side caches on deploy, update `CACHE_VERSION` in `.env.local` (e.g., change from `v1` to `v2`), run `npm run sync:env`, and redeploy.
 
 ## 🚀 Deployment Steps
 
@@ -760,7 +766,7 @@ You have **two options** for configuring Supabase environment variables:
 The Worker can expose Supabase config via `/api/config/public`, and the frontend will automatically use it as a fallback. This means you don't need to set environment variables in Cloudflare Pages dashboard.
 
 **Steps:**
-1. Ensure your `.env.local` has `SUPABASE_URL`, `SUPABASE_ANON_KEY`, optionally `LITELLM_BASE_URL` and `LITELLM_API_KEY`, and optionally `GERRIT_USERNAME` and `GERRIT_PASSWORD`
+1. Ensure your `.env.local` has `SUPABASE_URL`, `SUPABASE_ANON_KEY`, optionally `LITELLM_BASE_URL` and `LITELLM_API_KEY`, optionally `GERRIT_USERNAME` and `GERRIT_PASSWORD`, and optionally `CACHE_VERSION` (defaults to `v1`)
 2. Sync them to `wrangler.toml`:
    ```bash
    npm run sync:env
@@ -770,6 +776,8 @@ The Worker can expose Supabase config via `/api/config/public`, and the frontend
    npm run deploy
    ```
 4. The frontend will automatically fetch config from the Worker's `/api/config/public` endpoint
+
+**Note:** To invalidate server-side caches on deploy, update `CACHE_VERSION` in `.env.local` (e.g., change to `v2`), run `npm run sync:env`, and redeploy.
 
 ### Option 2: Set in Cloudflare Pages Dashboard (Manual)
 

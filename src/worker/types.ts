@@ -31,6 +31,7 @@ export interface Env {
   MAILCHANNELS_FROM_NAME?: string
   MAILCHANNELS_REPLY_TO_EMAIL?: string
   MAILCHANNELS_API_ENDPOINT?: string
+  CACHE_VERSION?: string
 }
 
 export interface Upload {
