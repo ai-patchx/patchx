@@ -16,6 +16,7 @@ A web service that streamlines contributing code to the Android Open Source Proj
 - 🧑‍💻 User registration: Email only (Supabase)
 - 📋 Dynamic project listing: automatically fetch all projects from Gerrit
 - 🌿 Dynamic branch listing: automatically fetch branches for selected project
+- 🔍 Searchable dropdowns: search and filter projects and branches with real-time filtering
 - ⚡ Smart caching: projects and branches are cached locally for 10 minutes to improve performance and reduce API calls
 
 ## 🛠️ Tech Stack
@@ -718,7 +719,7 @@ Response:
 }
 ```
 
-**Note:** Branches are automatically fetched and displayed in the submit page when a project is selected. The branch dropdown is disabled until a project is chosen.
+**Note:** Branches are automatically fetched and displayed in the submit page when a project is selected. The branch dropdown is disabled until a project is chosen. Both "Target Project" and "Target Branch" dropdowns support real-time search and filtering to help users quickly find the desired project or branch.
 
 **Caching:**
 - **Client-side:** Both projects and branches are cached locally in the browser for 10 minutes to improve performance. Users can manually refresh the cache using the refresh button (🔄) next to the "Target Project" and "Target Branch" dropdowns. The cache persists across page reloads using localStorage.

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { FileText, Settings, Send, Moon, Sun, Eye, Terminal, Github, Code, RefreshCw } from 'lucide-react'
 import FileUpload from '../components/FileUpload'
+import SearchableSelect from '../components/SearchableSelect'
 import useFileUploadStore from '../stores/fileUploadStore'
 import useGitAuthorStore from '../stores/gitAuthorStore'
 import useProjectCacheStore from '../stores/projectCacheStore'
@@ -593,32 +594,20 @@ const SubmitPage: React.FC = () => {
                   <RefreshCw className={`w-4 h-4 ${isLoadingProjects ? 'animate-spin' : ''}`} />
                 </button>
               </div>
-              <select
+              <SearchableSelect
+                options={projects.map((project) => ({
+                  value: project.id,
+                  label: `${project.name}${project.description ? ` - ${project.description}` : ''}`
+                }))}
                 value={selectedProject}
-                onChange={(e) => setSelectedProject(e.target.value)}
+                onChange={setSelectedProject}
+                placeholder="Please select an AOSP project"
                 disabled={isLoadingProjects}
-                className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent ${
-                  theme === 'dark'
-                    ? 'input-gradient border-gradient-accent'
-                    : 'border-gray-300 bg-white'
-                } ${isLoadingProjects ? 'opacity-50 cursor-not-allowed' : ''}`}
-                required
-              >
-                {isLoadingProjects ? (
-                  <option value="">Loading projects from Gerrit...</option>
-                ) : projects.length === 0 ? (
-                  <option value="">No projects available (check Gerrit configuration)</option>
-                ) : (
-                  <>
-                    <option value="">Please select an AOSP project</option>
-                    {projects.map((project) => (
-                      <option key={project.id} value={project.id}>
-                        {project.name}{project.description ? ` - ${project.description}` : ''}
-                      </option>
-                    ))}
-                  </>
-                )}
-              </select>
+                isLoading={isLoadingProjects}
+                emptyMessage="No projects available (check Gerrit configuration)"
+                loadingMessage="Loading projects from Gerrit..."
+                theme={theme}
+              />
               {projects.length > 0 && (
                 <p className={`text-xs mt-1 ${
                   theme === 'dark' ? 'text-gradient-secondary opacity-70' : 'text-gray-500'
@@ -652,32 +641,20 @@ const SubmitPage: React.FC = () => {
                   </button>
                 )}
               </div>
-              <select
+              <SearchableSelect
+                options={branches.map((branch) => ({
+                  value: branch.name,
+                  label: branch.name
+                }))}
                 value={selectedBranch}
-                onChange={(e) => setSelectedBranch(e.target.value)}
+                onChange={setSelectedBranch}
+                placeholder={!selectedProject ? "Please select a project first" : "Please select a branch"}
                 disabled={!selectedProject || isLoadingBranches}
-                className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent ${
-                  theme === 'dark'
-                    ? 'input-gradient border-gradient-accent'
-                    : 'border-gray-300 bg-white'
-                } ${!selectedProject || isLoadingBranches ? 'opacity-50 cursor-not-allowed' : ''}`}
-              >
-                {!selectedProject ? (
-                  <option value="">Please select a project first</option>
-                ) : isLoadingBranches ? (
-                  <option value="">Loading branches...</option>
-                ) : branches.length === 0 ? (
-                  <option value="">No branches available</option>
-                ) : (
-                  <>
-                    {branches.map((branch) => (
-                      <option key={branch.ref} value={branch.name}>
-                        {branch.name}
-                      </option>
-                    ))}
-                  </>
-                )}
-              </select>
+                isLoading={isLoadingBranches}
+                emptyMessage="No branches available"
+                loadingMessage="Loading branches..."
+                theme={theme}
+              />
               {selectedProject && branches.length > 0 && (
                 <p className={`text-xs mt-1 ${
                   theme === 'dark' ? 'text-gradient-secondary opacity-70' : 'text-gray-500'
