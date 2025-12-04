@@ -23,7 +23,7 @@ const splitEmails = (value: string): string[] => {
 const SubmitPage: React.FC = () => {
   const { file, setUploadStatus, setUploadId, setError } = useFileUploadStore()
   const { theme, toggleTheme } = useTheme()
-  const { authorName, authorEmail, loadFromStorage } = useGitAuthorStore()
+  const { authorName, authorEmail, setAuthorName, setAuthorEmail, loadFromStorage } = useGitAuthorStore()
   const {
     getCachedProjects,
     setCachedProjects,
@@ -733,6 +733,46 @@ const SubmitPage: React.FC = () => {
                 onChange={(e) => setDescription(e.target.value)}
                 placeholder="Describe your changes in detail, including reasons and impact..."
                 rows={4}
+                className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent ${
+                  theme === 'dark'
+                    ? 'input-gradient border-gradient-accent'
+                    : 'border-gray-300 bg-white'
+                }`}
+              />
+            </div>
+
+            {/* Commit Author Name */}
+            <div>
+              <label className={`block text-sm font-medium mb-2 ${
+                theme === 'dark' ? 'text-gradient-primary' : 'text-gray-700'
+              }`}>
+                Author Name
+              </label>
+              <input
+                type="text"
+                value={authorName}
+                onChange={(e) => setAuthorName(e.target.value)}
+                placeholder="Enter author name for git commit --author"
+                className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent ${
+                  theme === 'dark'
+                    ? 'input-gradient border-gradient-accent'
+                    : 'border-gray-300 bg-white'
+                }`}
+              />
+            </div>
+
+            {/* Commit Author Email */}
+            <div>
+              <label className={`block text-sm font-medium mb-2 ${
+                theme === 'dark' ? 'text-gradient-primary' : 'text-gray-700'
+              }`}>
+                Author Email
+              </label>
+              <input
+                type="email"
+                value={authorEmail}
+                onChange={(e) => setAuthorEmail(e.target.value)}
+                placeholder="Enter author email for git commit --author"
                 className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent ${
                   theme === 'dark'
                     ? 'input-gradient border-gradient-accent'
