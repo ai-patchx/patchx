@@ -674,31 +674,20 @@ const SubmitPage: React.FC = () => {
                   <span>AI Model for Commit Generation & Conflict Resolution</span>
                 </div>
               </label>
-              <select
+              <SearchableSelect
+                options={models.map((model) => ({
+                  value: model.id,
+                  label: `${model.name}${model.provider !== 'unknown' ? ` (${model.provider})` : ''}`
+                }))}
                 value={selectedModel}
-                onChange={(e) => setSelectedModel(e.target.value)}
+                onChange={setSelectedModel}
+                placeholder="Select a model (optional)"
                 disabled={isLoadingModels || models.length === 0}
-                className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent ${
-                  theme === 'dark'
-                    ? 'input-gradient border-gradient-accent'
-                    : 'border-gray-300 bg-white'
-                } ${isLoadingModels || models.length === 0 ? 'opacity-50 cursor-not-allowed' : ''}`}
-              >
-                {isLoadingModels ? (
-                  <option value="">Loading models...</option>
-                ) : models.length === 0 ? (
-                  <option value="">No models available</option>
-                ) : (
-                  <>
-                    <option value="">Select a model (optional)</option>
-                    {models.map((model) => (
-                      <option key={model.id} value={model.id}>
-                        {model.name} {model.provider !== 'unknown' ? `(${model.provider})` : ''}
-                      </option>
-                    ))}
-                  </>
-                )}
-              </select>
+                isLoading={isLoadingModels}
+                emptyMessage="No models available (check LiteLLM configuration)"
+                loadingMessage="Loading models from LiteLLM..."
+                theme={theme}
+              />
               {models.length === 0 && !isLoadingModels && (
                 <p className={`text-xs mt-1 ${
                   theme === 'dark' ? 'text-gradient-secondary opacity-70' : 'text-gray-500'
