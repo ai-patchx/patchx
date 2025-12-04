@@ -4,6 +4,7 @@ import { Mail, Moon, Sun, Github, Code } from 'lucide-react'
 import { useAuthStore } from '@/stores/authStore'
 import { useTheme } from '@/hooks/useTheme'
 import RegistrationModal from '@/components/RegistrationModal'
+import packageInfo from '../../package.json'
 
 export default function LoginPage() {
   const [username, setUsername] = useState('')
@@ -232,6 +233,17 @@ export default function LoginPage() {
         isOpen={showRegistrationModal}
         onClose={() => setShowRegistrationModal(false)}
       />
+
+      {/* Version and build time information - Bottom left */}
+      <div className="fixed bottom-4 left-4 z-10">
+        <div className={`text-xs space-y-1 ${
+          theme === 'dark' ? 'text-gradient-secondary opacity-70' : 'text-gray-500'
+        }`}>
+          <div>Version: v{packageInfo.version}</div>
+          <div>Commit: {import.meta.env.GIT_HASH}</div>
+          <div>Build Time: {new Date(import.meta.env.BUILD_TIME).toLocaleString('en-US')}</div>
+        </div>
+      </div>
     </div>
   )
 }

@@ -4,6 +4,7 @@ import { Settings, Plus, Edit, Trash2, TestTube, Moon, Sun, ArrowLeft, Server, K
 import useRemoteNodeStore from '@/stores/remoteNodeStore'
 import { useTheme } from '@/hooks/useTheme'
 import type { RemoteNode, RemoteNodeFormData } from '@/types'
+import packageInfo from '../../package.json'
 
 export default function SettingsPage() {
   const navigate = useNavigate()
@@ -391,6 +392,17 @@ export default function SettingsPage() {
           </div>
         </div>
       )}
+
+      {/* Version and build time information - Bottom left */}
+      <div className="fixed bottom-4 left-4 z-10">
+        <div className={`text-xs space-y-1 ${
+          theme === 'dark' ? 'text-gradient-secondary opacity-70' : 'text-gray-500'
+        }`}>
+          <div>Version: v{packageInfo.version}</div>
+          <div>Commit: {import.meta.env.GIT_HASH}</div>
+          <div>Build Time: {new Date(import.meta.env.BUILD_TIME).toLocaleString('en-US')}</div>
+        </div>
+      </div>
     </div>
   )
 }
