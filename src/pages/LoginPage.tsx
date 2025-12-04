@@ -103,13 +103,8 @@ export default function LoginPage() {
             <h1 className={`text-3xl font-bold mb-2 text-center ${
               theme === 'dark' ? 'text-gradient-primary' : 'text-gray-900'
             }`}>
-              User Login
+              PatchX
             </h1>
-            <p className={`text-center ${
-              theme === 'dark' ? 'text-gradient-secondary' : 'text-gray-600'
-            }`}>
-              Login to PatchX with your account
-            </p>
           </div>
 
           <form className="space-y-6" onSubmit={handleSubmit}>
