@@ -1,11 +1,13 @@
 import { useEffect, useState } from 'react'
-import { User, Mail, Moon, Sun, LogIn, UserPlus } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
+import { User, Mail, Moon, Sun, LogIn, UserPlus, Settings } from 'lucide-react'
 import useGitAuthorStore from '@/stores/gitAuthorStore'
 import { useTheme } from '@/hooks/useTheme'
 import RegistrationModal from '@/components/RegistrationModal'
 import { useAuthStore } from '@/stores/authStore'
 
 export default function Home() {
+  const navigate = useNavigate()
   const { authorName, authorEmail, setAuthorName, setAuthorEmail, loadFromStorage } = useGitAuthorStore()
   const { theme, toggleTheme } = useTheme()
   const [showAuthModal, setShowAuthModal] = useState(false)
@@ -34,12 +36,21 @@ export default function Home() {
           <div className="flex justify-between items-center mb-4">
             <div className="flex space-x-2">
               {user ? (
-                <button
-                  onClick={handleLogout}
-                  className={`${theme === 'dark' ? 'bg-red-600 hover:bg-red-700' : 'bg-red-600 hover:bg-red-700'} text-white px-3 py-1 rounded-lg text-sm transition-colors duration-200`}
-                >
-                  Sign Out
-                </button>
+                <>
+                  <button
+                    onClick={() => navigate('/settings')}
+                    className={`${theme === 'dark' ? 'btn-gradient' : 'bg-blue-600 hover:bg-blue-700 text-white'} px-3 py-1 rounded-lg text-sm transition-colors duration-200 flex items-center`}
+                  >
+                    <Settings className="w-4 h-4 mr-1" />
+                    Settings
+                  </button>
+                  <button
+                    onClick={handleLogout}
+                    className={`${theme === 'dark' ? 'bg-red-600 hover:bg-red-700' : 'bg-red-600 hover:bg-red-700'} text-white px-3 py-1 rounded-lg text-sm transition-colors duration-200`}
+                  >
+                    Sign Out
+                  </button>
+                </>
               ) : (
                 <>
                   <button

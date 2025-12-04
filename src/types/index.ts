@@ -51,3 +51,26 @@ export interface StatusResponse {
   createdAt: string
   error?: string
 }
+
+export interface RemoteNode {
+  id: string
+  name: string
+  host: string
+  port: number
+  username: string
+  authType: 'key' | 'password'
+  sshKey?: string // Private SSH key content
+  password?: string // Encrypted password
+  createdAt: string
+  updatedAt: string
+}
+
+export interface RemoteNodeFormData {
+  name: string
+  host: string
+  port: number
+  username: string
+  authType: 'key' | 'password'
+  sshKey?: string
+  password?: string
+}

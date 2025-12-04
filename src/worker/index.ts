@@ -4,6 +4,19 @@ import { SubmissionService } from './services/submissionService'
 import { EnhancedPatchService } from './services/enhancedPatchService'
 import { GerritService } from './services/gerritService'
 
+interface RemoteNodeData {
+  id: string
+  name: string
+  host: string
+  port: number
+  username: string
+  authType: 'key' | 'password'
+  sshKey?: string
+  password?: string
+  createdAt: string
+  updatedAt: string
+}
+
 // Cache configuration
 const CACHE_TTL = 3600 // 1 hour in seconds for projects (they don't change often)
 const BRANCHES_CACHE_TTL = 1800 // 30 minutes for branches
@@ -67,7 +80,9 @@ export default {
               aiTestProviders: '/api/ai/test-providers',
               models: '/api/models',
               projects: '/api/projects',
-              projectBranches: '/api/projects/:project/branches'
+              projectBranches: '/api/projects/:project/branches',
+              nodes: '/api/nodes',
+              nodeTest: '/api/nodes/:id/test'
             },
             documentation: 'https://github.com/your-repo/aosp-patch-service'
           }),
@@ -110,6 +125,16 @@ export default {
         return await handleProjects(request, env, corsHeaders)
       } else if (path.startsWith('/api/projects/') && path.endsWith('/branches') && method === 'GET') {
         return await handleProjectBranches(path, env, corsHeaders, request)
+      } else if (path === '/api/nodes' && method === 'GET') {
+        return await handleGetNodes(env, corsHeaders)
+      } else if (path === '/api/nodes' && method === 'POST') {
+        return await handleCreateNode(request, env, corsHeaders)
+      } else if (path.startsWith('/api/nodes/') && method === 'PUT') {
+        return await handleUpdateNode(path, request, env, corsHeaders)
+      } else if (path.startsWith('/api/nodes/') && method === 'DELETE') {
+        return await handleDeleteNode(path, env, corsHeaders)
+      } else if (path.startsWith('/api/nodes/') && path.endsWith('/test') && method === 'POST') {
+        return await handleTestNode(path, env, corsHeaders)
       }
 
       else {
@@ -1164,6 +1189,550 @@ async function handleProjectBranches(
       JSON.stringify({
         success: false,
         error: error instanceof Error ? error.message : 'Failed to fetch branches from Gerrit'
+      }),
+      {
+        status: 500,
+        headers: {
+          'Content-Type': 'application/json',
+          ...corsHeaders
+        }
+      }
+    )
+  }
+}
+
+// Remote Node Management Handlers
+async function handleGetNodes(env: Env, corsHeaders: Record<string, string>): Promise<Response> {
+  try {
+    if (!env.AOSP_PATCH_KV) {
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: 'KV storage not available'
+        }),
+        {
+          status: 500,
+          headers: {
+            'Content-Type': 'application/json',
+            ...corsHeaders
+          }
+        }
+      )
+    }
+
+    // Get all nodes from KV
+    const nodesList: any[] = []
+    // Note: KV doesn't support listing all keys directly, so we'll need to maintain a list
+    // For now, we'll use a single key to store all nodes
+    const nodesData = await env.AOSP_PATCH_KV.get('remote_nodes:list', 'json')
+
+    if (nodesData && Array.isArray(nodesData)) {
+      // Fetch each node's full data
+      for (const nodeId of nodesData) {
+        const nodeData = await env.AOSP_PATCH_KV.get(`remote_nodes:${nodeId}`, 'json') as RemoteNodeData | null
+        if (nodeData) {
+          // Don't return sensitive data (password/sshKey) in list
+          const { password, sshKey, ...safeNode } = nodeData
+          nodesList.push(safeNode)
+        }
+      }
+    }
+
+    return new Response(
+      JSON.stringify({
+        success: true,
+        data: nodesList
+      }),
+      {
+        status: 200,
+        headers: {
+          'Content-Type': 'application/json',
+          ...corsHeaders
+        }
+      }
+    )
+  } catch (error) {
+    console.error('Error fetching nodes:', error)
+    return new Response(
+      JSON.stringify({
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to fetch nodes'
+      }),
+      {
+        status: 500,
+        headers: {
+          'Content-Type': 'application/json',
+          ...corsHeaders
+        }
+      }
+    )
+  }
+}
+
+async function handleCreateNode(request: Request, env: Env, corsHeaders: Record<string, string>): Promise<Response> {
+  try {
+    if (!env.AOSP_PATCH_KV) {
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: 'KV storage not available'
+        }),
+        {
+          status: 500,
+          headers: {
+            'Content-Type': 'application/json',
+            ...corsHeaders
+          }
+        }
+      )
+    }
+
+    const body = await request.json() as {
+      name: string
+      host: string
+      port: number
+      username: string
+      authType: 'key' | 'password'
+      sshKey?: string
+      password?: string
+    }
+
+    // Validate required fields
+    if (!body.name || !body.host || !body.username) {
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: 'Missing required fields: name, host, username'
+        }),
+        {
+          status: 400,
+          headers: {
+            'Content-Type': 'application/json',
+            ...corsHeaders
+          }
+        }
+      )
+    }
+
+    if (body.authType === 'key' && !body.sshKey) {
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: 'SSH key is required when using key authentication'
+        }),
+        {
+          status: 400,
+          headers: {
+            'Content-Type': 'application/json',
+            ...corsHeaders
+          }
+        }
+      )
+    }
+
+    if (body.authType === 'password' && !body.password) {
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: 'Password is required when using password authentication'
+        }),
+        {
+          status: 400,
+          headers: {
+            'Content-Type': 'application/json',
+            ...corsHeaders
+          }
+        }
+      )
+    }
+
+    const nodeId = `node_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+    const now = new Date().toISOString()
+
+    const node: RemoteNodeData = {
+      id: nodeId,
+      name: body.name,
+      host: body.host,
+      port: body.port || 22,
+      username: body.username,
+      authType: body.authType,
+      sshKey: body.authType === 'key' ? body.sshKey : undefined,
+      password: body.authType === 'password' ? body.password : undefined, // In production, encrypt this
+      createdAt: now,
+      updatedAt: now
+    }
+
+    // Store node
+    await env.AOSP_PATCH_KV.put(`remote_nodes:${nodeId}`, JSON.stringify(node))
+
+    // Update nodes list
+    const nodesList = (await env.AOSP_PATCH_KV.get('remote_nodes:list', 'json')) || []
+    if (Array.isArray(nodesList)) {
+      nodesList.push(nodeId)
+      await env.AOSP_PATCH_KV.put('remote_nodes:list', JSON.stringify(nodesList))
+    } else {
+      await env.AOSP_PATCH_KV.put('remote_nodes:list', JSON.stringify([nodeId]))
+    }
+
+    // Return node without sensitive data
+    const { password, sshKey, ...safeNode } = node
+
+    return new Response(
+      JSON.stringify({
+        success: true,
+        data: safeNode
+      }),
+      {
+        status: 201,
+        headers: {
+          'Content-Type': 'application/json',
+          ...corsHeaders
+        }
+      }
+    )
+  } catch (error) {
+    console.error('Error creating node:', error)
+    return new Response(
+      JSON.stringify({
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to create node'
+      }),
+      {
+        status: 500,
+        headers: {
+          'Content-Type': 'application/json',
+          ...corsHeaders
+        }
+      }
+    )
+  }
+}
+
+async function handleUpdateNode(path: string, request: Request, env: Env, corsHeaders: Record<string, string>): Promise<Response> {
+  try {
+    if (!env.AOSP_PATCH_KV) {
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: 'KV storage not available'
+        }),
+        {
+          status: 500,
+          headers: {
+            'Content-Type': 'application/json',
+            ...corsHeaders
+          }
+        }
+      )
+    }
+
+    const nodeId = path.split('/')[3] // /api/nodes/{id}
+    if (!nodeId) {
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: 'Node ID is required'
+        }),
+        {
+          status: 400,
+          headers: {
+            'Content-Type': 'application/json',
+            ...corsHeaders
+          }
+        }
+      )
+    }
+
+    const existingNode = await env.AOSP_PATCH_KV.get(`remote_nodes:${nodeId}`, 'json') as RemoteNodeData | null
+    if (!existingNode) {
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: 'Node not found'
+        }),
+        {
+          status: 404,
+          headers: {
+            'Content-Type': 'application/json',
+            ...corsHeaders
+          }
+        }
+      )
+    }
+
+    const body = await request.json() as {
+      name?: string
+      host?: string
+      port?: number
+      username?: string
+      authType?: 'key' | 'password'
+      sshKey?: string
+      password?: string
+    }
+
+    // Update node
+    const updatedNode: RemoteNodeData = {
+      ...existingNode,
+      ...(body.name && { name: body.name }),
+      ...(body.host && { host: body.host }),
+      ...(body.port && { port: body.port }),
+      ...(body.username && { username: body.username }),
+      ...(body.authType && { authType: body.authType }),
+      ...(body.authType === 'key' && body.sshKey && { sshKey: body.sshKey }),
+      ...(body.authType === 'password' && body.password && { password: body.password }), // In production, encrypt this
+      // If authType changed, clear the other auth method
+      ...(body.authType === 'key' && { password: undefined }),
+      ...(body.authType === 'password' && { sshKey: undefined }),
+      updatedAt: new Date().toISOString()
+    }
+
+    // If password is empty string and we're editing, keep existing password
+    if (body.authType === 'password' && body.password === '' && existingNode.password) {
+      updatedNode.password = existingNode.password
+    }
+
+    await env.AOSP_PATCH_KV.put(`remote_nodes:${nodeId}`, JSON.stringify(updatedNode))
+
+    // Return node without sensitive data
+    const { password, sshKey, ...safeNode } = updatedNode
+
+    return new Response(
+      JSON.stringify({
+        success: true,
+        data: safeNode
+      }),
+      {
+        status: 200,
+        headers: {
+          'Content-Type': 'application/json',
+          ...corsHeaders
+        }
+      }
+    )
+  } catch (error) {
+    console.error('Error updating node:', error)
+    return new Response(
+      JSON.stringify({
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to update node'
+      }),
+      {
+        status: 500,
+        headers: {
+          'Content-Type': 'application/json',
+          ...corsHeaders
+        }
+      }
+    )
+  }
+}
+
+async function handleDeleteNode(path: string, env: Env, corsHeaders: Record<string, string>): Promise<Response> {
+  try {
+    if (!env.AOSP_PATCH_KV) {
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: 'KV storage not available'
+        }),
+        {
+          status: 500,
+          headers: {
+            'Content-Type': 'application/json',
+            ...corsHeaders
+          }
+        }
+      )
+    }
+
+    const nodeId = path.split('/')[3] // /api/nodes/{id}
+    if (!nodeId) {
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: 'Node ID is required'
+        }),
+        {
+          status: 400,
+          headers: {
+            'Content-Type': 'application/json',
+            ...corsHeaders
+          }
+        }
+      )
+    }
+
+    // Delete node
+    await env.AOSP_PATCH_KV.delete(`remote_nodes:${nodeId}`)
+
+    // Update nodes list
+    const nodesList = (await env.AOSP_PATCH_KV.get('remote_nodes:list', 'json')) || []
+    if (Array.isArray(nodesList)) {
+      const updatedList = nodesList.filter((id: string) => id !== nodeId)
+      await env.AOSP_PATCH_KV.put('remote_nodes:list', JSON.stringify(updatedList))
+    }
+
+    return new Response(
+      JSON.stringify({
+        success: true
+      }),
+      {
+        status: 200,
+        headers: {
+          'Content-Type': 'application/json',
+          ...corsHeaders
+        }
+      }
+    )
+  } catch (error) {
+    console.error('Error deleting node:', error)
+    return new Response(
+      JSON.stringify({
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to delete node'
+      }),
+      {
+        status: 500,
+        headers: {
+          'Content-Type': 'application/json',
+          ...corsHeaders
+        }
+      }
+    )
+  }
+}
+
+async function handleTestNode(path: string, env: Env, corsHeaders: Record<string, string>): Promise<Response> {
+  try {
+    if (!env.AOSP_PATCH_KV) {
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: 'KV storage not available'
+        }),
+        {
+          status: 500,
+          headers: {
+            'Content-Type': 'application/json',
+            ...corsHeaders
+          }
+        }
+      )
+    }
+
+    const nodeId = path.split('/')[3] // /api/nodes/{id}/test
+    if (!nodeId) {
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: 'Node ID is required'
+        }),
+        {
+          status: 400,
+          headers: {
+            'Content-Type': 'application/json',
+            ...corsHeaders
+          }
+        }
+      )
+    }
+
+    const node = await env.AOSP_PATCH_KV.get(`remote_nodes:${nodeId}`, 'json') as RemoteNodeData | null
+    if (!node) {
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: 'Node not found'
+        }),
+        {
+          status: 404,
+          headers: {
+            'Content-Type': 'application/json',
+            ...corsHeaders
+          }
+        }
+      )
+    }
+
+    // Note: Actual SSH connection testing would require server-side SSH client
+    // For now, we'll just validate the configuration
+    // In a real implementation, you would use a library like ssh2 or execute SSH commands
+    // This is a placeholder that validates the node configuration
+
+    if (!node.host || !node.username) {
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: 'Invalid node configuration'
+        }),
+        {
+          status: 400,
+          headers: {
+            'Content-Type': 'application/json',
+            ...corsHeaders
+          }
+        }
+      )
+    }
+
+    if (node.authType === 'key' && !node.sshKey) {
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: 'SSH key is missing'
+        }),
+        {
+          status: 400,
+          headers: {
+            'Content-Type': 'application/json',
+            ...corsHeaders
+          }
+        }
+      )
+    }
+
+    if (node.authType === 'password' && !node.password) {
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: 'Password is missing'
+        }),
+        {
+          status: 400,
+          headers: {
+            'Content-Type': 'application/json',
+            ...corsHeaders
+          }
+        }
+      )
+    }
+
+    // TODO: Implement actual SSH connection test
+    // For now, we'll return success if configuration is valid
+    // In production, you would:
+    // 1. Use a server-side SSH client library
+    // 2. Attempt to connect to the remote node
+    // 3. Return success/failure based on actual connection result
+
+    return new Response(
+      JSON.stringify({
+        success: true,
+        message: 'Node configuration is valid. Note: Actual connection test not implemented yet.'
+      }),
+      {
+        status: 200,
+        headers: {
+          'Content-Type': 'application/json',
+          ...corsHeaders
+        }
+      }
+    )
+  } catch (error) {
+    console.error('Error testing node:', error)
+    return new Response(
+      JSON.stringify({
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to test node connection'
       }),
       {
         status: 500,

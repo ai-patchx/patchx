@@ -5,6 +5,7 @@ import StatusPage from './pages/StatusPage'
 import LoginPage from './pages/LoginPage'
 import Home from './pages/Home'
 import EmailConfirmationPage from './pages/EmailConfirmationPage'
+import SettingsPage from './pages/SettingsPage'
 import { useTheme } from './hooks/useTheme'
 import { useAuthStore } from './stores/authStore'
 
@@ -57,6 +58,10 @@ function App() {
           <Route
             path="/status/:id"
             element={(user || workerUser) ? <StatusPage /> : <Navigate to="/" replace />}
+          />
+          <Route
+            path="/settings"
+            element={(user || workerUser) ? <SettingsPage /> : <Navigate to="/" replace />}
           />
         </Routes>
       </div>

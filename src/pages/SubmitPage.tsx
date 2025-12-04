@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { FileText, Settings, Send, Moon, Sun, Eye, Terminal, Github, Code, RefreshCw } from 'lucide-react'
 import FileUpload from '../components/FileUpload'
 import SearchableSelect from '../components/SearchableSelect'
@@ -21,6 +22,7 @@ const splitEmails = (value: string): string[] => {
 }
 
 const SubmitPage: React.FC = () => {
+  const navigate = useNavigate()
   const { file, setUploadStatus, setUploadId, setError } = useFileUploadStore()
   const { theme, toggleTheme } = useTheme()
   const { authorName, authorEmail, setAuthorName, setAuthorEmail, loadFromStorage } = useGitAuthorStore()
@@ -502,6 +504,17 @@ const SubmitPage: React.FC = () => {
       <div className="max-w-4xl mx-auto px-4">
         {/* Theme toggle, GitHub and Gerrit buttons */}
         <div className="flex justify-end mb-4 space-x-2">
+          <button
+            onClick={() => navigate('/settings')}
+            className={`p-2 rounded-lg transition-colors duration-200 ${
+              theme === 'dark'
+                ? 'bg-gradient-accent text-gradient-primary hover:bg-gradient-highlight'
+                : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+            }`}
+            title="Settings"
+          >
+            <Settings className="w-5 h-5" />
+          </button>
           <a
             href="https://github.com/ai-patchx/patchx"
             target="_blank"
