@@ -142,13 +142,6 @@ export default function SettingsPage() {
             </div>
           </div>
 
-          {/* Error Message */}
-          {error && (
-            <div className={`mb-4 p-3 rounded-md ${theme === 'dark' ? 'bg-red-900/30 border border-red-700' : 'bg-red-50 border border-red-200'}`}>
-              <p className={`text-sm ${theme === 'dark' ? 'text-red-300' : 'text-red-800'}`}>{error}</p>
-            </div>
-          )}
-
           {/* Add Node Button */}
           <div className="mb-6">
             <button
