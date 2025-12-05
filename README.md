@@ -416,8 +416,6 @@ Once configured, you can test your email setup from the Settings page:
 
 The test will verify that your email configuration (Resend or MailChannels) is working correctly. If Resend is configured, it will be used; otherwise, it falls back to MailChannels API.
 
-Once configured, the Submit page shows two new fields—**Email Notifications** and **CC List**—so contributors can decide who will receive processing/completed/failed status updates for every patch.
-
 ### Frontend environment (Vite)
 
 Set the frontend base URL for the backend Worker to avoid hardcoded endpoints and enable per‑environment configuration:

@@ -420,8 +420,6 @@ wrangler secret put MAILCHANNELS_API_KEY
 
 测试将验证您的邮件配置（Resend 或 MailChannels）是否正常工作。如果配置了 Resend，将使用 Resend；否则将回退到 MailChannels API。
 
-配置完成后，提交页面将显示 **Email Notifications** 与 **CC List** 输入框，允许为每次提交单独指定接收人与抄送名单，并在“处理中 / 成功 / 失败”时收到通知。
-
 ### 前端环境变量（Vite）
 
 为避免端点硬编码并按环境区分配置，请设置前端用于访问后端 Worker 的基地址：

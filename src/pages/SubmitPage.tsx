@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { FileText, Settings, Send, Moon, Sun, Eye, Terminal, Github, Code, RefreshCw } from 'lucide-react'
+import { FileText, Settings, Send, Moon, Sun, Eye, Terminal, Github, Code, RefreshCw, Folder, GitBranch, Brain, MessageSquare, AlignLeft, User, Mail, Bell } from 'lucide-react'
 import FileUpload from '../components/FileUpload'
 import SearchableSelect from '../components/SearchableSelect'
 import useFileUploadStore from '../stores/fileUploadStore'
@@ -51,7 +51,6 @@ const SubmitPage: React.FC = () => {
   const [consoleOutput, setConsoleOutput] = useState<string[]>([])
   const [currentProcess, setCurrentProcess] = useState('')
   const [notificationReceiversInput, setNotificationReceiversInput] = useState('')
-  const [notificationCcInput, setNotificationCcInput] = useState('')
   const [emailValidationError, setEmailValidationError] = useState<string | null>(null)
 
   useEffect(() => {
@@ -343,9 +342,6 @@ const SubmitPage: React.FC = () => {
   }
 
   const notificationReceivers = normalizeEmailList(notificationReceiversInput)
-  const notificationCc = normalizeEmailList(notificationCcInput).filter(
-    email => !notificationReceivers.includes(email)
-  )
 
   const renderEmailChips = (emails: string[]) => {
     if (emails.length === 0) {
@@ -380,17 +376,6 @@ const SubmitPage: React.FC = () => {
     const invalidReceiver = findInvalidEmail(notificationReceiversInput)
     if (invalidReceiver) {
       setEmailValidationError(`Invalid receiver email: ${invalidReceiver}`)
-      return
-    }
-
-    const invalidCc = findInvalidEmail(notificationCcInput)
-    if (invalidCc) {
-      setEmailValidationError(`Invalid CC email: ${invalidCc}`)
-      return
-    }
-
-    if (!notificationReceivers.length && notificationCc.length > 0) {
-      setEmailValidationError('Please add at least one email under Receivers to enable notifications.')
       return
     }
 
@@ -456,8 +441,7 @@ const SubmitPage: React.FC = () => {
           description,
           branch: selectedBranch,
           model: selectedModel || undefined,
-          notificationEmails: notificationReceivers,
-          notificationCc
+          notificationEmails: notificationReceivers
         })
       })
 
@@ -581,6 +565,9 @@ const SubmitPage: React.FC = () => {
               <FileUpload onFileSelect={handleFileSelect} />
             </div>
 
+            {/* Separator */}
+            <div className={`border-t ${theme === 'dark' ? 'border-gray-700' : 'border-gray-200'}`}></div>
+
             {/* Project Selection */}
             <div>
               <div className="flex items-center justify-between mb-2">
@@ -588,7 +575,7 @@ const SubmitPage: React.FC = () => {
                   theme === 'dark' ? 'text-gradient-primary' : 'text-gray-700'
                 }`}>
                   <div className="flex items-center space-x-2">
-                    <Settings className="w-5 h-5" />
+                    <Folder className="w-5 h-5" />
                     <span>Target Project</span>
                     <span className="text-red-500">*</span>
                   </div>
@@ -636,7 +623,10 @@ const SubmitPage: React.FC = () => {
                 <label className={`block text-sm font-medium ${
                   theme === 'dark' ? 'text-gradient-primary' : 'text-gray-700'
                 }`}>
-                  Target Branch
+                  <div className="flex items-center space-x-2">
+                    <GitBranch className="w-5 h-5" />
+                    <span>Target Branch</span>
+                  </div>
                 </label>
                 {selectedProject && (
                   <button
@@ -677,13 +667,16 @@ const SubmitPage: React.FC = () => {
               )}
             </div>
 
+            {/* Separator */}
+            <div className={`border-t ${theme === 'dark' ? 'border-gray-700' : 'border-gray-200'}`}></div>
+
             {/* Model Selection for Commit Generation & Conflict Resolution */}
             <div>
               <label className={`block text-sm font-medium mb-2 ${
                 theme === 'dark' ? 'text-gradient-primary' : 'text-gray-700'
               }`}>
                 <div className="flex items-center space-x-2">
-                  <Settings className="w-5 h-5" />
+                  <Brain className="w-5 h-5" />
                   <span>AI Model for Commit Generation & Conflict Resolution</span>
                 </div>
               </label>
@@ -710,12 +703,16 @@ const SubmitPage: React.FC = () => {
               )}
             </div>
 
+            {/* Separator */}
+            <div className={`border-t ${theme === 'dark' ? 'border-gray-700' : 'border-gray-200'}`}></div>
+
             {/* Commit Subject */}
             <div>
               <label className={`block text-sm font-medium mb-2 ${
                 theme === 'dark' ? 'text-gradient-primary' : 'text-gray-700'
               }`}>
                 <div className="flex items-center space-x-2">
+                  <MessageSquare className="w-5 h-5" />
                   <span>Commit Subject</span>
                   <span className="text-red-500">*</span>
                 </div>
@@ -739,7 +736,10 @@ const SubmitPage: React.FC = () => {
               <label className={`block text-sm font-medium mb-2 ${
                 theme === 'dark' ? 'text-gradient-primary' : 'text-gray-700'
               }`}>
-                Detailed Description
+                <div className="flex items-center space-x-2">
+                  <AlignLeft className="w-5 h-5" />
+                  <span>Detailed Description</span>
+                </div>
               </label>
               <textarea
                 value={description}
@@ -754,12 +754,18 @@ const SubmitPage: React.FC = () => {
               />
             </div>
 
+            {/* Separator */}
+            <div className={`border-t ${theme === 'dark' ? 'border-gray-700' : 'border-gray-200'}`}></div>
+
             {/* Commit Author Name */}
             <div>
               <label className={`block text-sm font-medium mb-2 ${
                 theme === 'dark' ? 'text-gradient-primary' : 'text-gray-700'
               }`}>
-                Author Name
+                <div className="flex items-center space-x-2">
+                  <User className="w-5 h-5" />
+                  <span>Author Name</span>
+                </div>
               </label>
               <input
                 type="text"
@@ -779,7 +785,10 @@ const SubmitPage: React.FC = () => {
               <label className={`block text-sm font-medium mb-2 ${
                 theme === 'dark' ? 'text-gradient-primary' : 'text-gray-700'
               }`}>
-                Author Email
+                <div className="flex items-center space-x-2">
+                  <Mail className="w-5 h-5" />
+                  <span>Author Email</span>
+                </div>
               </label>
               <input
                 type="email"
@@ -794,12 +803,18 @@ const SubmitPage: React.FC = () => {
               />
             </div>
 
+            {/* Separator */}
+            <div className={`border-t ${theme === 'dark' ? 'border-gray-700' : 'border-gray-200'}`}></div>
+
             {/* Notification Emails */}
             <div>
               <label className={`block text-sm font-medium mb-2 ${
                 theme === 'dark' ? 'text-gradient-primary' : 'text-gray-700'
               }`}>
-                Email Notifications
+                <div className="flex items-center space-x-2">
+                  <Bell className="w-5 h-5" />
+                  <span>Email Notifications</span>
+                </div>
               </label>
               <textarea
                 value={notificationReceiversInput}
@@ -813,27 +828,6 @@ const SubmitPage: React.FC = () => {
                 }`}
               />
               {renderEmailChips(notificationReceivers)}
-            </div>
-
-            {/* CC List */}
-            <div>
-              <label className={`block text-sm font-medium mb-2 ${
-                theme === 'dark' ? 'text-gradient-primary' : 'text-gray-700'
-              }`}>
-                CC List
-              </label>
-              <textarea
-                value={notificationCcInput}
-                onChange={(e) => setNotificationCcInput(e.target.value)}
-                placeholder="CC teammates, e.g. reviewer@example.com"
-                rows={2}
-                className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent ${
-                  theme === 'dark'
-                    ? 'input-gradient border-gradient-accent'
-                    : 'border-gray-300 bg-white'
-                }`}
-              />
-              {renderEmailChips(notificationCc)}
             </div>
 
             {emailValidationError && (
