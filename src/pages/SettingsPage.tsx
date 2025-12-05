@@ -278,24 +278,30 @@ export default function SettingsPage() {
               </h2>
             </div>
             <p className={`text-sm mb-4 ${theme === 'dark' ? 'text-gradient-secondary' : 'text-gray-600'}`}>
-              Test your MailChannels email configuration by sending a test email. The test will use the configured values from your Cloudflare Worker environment.
+              Test your email configuration by sending a test email. The test will use Resend (if configured) or fall back to MailChannels API.
             </p>
 
             <div className={`${theme === 'dark' ? 'bg-gradient-dark-subtle border border-gray-700/40' : 'bg-gray-50 border border-gray-200'} rounded-lg p-4 mb-4`}>
               <div className={`space-y-2 text-sm ${theme === 'dark' ? 'text-gradient-secondary' : 'text-gray-600'}`}>
                 <div className="flex items-center space-x-2">
-                  <span className="font-semibold">Configuration:</span>
+                  <span className="font-semibold">Resend Configuration (Recommended):</span>
                 </div>
                 <div className="pl-4 space-y-1">
-                  <div>• MAILCHANNELS_FROM_EMAIL: Set in wrangler.toml</div>
-                  <div>• MAILCHANNELS_FROM_NAME: Set in wrangler.toml</div>
-                  <div>• MAILCHANNELS_API_ENDPOINT: Set in wrangler.toml (optional, defaults to https://api.mailchannels.net/tx/v1/send)</div>
-                  <div>• MAILCHANNELS_API_KEY: Set in wrangler.toml (optional, required for paid MailChannels plans)</div>
+                  <div>• RESEND_API_KEY: Set in wrangler.toml (free tier: 3,000 emails/month)</div>
+                  <div>• RESEND_FROM_EMAIL: Set in wrangler.toml</div>
+                  <div>• RESEND_FROM_NAME: Set in wrangler.toml</div>
+                  <div>• RESEND_REPLY_TO_EMAIL: Set in wrangler.toml (optional)</div>
                 </div>
                 <div className={`mt-3 pt-3 border-t ${theme === 'dark' ? 'border-gray-700' : 'border-gray-200'}`}>
-                  <p className={`text-xs ${theme === 'dark' ? 'text-yellow-400' : 'text-yellow-700'}`}>
-                    ⚠️ Note: If you get a 401 error, MailChannels may require an API key. Add MAILCHANNELS_API_KEY to your wrangler.toml and redeploy.
-                  </p>
+                  <div className="flex items-center space-x-2">
+                    <span className="font-semibold">MailChannels Configuration (Fallback):</span>
+                  </div>
+                  <div className="pl-4 space-y-1 mt-1">
+                    <div>• MAILCHANNELS_FROM_EMAIL: Set in wrangler.toml</div>
+                    <div>• MAILCHANNELS_FROM_NAME: Set in wrangler.toml</div>
+                    <div>• MAILCHANNELS_API_ENDPOINT: Set in wrangler.toml (optional)</div>
+                    <div>• MAILCHANNELS_API_KEY: Set in wrangler.toml (required for paid plans)</div>
+                  </div>
                 </div>
               </div>
             </div>

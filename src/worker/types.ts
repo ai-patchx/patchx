@@ -27,6 +27,13 @@ export interface Env {
   CUSTOM_AI_TEMPERATURE?: string
   LITELLM_BASE_URL?: string
   LITELLM_API_KEY?: string
+  // Resend Email Configuration (free tier: 100 emails/day)
+  RESEND_API_KEY?: string
+  RESEND_FROM_EMAIL?: string
+  RESEND_FROM_NAME?: string
+  RESEND_REPLY_TO_EMAIL?: string
+
+  // Legacy MailChannels support (deprecated)
   MAILCHANNELS_FROM_EMAIL?: string
   MAILCHANNELS_FROM_NAME?: string
   MAILCHANNELS_REPLY_TO_EMAIL?: string

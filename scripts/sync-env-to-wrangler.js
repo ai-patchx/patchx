@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 /**
- * Sync Supabase, LiteLLM, and Gerrit environment variables from .env.local to wrangler.toml
+ * Sync Supabase, LiteLLM, Resend, MailChannels, and Gerrit environment variables from .env.local to wrangler.toml
  * This allows the Worker to expose Supabase config via /api/config/public
  * so the frontend can use it even if Cloudflare Pages env vars aren't set.
  */
@@ -20,6 +20,10 @@ let supabaseAnonKey = ''
 let publicSiteUrl = ''
 let litellmBaseUrl = ''
 let litellmApiKey = ''
+let resendApiKey = ''
+let resendFromEmail = ''
+let resendFromName = ''
+let resendReplyTo = ''
 let mailFromEmail = ''
 let mailFromName = ''
 let mailReplyTo = ''
@@ -45,6 +49,14 @@ try {
       litellmBaseUrl = trimmed.split('=')[1]?.trim().replace(/^["']|["']$/g, '') || ''
     } else if (trimmed.startsWith('LITELLM_API_KEY=')) {
       litellmApiKey = trimmed.split('=')[1]?.trim().replace(/^["']|["']$/g, '') || ''
+    } else if (trimmed.startsWith('RESEND_API_KEY=')) {
+      resendApiKey = trimmed.split('=')[1]?.trim().replace(/^["']|["']$/g, '') || ''
+    } else if (trimmed.startsWith('RESEND_FROM_EMAIL=')) {
+      resendFromEmail = trimmed.split('=')[1]?.trim().replace(/^["']|["']$/g, '') || ''
+    } else if (trimmed.startsWith('RESEND_FROM_NAME=')) {
+      resendFromName = trimmed.split('=')[1]?.trim().replace(/^["']|["']$/g, '') || ''
+    } else if (trimmed.startsWith('RESEND_REPLY_TO_EMAIL=')) {
+      resendReplyTo = trimmed.split('=')[1]?.trim().replace(/^["']|["']$/g, '') || ''
     } else if (trimmed.startsWith('MAILCHANNELS_FROM_EMAIL=')) {
       mailFromEmail = trimmed.split('=')[1]?.trim().replace(/^["']|["']$/g, '') || ''
     } else if (trimmed.startsWith('MAILCHANNELS_FROM_NAME=')) {
@@ -82,6 +94,18 @@ if (!publicSiteUrl) {
   console.warn('⚠️  Warning: VITE_PUBLIC_SITE_URL not found in .env.local. Using existing value in wrangler.toml.')
 }
 
+if (!resendApiKey) {
+  console.warn('⚠️  Warning: RESEND_API_KEY not found in .env.local. Resend email service will not be available.')
+}
+if (!resendFromEmail) {
+  console.warn('⚠️  Warning: RESEND_FROM_EMAIL not found in .env.local. Resend email service will not be available.')
+}
+if (!resendFromName) {
+  console.warn('⚠️  Warning: RESEND_FROM_NAME not found in .env.local.')
+}
+if (!resendReplyTo) {
+  console.warn('⚠️  Warning: RESEND_REPLY_TO_EMAIL not found in .env.local.')
+}
 if (!mailFromEmail) {
   console.warn('⚠️  Warning: MAILCHANNELS_FROM_EMAIL not found in .env.local. Email notifications may use stale values in wrangler.toml.')
 }
@@ -141,6 +165,11 @@ if (publicSiteUrl) {
 // First, remove all existing LITELLM entries (including placeholders) to avoid duplicates
 wranglerContent = wranglerContent.replace(/^LITELLM_BASE_URL\s*=.*$/gm, '')
 wranglerContent = wranglerContent.replace(/^LITELLM_API_KEY\s*=.*$/gm, '')
+// Remove all existing Resend entries to avoid duplicates
+wranglerContent = wranglerContent.replace(/^RESEND_API_KEY\s*=.*$/gm, '')
+wranglerContent = wranglerContent.replace(/^RESEND_FROM_EMAIL\s*=.*$/gm, '')
+wranglerContent = wranglerContent.replace(/^RESEND_FROM_NAME\s*=.*$/gm, '')
+wranglerContent = wranglerContent.replace(/^RESEND_REPLY_TO_EMAIL\s*=.*$/gm, '')
 // Clean up multiple consecutive empty lines
 wranglerContent = wranglerContent.replace(/\n\n\n+/g, '\n\n')
 
@@ -222,6 +251,13 @@ const updateMailVar = (key, value) => {
   }
 }
 
+// Update Resend variables
+updateMailVar('RESEND_API_KEY', resendApiKey)
+updateMailVar('RESEND_FROM_EMAIL', resendFromEmail)
+updateMailVar('RESEND_FROM_NAME', resendFromName)
+updateMailVar('RESEND_REPLY_TO_EMAIL', resendReplyTo)
+
+// Update MailChannels variables (fallback)
 updateMailVar('MAILCHANNELS_FROM_EMAIL', mailFromEmail)
 updateMailVar('MAILCHANNELS_FROM_NAME', mailFromName)
 updateMailVar('MAILCHANNELS_REPLY_TO_EMAIL', mailReplyTo)
@@ -462,6 +498,104 @@ if (litellmApiKey) {
 
   if (insertIndex3 >= 0) {
     lines3.splice(insertIndex3 + 1, 0, `LITELLM_API_KEY = "${litellmApiKey}"`)
+    wranglerContent = lines3.join('\n')
+  }
+}
+
+// Add Resend variables if configured
+if (resendApiKey && resendFromEmail) {
+  // Add to default [vars] section after LITELLM_API_KEY or VITE_PUBLIC_SITE_URL
+  const lines = wranglerContent.split('\n')
+  let inVarsSection = false
+  let insertIndex = -1
+
+  for (let i = 0; i < lines.length; i++) {
+    if (lines[i].trim() === '[vars]') {
+      inVarsSection = true
+    } else if (lines[i].trim().startsWith('[') && lines[i].trim() !== '[vars]') {
+      if (inVarsSection) {
+        break
+      }
+    }
+    if (inVarsSection) {
+      if (lines[i].includes('LITELLM_API_KEY =')) {
+        insertIndex = i
+        break
+      } else if (lines[i].includes('VITE_PUBLIC_SITE_URL =') && insertIndex === -1) {
+        insertIndex = i
+      }
+    }
+  }
+
+  if (insertIndex >= 0) {
+    const resendVars = []
+    if (resendApiKey) resendVars.push(`RESEND_API_KEY = "${resendApiKey}"`)
+    if (resendFromEmail) resendVars.push(`RESEND_FROM_EMAIL = "${resendFromEmail}"`)
+    if (resendFromName) resendVars.push(`RESEND_FROM_NAME = "${resendFromName}"`)
+    if (resendReplyTo) resendVars.push(`RESEND_REPLY_TO_EMAIL = "${resendReplyTo}"`)
+    lines.splice(insertIndex + 1, 0, '', ...resendVars)
+    wranglerContent = lines.join('\n')
+  }
+
+  // Add to [env.production.vars] after LITELLM_API_KEY or VITE_PUBLIC_SITE_URL
+  const lines2 = wranglerContent.split('\n')
+  let inProductionSection = false
+  let insertIndex2 = -1
+
+  for (let i = 0; i < lines2.length; i++) {
+    if (lines2[i].trim() === '[env.production.vars]') {
+      inProductionSection = true
+    } else if (lines2[i].trim().startsWith('[') && lines2[i].trim() !== '[env.production.vars]') {
+      if (inProductionSection && lines2[i].trim() === '[env.staging.vars]') {
+        break
+      }
+    }
+    if (inProductionSection) {
+      if (lines2[i].includes('LITELLM_API_KEY =')) {
+        insertIndex2 = i
+        break
+      } else if (lines2[i].includes('VITE_PUBLIC_SITE_URL =') && insertIndex2 === -1) {
+        insertIndex2 = i
+      }
+    }
+  }
+
+  if (insertIndex2 >= 0) {
+    const resendVars = []
+    if (resendApiKey) resendVars.push(`RESEND_API_KEY = "${resendApiKey}"`)
+    if (resendFromEmail) resendVars.push(`RESEND_FROM_EMAIL = "${resendFromEmail}"`)
+    if (resendFromName) resendVars.push(`RESEND_FROM_NAME = "${resendFromName}"`)
+    if (resendReplyTo) resendVars.push(`RESEND_REPLY_TO_EMAIL = "${resendReplyTo}"`)
+    lines2.splice(insertIndex2 + 1, 0, '', ...resendVars)
+    wranglerContent = lines2.join('\n')
+  }
+
+  // Add to [env.staging.vars] after LITELLM_API_KEY or VITE_PUBLIC_SITE_URL
+  const lines3 = wranglerContent.split('\n')
+  let inStagingSection = false
+  let insertIndex3 = -1
+
+  for (let i = 0; i < lines3.length; i++) {
+    if (lines3[i].trim() === '[env.staging.vars]') {
+      inStagingSection = true
+    }
+    if (inStagingSection) {
+      if (lines3[i].includes('LITELLM_API_KEY =')) {
+        insertIndex3 = i
+        break
+      } else if (lines3[i].includes('VITE_PUBLIC_SITE_URL =') && insertIndex3 === -1) {
+        insertIndex3 = i
+      }
+    }
+  }
+
+  if (insertIndex3 >= 0) {
+    const resendVars = []
+    if (resendApiKey) resendVars.push(`RESEND_API_KEY = "${resendApiKey}"`)
+    if (resendFromEmail) resendVars.push(`RESEND_FROM_EMAIL = "${resendFromEmail}"`)
+    if (resendFromName) resendVars.push(`RESEND_FROM_NAME = "${resendFromName}"`)
+    if (resendReplyTo) resendVars.push(`RESEND_REPLY_TO_EMAIL = "${resendReplyTo}"`)
+    lines3.splice(insertIndex3 + 1, 0, '', ...resendVars)
     wranglerContent = lines3.join('\n')
   }
 }

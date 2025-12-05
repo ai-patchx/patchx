@@ -1750,23 +1750,6 @@ async function handleTestNode(path: string, env: Env, corsHeaders: Record<string
 
 async function handleTestEmail(request: Request, env: Env, corsHeaders: Record<string, string>): Promise<Response> {
   try {
-    // Validate required environment variables
-    if (!env.MAILCHANNELS_FROM_EMAIL) {
-      return new Response(
-        JSON.stringify({
-          success: false,
-          error: 'MAILCHANNELS_FROM_EMAIL is not configured'
-        }),
-        {
-          status: 400,
-          headers: {
-            'Content-Type': 'application/json',
-            ...corsHeaders
-          }
-        }
-      )
-    }
-
     // Parse request body
     const body = await request.json() as { email?: string }
     const testEmail = body?.email?.trim()
@@ -1805,10 +1788,139 @@ async function handleTestEmail(request: Request, env: Env, corsHeaders: Record<s
       )
     }
 
-    // Prepare test email payload
+    // Check if Resend is configured (preferred method)
+    const useResend = !!(env.RESEND_API_KEY && env.RESEND_FROM_EMAIL)
+    const fromEmail = env.RESEND_FROM_EMAIL || env.MAILCHANNELS_FROM_EMAIL
+    const fromName = env.RESEND_FROM_NAME || env.MAILCHANNELS_FROM_NAME || 'PatchX'
+
+    if (!fromEmail) {
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: 'RESEND_FROM_EMAIL or MAILCHANNELS_FROM_EMAIL is not configured'
+        }),
+        {
+          status: 400,
+          headers: {
+            'Content-Type': 'application/json',
+            ...corsHeaders
+          }
+        }
+      )
+    }
+
+    // Use Resend if configured
+    if (useResend) {
+      const testText = `This is a test email from PatchX to verify your Resend email configuration.
+
+Configuration Details:
+- From Email: ${fromEmail}
+- From Name: ${fromName}
+
+If you received this email, your Resend configuration is working correctly!`
+
+      const testHtml = `
+        <div style="font-family: Arial, sans-serif; line-height: 1.6;">
+          <h2 style="color: #2563eb;">Resend Email Configuration Test</h2>
+          <p>This is a test email from PatchX to verify your Resend email configuration.</p>
+          <div style="background-color: #f1f5f9; padding: 16px; border-radius: 8px; margin: 16px 0;">
+            <h3 style="margin-top: 0; color: #475569;">Configuration Details:</h3>
+            <table style="border-collapse: collapse;">
+              <tr>
+                <td style="padding: 6px 12px; font-weight: bold; color: #475569;">From Email:</td>
+                <td style="padding: 6px 12px; color: #0f172a;">${fromEmail}</td>
+              </tr>
+              <tr>
+                <td style="padding: 6px 12px; font-weight: bold; color: #475569;">From Name:</td>
+                <td style="padding: 6px 12px; color: #0f172a;">${fromName}</td>
+              </tr>
+            </table>
+          </div>
+          <p style="color: #16a34a; font-weight: bold;">✓ If you received this email, your Resend configuration is working correctly!</p>
+          <p style="margin-top: 24px; color: #64748b; font-size: 12px;">
+            This email was sent automatically by PatchX.
+          </p>
+        </div>
+      `
+
+      try {
+        const response = await fetch('https://api.resend.com/emails', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${env.RESEND_API_KEY}`
+          },
+          body: JSON.stringify({
+            from: `${fromName} <${fromEmail}>`,
+            to: testEmail,
+            subject: '[PatchX] Resend Email Configuration Test',
+            text: testText,
+            html: testHtml
+          })
+        })
+
+        if (!response.ok) {
+          const errorText = await response.text()
+          console.error('Failed to send test email via Resend:', response.status, errorText)
+
+          let errorMessage = `Failed to send test email via Resend: ${response.status}`
+          try {
+            const errorJson = JSON.parse(errorText)
+            if (errorJson.message) {
+              errorMessage = `Resend error: ${errorJson.message}`
+            }
+          } catch {
+            errorMessage = `Failed to send test email via Resend: ${response.status} ${errorText.substring(0, 200)}`
+          }
+
+          return new Response(
+            JSON.stringify({
+              success: false,
+              error: errorMessage
+            }),
+            {
+              status: 200,
+              headers: {
+                'Content-Type': 'application/json',
+                ...corsHeaders
+              }
+            }
+          )
+        }
+
+        return new Response(
+          JSON.stringify({
+            success: true,
+            message: `Test email sent successfully to ${testEmail} via Resend`
+          }),
+          {
+            status: 200,
+            headers: {
+              'Content-Type': 'application/json',
+              ...corsHeaders
+            }
+          }
+        )
+      } catch (error) {
+        console.error('Error sending test email via Resend:', error)
+        return new Response(
+          JSON.stringify({
+            success: false,
+            error: error instanceof Error ? error.message : 'Failed to send test email via Resend'
+          }),
+          {
+            status: 200,
+            headers: {
+              'Content-Type': 'application/json',
+              ...corsHeaders
+            }
+          }
+        )
+      }
+    }
+
+    // Fall back to MailChannels API
     const endpoint = env.MAILCHANNELS_API_ENDPOINT || 'https://api.mailchannels.net/tx/v1/send'
-    const fromName = env.MAILCHANNELS_FROM_NAME || 'PatchX'
-    const fromEmail = env.MAILCHANNELS_FROM_EMAIL
 
     const payload = {
       personalizations: [

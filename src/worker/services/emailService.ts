@@ -44,8 +44,12 @@ export class EmailService {
       return false
     }
 
-    if (!this.env.MAILCHANNELS_FROM_EMAIL) {
-      console.warn('Email notification skipped: MAILCHANNELS_FROM_EMAIL is not configured')
+    // Check if Resend is configured (preferred method)
+    const useResend = !!(this.env.RESEND_API_KEY && this.env.RESEND_FROM_EMAIL)
+    const fromEmail = this.env.RESEND_FROM_EMAIL || this.env.MAILCHANNELS_FROM_EMAIL
+
+    if (!fromEmail) {
+      console.warn('Email notification skipped: RESEND_FROM_EMAIL or MAILCHANNELS_FROM_EMAIL is not configured')
       return false
     }
 
@@ -59,7 +63,25 @@ export class EmailService {
 
     const plainText = this.buildPlainText(submission, stage, statusInfo.description, statusPageUrl)
     const html = this.buildHtml(submission, stage, statusInfo.description, statusPageUrl)
+    const subject = `[PatchX] ${statusInfo.title}: ${submission.subject}`
+    const fromName = this.env.RESEND_FROM_NAME || this.env.MAILCHANNELS_FROM_NAME || 'PatchX'
+    const replyTo = this.env.RESEND_REPLY_TO_EMAIL || this.env.MAILCHANNELS_REPLY_TO_EMAIL
 
+    // Use Resend if configured (preferred method)
+    if (useResend) {
+      return await this.sendViaResend({
+        to: recipients,
+        cc: ccRecipients.length > 0 ? ccRecipients : undefined,
+        from: fromEmail,
+        fromName,
+        replyTo,
+        subject,
+        text: plainText,
+        html
+      })
+    }
+
+    // Fall back to MailChannels API
     const personalization: Record<string, unknown> = {
       to: recipients.map(email => ({ email })),
       headers: {
@@ -74,19 +96,19 @@ export class EmailService {
     const payload = {
       personalizations: [personalization],
       from: {
-        email: this.env.MAILCHANNELS_FROM_EMAIL,
-        name: this.env.MAILCHANNELS_FROM_NAME || 'PatchX Notifications'
+        email: fromEmail,
+        name: fromName
       },
-      subject: `[PatchX] ${statusInfo.title}: ${submission.subject}`,
+      subject,
       content: [
         { type: 'text/plain', value: plainText },
         { type: 'text/html', value: html }
       ],
-      ...(this.env.MAILCHANNELS_REPLY_TO_EMAIL
+      ...(replyTo
         ? {
             reply_to: {
-              email: this.env.MAILCHANNELS_REPLY_TO_EMAIL,
-              name: this.env.MAILCHANNELS_FROM_NAME || 'PatchX Notifications'
+              email: replyTo,
+              name: fromName
             }
           }
         : {})
@@ -232,6 +254,55 @@ export class EmailService {
           return char
       }
     })
+  }
+
+  private async sendViaResend(options: {
+    to: string[]
+    cc?: string[]
+    from: string
+    fromName: string
+    replyTo?: string
+    subject: string
+    text: string
+    html: string
+  }): Promise<boolean> {
+    try {
+      const payload: Record<string, unknown> = {
+        from: `${options.fromName} <${options.from}>`,
+        to: options.to,
+        subject: options.subject,
+        text: options.text,
+        html: options.html
+      }
+
+      if (options.cc && options.cc.length > 0) {
+        payload.cc = options.cc
+      }
+
+      if (options.replyTo) {
+        payload.reply_to = options.replyTo
+      }
+
+      const response = await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${this.env.RESEND_API_KEY}`
+        },
+        body: JSON.stringify(payload)
+      })
+
+      if (!response.ok) {
+        const errorText = await response.text()
+        console.error('Failed to send email via Resend:', response.status, errorText)
+        return false
+      }
+
+      return true
+    } catch (error) {
+      console.error('Unexpected error while sending email via Resend:', error)
+      return false
+    }
   }
 }
 

@@ -320,7 +320,33 @@ LITELLM_API_KEY=your-litellm-api-key
 
 ### Email notification setup
 
-Patch submission status emails are sent through [MailChannels](https://mailchannels.com/) directly from the Cloudflare Worker.
+Patch submission status emails are sent via [Resend](https://resend.com/) (free tier available) or MailChannels API (fallback).
+
+#### Option 1: Resend (Recommended - Free Tier Available)
+
+Resend offers a generous free tier:
+- **3,000 emails per month**
+- **100 emails per day**
+
+#### Getting a Resend API Key
+
+1. **Sign up for Resend:**
+   - Visit [Resend](https://resend.com/) and create a free account
+   - No credit card required for the free tier
+
+2. **Get your API Key:**
+   - Log into your Resend dashboard
+   - Navigate to API Keys section
+   - Create a new API key
+   - Copy the API key (starts with `re_`)
+
+3. **Verify your domain (required for sending):**
+   - In Resend dashboard, go to Domains
+   - Add and verify your sending domain
+   - Follow DNS verification instructions
+   - Ensure your `RESEND_FROM_EMAIL` uses a verified domain
+
+#### Option 2: MailChannels API (Fallback)
 
 **Important:** As of August 2024, MailChannels discontinued their free service for Cloudflare Workers. You now need to sign up for a MailChannels Email API plan to send emails.
 
@@ -341,9 +367,29 @@ Patch submission status emails are sent through [MailChannels](https://mailchann
    - Follow MailChannels instructions to verify your sending domain
    - Ensure your `MAILCHANNELS_FROM_EMAIL` uses a verified domain
 
-#### Configuration
+#### Resend Configuration
 
 Configure the following variables in `wrangler.toml` (or the Cloudflare dashboard) for each environment:
+
+```bash
+RESEND_API_KEY=re_your-resend-api-key
+RESEND_FROM_EMAIL=no-reply@your-domain.com
+RESEND_FROM_NAME="PatchX"
+RESEND_REPLY_TO_EMAIL=patchx@your-domain.com   # optional
+```
+
+**Security Note:** For production, consider using Cloudflare Workers secrets instead of storing the API key in `wrangler.toml`:
+
+```bash
+# Set as a secret (not in wrangler.toml)
+wrangler secret put RESEND_API_KEY
+```
+
+Then access it in your worker code via `env.RESEND_API_KEY`.
+
+#### MailChannels Configuration (Fallback)
+
+If Resend is not configured, the system will fall back to MailChannels API:
 
 ```bash
 MAILCHANNELS_FROM_EMAIL=no-reply@your-domain.com
@@ -353,14 +399,12 @@ MAILCHANNELS_API_ENDPOINT=https://api.mailchannels.net/tx/v1/send   # optional o
 MAILCHANNELS_API_KEY=your-api-key-here   # required for paid plans
 ```
 
-**Security Note:** For production, consider using Cloudflare Workers secrets instead of storing the API key in `wrangler.toml`:
+**Security Note:** For production, consider using Cloudflare Workers secrets:
 
 ```bash
 # Set as a secret (not in wrangler.toml)
 wrangler secret put MAILCHANNELS_API_KEY
 ```
-
-Then access it in your worker code via `env.MAILCHANNELS_API_KEY`.
 
 #### Testing Email Configuration
 
@@ -370,7 +414,7 @@ Once configured, you can test your email setup from the Settings page:
 3. Enter a test email address
 4. Click "Send Test Email"
 
-The test will verify that your MailChannels configuration (FROM_EMAIL, FROM_NAME, API_ENDPOINT, and API_KEY) is working correctly.
+The test will verify that your email configuration (Resend or MailChannels) is working correctly. If Resend is configured, it will be used; otherwise, it falls back to MailChannels API.
 
 Once configured, the Submit page shows two new fields—**Email Notifications** and **CC List**—so contributors can decide who will receive processing/completed/failed status updates for every patch.
 

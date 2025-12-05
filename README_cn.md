@@ -324,7 +324,33 @@ LITELLM_API_KEY=your-litellm-api-key
 
 ### 邮件通知配置
 
-补丁提交流程通过 [MailChannels](https://mailchannels.com/) 在 Cloudflare Worker 中直接发送状态邮件。
+补丁提交流程通过 [Resend](https://resend.com/)（提供免费套餐）或 MailChannels API（备用方案）发送状态邮件。
+
+#### 选项 1：Resend（推荐 - 提供免费套餐）
+
+Resend 提供慷慨的免费套餐：
+- **每月 3,000 封邮件**
+- **每天 100 封邮件**
+
+#### 获取 Resend API 密钥
+
+1. **注册 Resend：**
+   - 访问 [Resend](https://resend.com/) 并创建免费账户
+   - 免费套餐无需信用卡
+
+2. **获取您的 API 密钥：**
+   - 登录您的 Resend 控制台
+   - 导航到 API Keys（API 密钥）部分
+   - 创建新的 API 密钥
+   - 复制 API 密钥（以 `re_` 开头）
+
+3. **验证您的域名（发送邮件必需）：**
+   - 在 Resend 控制台中，转到 Domains（域名）
+   - 添加并验证您的发送域名
+   - 按照 DNS 验证说明操作
+   - 确保您的 `RESEND_FROM_EMAIL` 使用已验证的域名
+
+#### 选项 2：MailChannels API（备用方案）
 
 **重要提示：** 自 2024 年 8 月起，MailChannels 已停止为 Cloudflare Workers 提供免费服务。您现在需要注册 MailChannels Email API 计划才能发送邮件。
 
@@ -345,9 +371,29 @@ LITELLM_API_KEY=your-litellm-api-key
    - 按照 MailChannels 的说明验证您的发送域名
    - 确保您的 `MAILCHANNELS_FROM_EMAIL` 使用已验证的域名
 
-#### 配置
+#### Resend 配置
 
 请在 `wrangler.toml`（或 Cloudflare 后台）中为各环境设置以下变量：
+
+```bash
+RESEND_API_KEY=re_your-resend-api-key
+RESEND_FROM_EMAIL=no-reply@your-domain.com
+RESEND_FROM_NAME="PatchX"
+RESEND_REPLY_TO_EMAIL=patchx@your-domain.com   # 可选
+```
+
+**安全提示：** 对于生产环境，建议使用 Cloudflare Workers 密钥而不是将 API 密钥存储在 `wrangler.toml` 中：
+
+```bash
+# 设置为密钥（不在 wrangler.toml 中）
+wrangler secret put RESEND_API_KEY
+```
+
+然后通过 `env.RESEND_API_KEY` 在 worker 代码中访问它。
+
+#### MailChannels 配置（备用方案）
+
+如果未配置 Resend，系统将回退到 MailChannels API：
 
 ```bash
 MAILCHANNELS_FROM_EMAIL=no-reply@your-domain.com
@@ -357,14 +403,12 @@ MAILCHANNELS_API_ENDPOINT=https://api.mailchannels.net/tx/v1/send   # 可选覆�
 MAILCHANNELS_API_KEY=your-api-key-here   # 付费计划必需
 ```
 
-**安全提示：** 对于生产环境，建议使用 Cloudflare Workers 密钥而不是将 API 密钥存储在 `wrangler.toml` 中：
+**安全提示：** 对于生产环境，建议使用 Cloudflare Workers 密钥：
 
 ```bash
 # 设置为密钥（不在 wrangler.toml 中）
 wrangler secret put MAILCHANNELS_API_KEY
 ```
-
-然后通过 `env.MAILCHANNELS_API_KEY` 在 worker 代码中访问它。
 
 #### 测试邮件配置
 
@@ -374,7 +418,7 @@ wrangler secret put MAILCHANNELS_API_KEY
 3. 输入测试邮箱地址
 4. 点击"发送测试邮件"
 
-测试将验证您的 MailChannels 配置（FROM_EMAIL、FROM_NAME、API_ENDPOINT 和 API_KEY）是否正常工作。
+测试将验证您的邮件配置（Resend 或 MailChannels）是否正常工作。如果配置了 Resend，将使用 Resend；否则将回退到 MailChannels API。
 
 配置完成后，提交页面将显示 **Email Notifications** 与 **CC List** 输入框，允许为每次提交单独指定接收人与抄送名单，并在“处理中 / 成功 / 失败”时收到通知。
 
