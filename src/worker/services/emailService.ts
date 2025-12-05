@@ -94,11 +94,18 @@ export class EmailService {
 
     try {
       const endpoint = this.env.MAILCHANNELS_API_ENDPOINT || 'https://api.mailchannels.net/tx/v1/send'
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json'
+      }
+
+      // Add API key if configured (for MailChannels paid plans)
+      if (this.env.MAILCHANNELS_API_KEY) {
+        headers['Authorization'] = `Bearer ${this.env.MAILCHANNELS_API_KEY}`
+      }
+
       const response = await fetch(endpoint, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
+        headers,
         body: JSON.stringify(payload)
       })
 

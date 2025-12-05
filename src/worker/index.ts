@@ -82,7 +82,8 @@ export default {
               projects: '/api/projects',
               projectBranches: '/api/projects/:project/branches',
               nodes: '/api/nodes',
-              nodeTest: '/api/nodes/:id/test'
+              nodeTest: '/api/nodes/:id/test',
+              emailTest: '/api/email/test'
             },
             documentation: 'https://github.com/your-repo/aosp-patch-service'
           }),
@@ -135,6 +136,8 @@ export default {
         return await handleDeleteNode(path, env, corsHeaders)
       } else if (path.startsWith('/api/nodes/') && path.endsWith('/test') && method === 'POST') {
         return await handleTestNode(path, env, corsHeaders)
+      } else if (path === '/api/email/test' && method === 'POST') {
+        return await handleTestEmail(request, env, corsHeaders)
       }
 
       else {
@@ -1733,6 +1736,223 @@ async function handleTestNode(path: string, env: Env, corsHeaders: Record<string
       JSON.stringify({
         success: false,
         error: error instanceof Error ? error.message : 'Failed to test node connection'
+      }),
+      {
+        status: 500,
+        headers: {
+          'Content-Type': 'application/json',
+          ...corsHeaders
+        }
+      }
+    )
+  }
+}
+
+async function handleTestEmail(request: Request, env: Env, corsHeaders: Record<string, string>): Promise<Response> {
+  try {
+    // Validate required environment variables
+    if (!env.MAILCHANNELS_FROM_EMAIL) {
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: 'MAILCHANNELS_FROM_EMAIL is not configured'
+        }),
+        {
+          status: 400,
+          headers: {
+            'Content-Type': 'application/json',
+            ...corsHeaders
+          }
+        }
+      )
+    }
+
+    // Parse request body
+    const body = await request.json() as { email?: string }
+    const testEmail = body?.email?.trim()
+
+    if (!testEmail) {
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: 'Email address is required'
+        }),
+        {
+          status: 400,
+          headers: {
+            'Content-Type': 'application/json',
+            ...corsHeaders
+          }
+        }
+      )
+    }
+
+    // Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/i
+    if (!emailRegex.test(testEmail)) {
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: 'Invalid email address format'
+        }),
+        {
+          status: 400,
+          headers: {
+            'Content-Type': 'application/json',
+            ...corsHeaders
+          }
+        }
+      )
+    }
+
+    // Prepare test email payload
+    const endpoint = env.MAILCHANNELS_API_ENDPOINT || 'https://api.mailchannels.net/tx/v1/send'
+    const fromName = env.MAILCHANNELS_FROM_NAME || 'PatchX'
+    const fromEmail = env.MAILCHANNELS_FROM_EMAIL
+
+    const payload = {
+      personalizations: [
+        {
+          to: [{ email: testEmail }]
+        }
+      ],
+      from: {
+        email: fromEmail,
+        name: fromName
+      },
+      subject: '[PatchX] Email Configuration Test',
+      content: [
+        {
+          type: 'text/plain',
+          value: `This is a test email from PatchX to verify your email configuration.
+
+Configuration Details:
+- From Email: ${fromEmail}
+- From Name: ${fromName}
+- API Endpoint: ${endpoint}
+
+If you received this email, your MailChannels configuration is working correctly!`
+        },
+        {
+          type: 'text/html',
+          value: `
+            <div style="font-family: Arial, sans-serif; line-height: 1.6;">
+              <h2 style="color: #2563eb;">Email Configuration Test</h2>
+              <p>This is a test email from PatchX to verify your email configuration.</p>
+              <div style="background-color: #f1f5f9; padding: 16px; border-radius: 8px; margin: 16px 0;">
+                <h3 style="margin-top: 0; color: #475569;">Configuration Details:</h3>
+                <table style="border-collapse: collapse;">
+                  <tr>
+                    <td style="padding: 6px 12px; font-weight: bold; color: #475569;">From Email:</td>
+                    <td style="padding: 6px 12px; color: #0f172a;">${fromEmail}</td>
+                  </tr>
+                  <tr>
+                    <td style="padding: 6px 12px; font-weight: bold; color: #475569;">From Name:</td>
+                    <td style="padding: 6px 12px; color: #0f172a;">${fromName}</td>
+                  </tr>
+                  <tr>
+                    <td style="padding: 6px 12px; font-weight: bold; color: #475569;">API Endpoint:</td>
+                    <td style="padding: 6px 12px; color: #0f172a;">${endpoint}</td>
+                  </tr>
+                </table>
+              </div>
+              <p style="color: #16a34a; font-weight: bold;">✓ If you received this email, your MailChannels configuration is working correctly!</p>
+              <p style="margin-top: 24px; color: #64748b; font-size: 12px;">
+                This email was sent automatically by PatchX.
+              </p>
+            </div>
+          `
+        }
+      ],
+      ...(env.MAILCHANNELS_REPLY_TO_EMAIL
+        ? {
+            reply_to: {
+              email: env.MAILCHANNELS_REPLY_TO_EMAIL,
+              name: fromName
+            }
+          }
+        : {})
+    }
+
+    // Send test email
+    // Note: MailChannels may require authentication depending on your plan
+    // If you get 401 errors, you may need to add API key authentication
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json'
+    }
+
+    // Add API key if configured (for MailChannels paid plans)
+    if (env.MAILCHANNELS_API_KEY) {
+      headers['Authorization'] = `Bearer ${env.MAILCHANNELS_API_KEY}`
+    }
+
+    const response = await fetch(endpoint, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(payload)
+    })
+
+    if (!response.ok) {
+      const errorText = await response.text()
+      console.error('Failed to send test email:', response.status, errorText)
+
+      // Provide helpful error messages
+      let errorMessage = `Failed to send test email: ${response.status}`
+      if (response.status === 401) {
+        errorMessage = 'Authentication required. MailChannels may require an API key. Please check your MailChannels configuration and ensure MAILCHANNELS_API_KEY is set if using a paid plan.'
+      } else if (response.status === 403) {
+        errorMessage = 'Access forbidden. Please verify your MailChannels account and API key permissions.'
+      } else {
+        // Try to extract meaningful error from response
+        try {
+          const errorJson = JSON.parse(errorText)
+          if (errorJson.errors && Array.isArray(errorJson.errors)) {
+            errorMessage = `MailChannels error: ${errorJson.errors.map((e: any) => e.message || e).join(', ')}`
+          } else if (errorJson.message) {
+            errorMessage = `MailChannels error: ${errorJson.message}`
+          } else {
+            errorMessage = `Failed to send test email: ${response.status} ${errorText.substring(0, 200)}`
+          }
+        } catch {
+          // If not JSON, use the text as-is (truncated)
+          errorMessage = `Failed to send test email: ${response.status} ${errorText.substring(0, 200)}`
+        }
+      }
+
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: errorMessage
+        }),
+        {
+          status: 200, // Return 200 so frontend can display the error message
+          headers: {
+            'Content-Type': 'application/json',
+            ...corsHeaders
+          }
+        }
+      )
+    }
+
+    return new Response(
+      JSON.stringify({
+        success: true,
+        message: `Test email sent successfully to ${testEmail}`
+      }),
+      {
+        status: 200,
+        headers: {
+          'Content-Type': 'application/json',
+          ...corsHeaders
+        }
+      }
+    )
+  } catch (error) {
+    console.error('Error sending test email:', error)
+    return new Response(
+      JSON.stringify({
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to send test email'
       }),
       {
         status: 500,

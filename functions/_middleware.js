@@ -48,6 +48,11 @@ export async function onRequest(context) {
     return proxyToWorker(request, 'https://patchx-service.angersax.workers.dev');
   }
 
+  // Proxy /api/email/test to Worker
+  if (pathname === '/api/email/test' && request.method === 'POST') {
+    return proxyToWorker(request, 'https://patchx-service.angersax.workers.dev');
+  }
+
   return context.next();
 }
 

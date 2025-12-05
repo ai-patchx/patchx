@@ -324,14 +324,57 @@ LITELLM_API_KEY=your-litellm-api-key
 
 ### 邮件通知配置
 
-补丁提交流程通过 [MailChannels](https://mailchannels.com/) 在 Cloudflare Worker 中直接发送状态邮件。请在 `wrangler.toml`（或 Cloudflare 后台）中为各环境设置以下变量：
+补丁提交流程通过 [MailChannels](https://mailchannels.com/) 在 Cloudflare Worker 中直接发送状态邮件。
+
+**重要提示：** 自 2024 年 8 月起，MailChannels 已停止为 Cloudflare Workers 提供免费服务。您现在需要注册 MailChannels Email API 计划才能发送邮件。
+
+#### 获取 MailChannels API 密钥
+
+1. **注册 MailChannels Email API：**
+   - 访问 [MailChannels Email API](https://mailchannels.com/email-api) 并注册一个计划
+   - 选择适合您邮件发送量的计划
+
+2. **获取您的 API 密钥：**
+   - 登录您的 MailChannels 控制台
+   - 导航到 API Keys（API 密钥）部分
+   - 创建新的 API 密钥
+   - 复制 API 密钥（之后将无法再次查看）
+
+3. **验证您的域名（如需要）：**
+   - 某些计划需要域名验证
+   - 按照 MailChannels 的说明验证您的发送域名
+   - 确保您的 `MAILCHANNELS_FROM_EMAIL` 使用已验证的域名
+
+#### 配置
+
+请在 `wrangler.toml`（或 Cloudflare 后台）中为各环境设置以下变量：
 
 ```bash
 MAILCHANNELS_FROM_EMAIL=no-reply@your-domain.com
-MAILCHANNELS_FROM_NAME="PatchX Bot"
+MAILCHANNELS_FROM_NAME="PatchX"
 MAILCHANNELS_REPLY_TO_EMAIL=patchx@your-domain.com   # 可选
 MAILCHANNELS_API_ENDPOINT=https://api.mailchannels.net/tx/v1/send   # 可选覆写
+MAILCHANNELS_API_KEY=your-api-key-here   # 付费计划必需
 ```
+
+**安全提示：** 对于生产环境，建议使用 Cloudflare Workers 密钥而不是将 API 密钥存储在 `wrangler.toml` 中：
+
+```bash
+# 设置为密钥（不在 wrangler.toml 中）
+wrangler secret put MAILCHANNELS_API_KEY
+```
+
+然后通过 `env.MAILCHANNELS_API_KEY` 在 worker 代码中访问它。
+
+#### 测试邮件配置
+
+配置完成后，您可以从设置页面测试您的邮件设置：
+1. 导航到设置页面
+2. 滚动到"邮件配置测试"部分
+3. 输入测试邮箱地址
+4. 点击"发送测试邮件"
+
+测试将验证您的 MailChannels 配置（FROM_EMAIL、FROM_NAME、API_ENDPOINT 和 API_KEY）是否正常工作。
 
 配置完成后，提交页面将显示 **Email Notifications** 与 **CC List** 输入框，允许为每次提交单独指定接收人与抄送名单，并在“处理中 / 成功 / 失败”时收到通知。
 

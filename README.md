@@ -320,14 +320,57 @@ LITELLM_API_KEY=your-litellm-api-key
 
 ### Email notification setup
 
-Patch submission status emails are sent through [MailChannels](https://mailchannels.com/) directly from the Cloudflare Worker. Configure the following variables in `wrangler.toml` (or the Cloudflare dashboard) for each environment:
+Patch submission status emails are sent through [MailChannels](https://mailchannels.com/) directly from the Cloudflare Worker.
+
+**Important:** As of August 2024, MailChannels discontinued their free service for Cloudflare Workers. You now need to sign up for a MailChannels Email API plan to send emails.
+
+#### Getting a MailChannels API Key
+
+1. **Sign up for MailChannels Email API:**
+   - Visit [MailChannels Email API](https://mailchannels.com/email-api) and sign up for a plan
+   - Choose a plan that suits your email volume needs
+
+2. **Get your API Key:**
+   - Log into your MailChannels dashboard
+   - Navigate to API Keys section
+   - Create a new API key
+   - Copy the API key (you won't be able to see it again)
+
+3. **Verify your domain (if required):**
+   - Some plans require domain verification
+   - Follow MailChannels instructions to verify your sending domain
+   - Ensure your `MAILCHANNELS_FROM_EMAIL` uses a verified domain
+
+#### Configuration
+
+Configure the following variables in `wrangler.toml` (or the Cloudflare dashboard) for each environment:
 
 ```bash
 MAILCHANNELS_FROM_EMAIL=no-reply@your-domain.com
-MAILCHANNELS_FROM_NAME="PatchX Bot"
+MAILCHANNELS_FROM_NAME="PatchX"
 MAILCHANNELS_REPLY_TO_EMAIL=patchx@your-domain.com   # optional
 MAILCHANNELS_API_ENDPOINT=https://api.mailchannels.net/tx/v1/send   # optional override
+MAILCHANNELS_API_KEY=your-api-key-here   # required for paid plans
 ```
+
+**Security Note:** For production, consider using Cloudflare Workers secrets instead of storing the API key in `wrangler.toml`:
+
+```bash
+# Set as a secret (not in wrangler.toml)
+wrangler secret put MAILCHANNELS_API_KEY
+```
+
+Then access it in your worker code via `env.MAILCHANNELS_API_KEY`.
+
+#### Testing Email Configuration
+
+Once configured, you can test your email setup from the Settings page:
+1. Navigate to Settings
+2. Scroll to "Email Configuration Test" section
+3. Enter a test email address
+4. Click "Send Test Email"
+
+The test will verify that your MailChannels configuration (FROM_EMAIL, FROM_NAME, API_ENDPOINT, and API_KEY) is working correctly.
 
 Once configured, the Submit page shows two new fields—**Email Notifications** and **CC List**—so contributors can decide who will receive processing/completed/failed status updates for every patch.
 

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Settings, Plus, Edit, Trash2, TestTube, Moon, Sun, ArrowLeft, Server, Key, Lock, Globe } from 'lucide-react'
+import { Settings, Plus, Edit, Trash2, TestTube, Moon, Sun, ArrowLeft, Server, Key, Lock, Globe, Mail, Send } from 'lucide-react'
 import useRemoteNodeStore from '@/stores/remoteNodeStore'
 import { useTheme } from '@/hooks/useTheme'
 import type { RemoteNode, RemoteNodeFormData } from '@/types'
@@ -22,6 +22,9 @@ export default function SettingsPage() {
     password: ''
   })
   const [testingNodeId, setTestingNodeId] = useState<string | null>(null)
+  const [testEmail, setTestEmail] = useState('')
+  const [testingEmail, setTestingEmail] = useState(false)
+  const [emailTestResult, setEmailTestResult] = useState<{ success: boolean; message: string } | null>(null)
 
   useEffect(() => {
     fetchNodes()
@@ -80,6 +83,42 @@ export default function SettingsPage() {
       alert('Connection test failed. Please check the error message.')
     } finally {
       setTestingNodeId(null)
+    }
+  }
+
+  const handleTestEmail = async () => {
+    if (!testEmail.trim()) {
+      setEmailTestResult({ success: false, message: 'Please enter an email address' })
+      return
+    }
+
+    setTestingEmail(true)
+    setEmailTestResult(null)
+
+    try {
+      const response = await fetch('/api/email/test', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ email: testEmail.trim() })
+      })
+
+      const data = await response.json() as { success: boolean; message?: string; error?: string }
+
+      if (data.success) {
+        setEmailTestResult({ success: true, message: data.message || 'Test email sent successfully!' })
+        setTestEmail('')
+      } else {
+        setEmailTestResult({ success: false, message: data.error || 'Failed to send test email' })
+      }
+    } catch (err) {
+      setEmailTestResult({
+        success: false,
+        message: err instanceof Error ? err.message : 'Failed to send test email'
+      })
+    } finally {
+      setTestingEmail(false)
     }
   }
 
@@ -229,6 +268,106 @@ export default function SettingsPage() {
               ))}
             </div>
           )}
+
+          {/* Email Test Section */}
+          <div className={`mt-8 pt-8 border-t ${theme === 'dark' ? 'border-gray-700' : 'border-gray-200'}`}>
+            <div className="flex items-center space-x-3 mb-4">
+              <Mail className={`w-6 h-6 ${theme === 'dark' ? 'text-gradient-primary' : 'text-gray-700'}`} />
+              <h2 className={`text-xl font-semibold ${theme === 'dark' ? 'text-gradient-primary' : 'text-gray-900'}`}>
+                Email Configuration Test
+              </h2>
+            </div>
+            <p className={`text-sm mb-4 ${theme === 'dark' ? 'text-gradient-secondary' : 'text-gray-600'}`}>
+              Test your MailChannels email configuration by sending a test email. The test will use the configured values from your Cloudflare Worker environment.
+            </p>
+
+            <div className={`${theme === 'dark' ? 'bg-gradient-dark-subtle border border-gray-700/40' : 'bg-gray-50 border border-gray-200'} rounded-lg p-4 mb-4`}>
+              <div className={`space-y-2 text-sm ${theme === 'dark' ? 'text-gradient-secondary' : 'text-gray-600'}`}>
+                <div className="flex items-center space-x-2">
+                  <span className="font-semibold">Configuration:</span>
+                </div>
+                <div className="pl-4 space-y-1">
+                  <div>• MAILCHANNELS_FROM_EMAIL: Set in wrangler.toml</div>
+                  <div>• MAILCHANNELS_FROM_NAME: Set in wrangler.toml</div>
+                  <div>• MAILCHANNELS_API_ENDPOINT: Set in wrangler.toml (optional, defaults to https://api.mailchannels.net/tx/v1/send)</div>
+                  <div>• MAILCHANNELS_API_KEY: Set in wrangler.toml (optional, required for paid MailChannels plans)</div>
+                </div>
+                <div className={`mt-3 pt-3 border-t ${theme === 'dark' ? 'border-gray-700' : 'border-gray-200'}`}>
+                  <p className={`text-xs ${theme === 'dark' ? 'text-yellow-400' : 'text-yellow-700'}`}>
+                    ⚠️ Note: If you get a 401 error, MailChannels may require an API key. Add MAILCHANNELS_API_KEY to your wrangler.toml and redeploy.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label htmlFor="testEmail" className={`block text-sm font-medium mb-2 ${theme === 'dark' ? 'text-gradient-primary' : 'text-gray-700'}`}>
+                  Test Email Address *
+                </label>
+                <div className="flex space-x-2">
+                  <input
+                    type="email"
+                    id="testEmail"
+                    value={testEmail}
+                    onChange={(e) => {
+                      setTestEmail(e.target.value)
+                      setEmailTestResult(null)
+                    }}
+                    placeholder="your-email@example.com"
+                    disabled={testingEmail}
+                    className={`flex-1 ${inputBase} ${theme === 'dark' ? inputDark : inputLight} ${testingEmail ? 'opacity-50' : ''}`}
+                  />
+                  <button
+                    onClick={handleTestEmail}
+                    disabled={testingEmail || !testEmail.trim()}
+                    className={`${theme === 'dark' ? 'btn-gradient' : 'bg-blue-600 hover:bg-blue-700'} text-white px-4 py-2 rounded-lg transition-colors duration-200 flex items-center disabled:opacity-50 disabled:cursor-not-allowed`}
+                  >
+                    {testingEmail ? (
+                      <>
+                        <TestTube className="w-4 h-4 mr-2 animate-pulse" />
+                        Sending...
+                      </>
+                    ) : (
+                      <>
+                        <Send className="w-4 h-4 mr-2" />
+                        Send Test Email
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+
+              {emailTestResult && (
+                <div
+                  className={`p-3 rounded-lg ${
+                    emailTestResult.success
+                      ? theme === 'dark'
+                        ? 'bg-green-900/30 border border-green-700/50'
+                        : 'bg-green-50 border border-green-200'
+                      : theme === 'dark'
+                        ? 'bg-red-900/30 border border-red-700/50'
+                        : 'bg-red-50 border border-red-200'
+                  }`}
+                >
+                  <p
+                    className={`text-sm ${
+                      emailTestResult.success
+                        ? theme === 'dark'
+                          ? 'text-green-400'
+                          : 'text-green-800'
+                        : theme === 'dark'
+                          ? 'text-red-400'
+                          : 'text-red-800'
+                    }`}
+                  >
+                    {emailTestResult.success ? '✓ ' : '✗ '}
+                    {emailTestResult.message}
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
         </div>
       </div>
 
