@@ -32,6 +32,7 @@ let gerritBaseUrl = ''
 let gerritUsername = ''
 let gerritPassword = ''
 let cacheVersion = ''
+let testUserPassword = ''
 
 try {
   const envLocalPath = join(rootDir, '.env.local')
@@ -73,6 +74,8 @@ try {
       gerritPassword = trimmed.split('=')[1]?.trim().replace(/^["']|["']$/g, '') || ''
     } else if (trimmed.startsWith('CACHE_VERSION=')) {
       cacheVersion = trimmed.split('=')[1]?.trim().replace(/^["']|["']$/g, '') || 'v1'
+    } else if (trimmed.startsWith('TEST_USER_PASSWORD=')) {
+      testUserPassword = trimmed.split('=')[1]?.trim().replace(/^["']|["']$/g, '') || ''
     }
   }
 } catch (error) {
@@ -130,6 +133,10 @@ if (!gerritUsername || !gerritPassword) {
 if (!cacheVersion) {
   console.warn('⚠️  Warning: CACHE_VERSION not found in .env.local. Using default: v1')
   cacheVersion = 'v1'
+}
+
+if (!testUserPassword) {
+  console.warn('⚠️  Warning: TEST_USER_PASSWORD not found in .env.local. Using existing value in wrangler.toml.')
 }
 
 // Read wrangler.toml
@@ -598,6 +605,15 @@ if (resendApiKey && resendFromEmail) {
     lines3.splice(insertIndex3 + 1, 0, '', ...resendVars)
     wranglerContent = lines3.join('\n')
   }
+}
+
+// Update TEST_USER_PASSWORD in all sections
+if (testUserPassword) {
+  // Update TEST_USER_PASSWORD using regex replacement (works for all sections)
+  wranglerContent = wranglerContent.replace(
+    /TEST_USER_PASSWORD\s*=\s*"[^"]*"/g,
+    `TEST_USER_PASSWORD = "${testUserPassword}"`
+  )
 }
 
 // Update CACHE_VERSION in all sections
