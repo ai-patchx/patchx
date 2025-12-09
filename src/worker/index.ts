@@ -1811,18 +1811,18 @@ async function handleTestEmail(request: Request, env: Env, corsHeaders: Record<s
 
     // Use Resend if configured
     if (useResend) {
-      const testText = `This is a test email from PatchX to verify your Resend email configuration.
+      const testText = `This is a test email from PatchX to verify your email configuration.
 
 Configuration Details:
 - From Email: ${fromEmail}
 - From Name: ${fromName}
 
-If you received this email, your Resend configuration is working correctly!`
+If you received this email, your email configuration is working correctly!`
 
       const testHtml = `
         <div style="font-family: Arial, sans-serif; line-height: 1.6;">
-          <h2 style="color: #2563eb;">Resend Email Configuration Test</h2>
-          <p>This is a test email from PatchX to verify your Resend email configuration.</p>
+          <h2 style="color: #2563eb;">Email Configuration Test</h2>
+          <p>This is a test email from PatchX to verify your email configuration.</p>
           <div style="background-color: #f1f5f9; padding: 16px; border-radius: 8px; margin: 16px 0;">
             <h3 style="margin-top: 0; color: #475569;">Configuration Details:</h3>
             <table style="border-collapse: collapse;">
@@ -1836,7 +1836,7 @@ If you received this email, your Resend configuration is working correctly!`
               </tr>
             </table>
           </div>
-          <p style="color: #16a34a; font-weight: bold;">✓ If you received this email, your Resend configuration is working correctly!</p>
+          <p style="color: #16a34a; font-weight: bold;">✓ If you received this email, your email configuration is working correctly!</p>
           <p style="margin-top: 24px; color: #64748b; font-size: 12px;">
             This email was sent automatically by PatchX.
           </p>
@@ -1853,7 +1853,7 @@ If you received this email, your Resend configuration is working correctly!`
           body: JSON.stringify({
             from: `${fromName} <${fromEmail}>`,
             to: testEmail,
-            subject: '[PatchX] Resend Email Configuration Test',
+            subject: '[PatchX] Email Configuration Test',
             text: testText,
             html: testHtml
           })
