@@ -4,7 +4,7 @@ export async function onRequestPost(context) {
   const url = new URL(request.url);
   const pathname = url.pathname;
 
-  // Proxy /api/auth/login to Worker (Worker has TEST_USER_PASSWORD env var configured)
+  // Proxy /api/auth/login to Worker (Worker has TEST_USER_PASSWORD and ADMIN_USER_PASSWORD env vars configured)
   if (pathname === '/api/auth/login') {
     const workerUrl = 'https://patchx-service.angersax.workers.dev';
     try {

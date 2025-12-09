@@ -9,6 +9,7 @@ export interface LoginResponse {
   user: {
     id: string
     username: string
+    role?: string
   }
   token: string
   message?: string
@@ -18,6 +19,7 @@ export interface UserResponse {
   user: {
     id: string
     username: string
+    role?: string
   }
   message?: string
 }

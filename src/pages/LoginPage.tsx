@@ -41,7 +41,7 @@ export default function LoginPage() {
 
     try {
       const useWorkerAuth = import.meta.env.VITE_USE_WORKER_AUTH === 'true'
-      if (useWorkerAuth || username === 'patchx') {
+      if (useWorkerAuth || username === 'patchx' || username === 'admin') {
         await signInWorker(username, password)
       } else {
         await signIn(username, password)

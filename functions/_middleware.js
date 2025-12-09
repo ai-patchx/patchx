@@ -14,7 +14,7 @@ export async function onRequest(context) {
     });
   }
 
-  // Proxy /api/auth/login to Worker (Worker has TEST_USER_PASSWORD env var configured)
+  // Proxy /api/auth/login to Worker (Worker has TEST_USER_PASSWORD and ADMIN_USER_PASSWORD env vars configured)
   if (pathname === '/api/auth/login' && request.method === 'POST') {
     return proxyToWorker(request, 'https://patchx-service.angersax.workers.dev');
   }

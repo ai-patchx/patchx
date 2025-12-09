@@ -40,13 +40,30 @@ export async function onRequest(context) {
       return env.TEST_USER_PASSWORD || 'patchx';
     };
 
-    const VALID_CREDENTIALS = {
-      username: 'patchx',
-      password: getTestPassword()
+    // Get admin password from environment
+    const getAdminPassword = () => {
+      return env.ADMIN_USER_PASSWORD || 'admin';
     };
 
+    const VALID_CREDENTIALS = [
+      {
+        username: 'patchx',
+        password: getTestPassword(),
+        role: 'user'
+      },
+      {
+        username: 'admin',
+        password: getAdminPassword(),
+        role: 'administrator'
+      }
+    ];
+
     // Validate credentials
-    if (username !== VALID_CREDENTIALS.username || password !== VALID_CREDENTIALS.password) {
+    const validCredential = VALID_CREDENTIALS.find(
+      cred => cred.username === username && cred.password === password
+    );
+
+    if (!validCredential) {
       return new Response(
         JSON.stringify({ message: '用户名或密码错误' }),
         {
@@ -63,14 +80,16 @@ export async function onRequest(context) {
 
     // Create user and token
     const user = {
-      id: 'user-123',
-      username: username
+      id: username === 'admin' ? 'admin-123' : 'user-123',
+      username: username,
+      role: validCredential.role
     };
 
     // Simple token generation
     const token = btoa(JSON.stringify({
       userId: user.id,
       username: user.username,
+      role: user.role,
       exp: Date.now() + 24 * 60 * 60 * 1000 // 24 hours
     }));
 

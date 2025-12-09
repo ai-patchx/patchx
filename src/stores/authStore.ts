@@ -5,6 +5,7 @@ import type { User } from '@supabase/supabase-js'
 interface WorkerUser {
   id: string
   username: string
+  role?: string
 }
 
 interface AuthState {

@@ -57,6 +57,7 @@ export default defineConfig({
     'import.meta.env.GIT_HASH': JSON.stringify(gitHash),
     'import.meta.env.BUILD_TIME': JSON.stringify(new Date().toISOString()),
     'import.meta.env.TEST_USER_PASSWORD': JSON.stringify(getEnv('TEST_USER_PASSWORD') || 'patchx'),
+    'import.meta.env.ADMIN_USER_PASSWORD': JSON.stringify(getEnv('ADMIN_USER_PASSWORD') || 'admin'),
     'import.meta.env.SUPABASE_URL': JSON.stringify(getEnv('SUPABASE_URL')),
     'import.meta.env.SUPABASE_ANON_KEY': JSON.stringify(getEnv('SUPABASE_ANON_KEY')),
   },

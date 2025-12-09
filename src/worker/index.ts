@@ -385,13 +385,35 @@ async function handleLogin(request: Request, env: Env, corsHeaders: Record<strin
       return 'patchx'
     }
 
-    const VALID_CREDENTIALS = {
-      username: 'patchx',
-      password: getTestPassword()
+    // 获取管理员账号密码
+    const getAdminPassword = () => {
+      // 支持 Cloudflare Workers 环境变量
+      if (env.ADMIN_USER_PASSWORD) {
+        return env.ADMIN_USER_PASSWORD
+      }
+      // 默认密码
+      return 'admin'
     }
 
+    const VALID_CREDENTIALS = [
+      {
+        username: 'patchx',
+        password: getTestPassword(),
+        role: 'user'
+      },
+      {
+        username: 'admin',
+        password: getAdminPassword(),
+        role: 'administrator'
+      }
+    ]
+
     // 验证凭据
-    if (username !== VALID_CREDENTIALS.username || password !== VALID_CREDENTIALS.password) {
+    const validCredential = VALID_CREDENTIALS.find(
+      cred => cred.username === username && cred.password === password
+    )
+
+    if (!validCredential) {
       return new Response(
         JSON.stringify({ message: '用户名或密码错误' }),
         {
@@ -406,14 +428,16 @@ async function handleLogin(request: Request, env: Env, corsHeaders: Record<strin
 
     // 创建用户对象和简单的 JWT token
     const user = {
-      id: 'user-123',
-      username: username
+      id: username === 'admin' ? 'admin-123' : 'user-123',
+      username: username,
+      role: validCredential.role
     }
 
     // 简单的 token 生成（使用 base64 编码）
     const token = btoa(JSON.stringify({
       userId: user.id,
       username: user.username,
+      role: user.role,
       exp: Date.now() + 24 * 60 * 60 * 1000 // 24 小时后过期
     }))
 

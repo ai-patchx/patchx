@@ -8,6 +8,7 @@ interface LoginRequest {
 interface User {
   id: string
   username: string
+  role?: string
 }
 
 interface LoginResponse {
@@ -36,10 +37,38 @@ const getTestPassword = () => {
   return 'patchx'
 }
 
-const VALID_CREDENTIALS = {
-  username: 'patchx',
-  password: getTestPassword()
+// 获取管理员账号密码，支持多种环境变量格式
+const getAdminPassword = () => {
+  // 支持 Vercel 环境变量
+  if (process.env.ADMIN_USER_PASSWORD) {
+    return process.env.ADMIN_USER_PASSWORD
+  }
+  // 支持 Cloudflare Workers 环境变量
+  const globalPassword = (globalThis as { ADMIN_USER_PASSWORD?: string }).ADMIN_USER_PASSWORD
+  if (globalPassword) {
+    return globalPassword
+  }
+  // 支持本地开发环境变量（通过 import.meta.env）
+  const metaEnv = (import.meta as unknown as { env?: { ADMIN_USER_PASSWORD?: string } }).env
+  if (metaEnv?.ADMIN_USER_PASSWORD) {
+    return metaEnv.ADMIN_USER_PASSWORD
+  }
+  // 默认密码
+  return 'admin'
 }
+
+const VALID_CREDENTIALS = [
+  {
+    username: 'patchx',
+    password: getTestPassword(),
+    role: 'user'
+  },
+  {
+    username: 'admin',
+    password: getAdminPassword(),
+    role: 'administrator'
+  }
+]
 
 export default async function handler(
   req: VercelRequest,
@@ -68,20 +97,26 @@ export default async function handler(
     }
 
     // 验证凭据
-    if (username !== VALID_CREDENTIALS.username || password !== VALID_CREDENTIALS.password) {
+    const validCredential = VALID_CREDENTIALS.find(
+      cred => cred.username === username && cred.password === password
+    )
+
+    if (!validCredential) {
       return res.status(401).json({ message: '用户名或密码错误' })
     }
 
     // 创建用户对象和简单的 JWT token（实际项目中应使用真实的 JWT 库）
     const user: User = {
-      id: 'user-123',
-      username: username
+      id: username === 'admin' ? 'admin-123' : 'user-123',
+      username: username,
+      role: validCredential.role
     }
 
     // 简单的 token 生成（实际项目中应使用 jwt 库）
     const token = Buffer.from(JSON.stringify({
       userId: user.id,
       username: user.username,
+      role: user.role,
       exp: Date.now() + 24 * 60 * 60 * 1000 // 24 小时后过期
     })).toString('base64')
 

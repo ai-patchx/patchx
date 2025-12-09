@@ -33,6 +33,7 @@ let gerritUsername = ''
 let gerritPassword = ''
 let cacheVersion = ''
 let testUserPassword = ''
+let adminUserPassword = ''
 
 try {
   const envLocalPath = join(rootDir, '.env.local')
@@ -76,6 +77,8 @@ try {
       cacheVersion = trimmed.split('=')[1]?.trim().replace(/^["']|["']$/g, '') || 'v1'
     } else if (trimmed.startsWith('TEST_USER_PASSWORD=')) {
       testUserPassword = trimmed.split('=')[1]?.trim().replace(/^["']|["']$/g, '') || ''
+    } else if (trimmed.startsWith('ADMIN_USER_PASSWORD=')) {
+      adminUserPassword = trimmed.split('=')[1]?.trim().replace(/^["']|["']$/g, '') || ''
     }
   }
 } catch (error) {
@@ -137,6 +140,10 @@ if (!cacheVersion) {
 
 if (!testUserPassword) {
   console.warn('⚠️  Warning: TEST_USER_PASSWORD not found in .env.local. Using existing value in wrangler.toml.')
+}
+
+if (!adminUserPassword) {
+  console.warn('⚠️  Warning: ADMIN_USER_PASSWORD not found in .env.local. Using existing value in wrangler.toml.')
 }
 
 // Read wrangler.toml
@@ -613,6 +620,15 @@ if (testUserPassword) {
   wranglerContent = wranglerContent.replace(
     /TEST_USER_PASSWORD\s*=\s*"[^"]*"/g,
     `TEST_USER_PASSWORD = "${testUserPassword}"`
+  )
+}
+
+// Update ADMIN_USER_PASSWORD in all sections
+if (adminUserPassword) {
+  // Update ADMIN_USER_PASSWORD using regex replacement (works for all sections)
+  wranglerContent = wranglerContent.replace(
+    /ADMIN_USER_PASSWORD\s*=\s*"[^"]*"/g,
+    `ADMIN_USER_PASSWORD = "${adminUserPassword}"`
   )
 }
 
