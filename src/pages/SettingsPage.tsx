@@ -1,14 +1,16 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Settings, Plus, Edit, Trash2, TestTube, Moon, Sun, ArrowLeft, Server, Key, Lock, Globe, Mail, Send } from 'lucide-react'
+import { Settings, Plus, Edit, Trash2, TestTube, Moon, Sun, ArrowLeft, Server, Key, Lock, Globe, Mail, Send, ShieldAlert } from 'lucide-react'
 import useRemoteNodeStore from '@/stores/remoteNodeStore'
 import { useTheme } from '@/hooks/useTheme'
+import { useAuthStore } from '@/stores/authStore'
 import type { RemoteNode, RemoteNodeFormData } from '@/types'
 import packageInfo from '../../package.json'
 
 export default function SettingsPage() {
   const navigate = useNavigate()
   const { theme, toggleTheme } = useTheme()
+  const { isAdmin } = useAuthStore()
   const { nodes, isLoading, error, fetchNodes, addNode, updateNode, deleteNode, testConnection, setError } = useRemoteNodeStore()
   const [showAddModal, setShowAddModal] = useState(false)
   const [editingNode, setEditingNode] = useState<RemoteNode | null>(null)
@@ -26,9 +28,18 @@ export default function SettingsPage() {
   const [testingEmail, setTestingEmail] = useState(false)
   const [emailTestResult, setEmailTestResult] = useState<{ success: boolean; message: string } | null>(null)
 
+  // Redirect non-admin users
   useEffect(() => {
-    fetchNodes()
-  }, [fetchNodes])
+    if (!isAdmin()) {
+      navigate('/submit', { replace: true })
+    }
+  }, [isAdmin, navigate])
+
+  useEffect(() => {
+    if (isAdmin()) {
+      fetchNodes()
+    }
+  }, [fetchNodes, isAdmin])
 
   const handleAddNode = () => {
     setEditingNode(null)
@@ -151,6 +162,29 @@ export default function SettingsPage() {
   const inputBase = 'block w-full pl-10 pr-3 py-2 rounded-md leading-5 placeholder-gray-500 focus:outline-none focus:placeholder-gray-400 focus:ring-1 focus:ring-blue-500'
   const inputLight = 'bg-white border border-gray-300 focus:border-blue-500'
   const inputDark = 'input-gradient border focus:border-blue-500'
+
+  // Don't render if not admin (will redirect)
+  if (!isAdmin()) {
+    return (
+      <div className="min-h-screen py-12 px-4 sm:px-6 lg:px-8 flex items-center justify-center">
+        <div className={`${theme === 'dark' ? 'gradient-card' : 'bg-white'} max-w-md mx-auto rounded-lg shadow-lg p-6 text-center`}>
+          <ShieldAlert className={`w-12 h-12 mx-auto mb-4 ${theme === 'dark' ? 'text-gradient-primary' : 'text-red-600'}`} />
+          <h2 className={`text-xl font-bold mb-2 ${theme === 'dark' ? 'text-gradient-primary' : 'text-gray-900'}`}>
+            Access Denied
+          </h2>
+          <p className={`mb-4 ${theme === 'dark' ? 'text-gradient-secondary' : 'text-gray-600'}`}>
+            This page is only accessible to administrators.
+          </p>
+          <button
+            onClick={() => navigate('/submit')}
+            className={`${theme === 'dark' ? 'btn-gradient' : 'bg-blue-600 hover:bg-blue-700 text-white'} px-4 py-2 rounded-lg transition-colors duration-200`}
+          >
+            Go to Submit Page
+          </button>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="min-h-screen py-12 px-4 sm:px-6 lg:px-8">

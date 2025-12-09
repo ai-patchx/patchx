@@ -7,6 +7,7 @@ import useFileUploadStore from '../stores/fileUploadStore'
 import useGitAuthorStore from '../stores/gitAuthorStore'
 import useProjectCacheStore from '../stores/projectCacheStore'
 import { useTheme } from '../hooks/useTheme'
+import { useAuthStore } from '../stores/authStore'
 import UserInfo from '../components/UserInfo'
 import packageInfo from '../../package.json'
 
@@ -25,6 +26,7 @@ const SubmitPage: React.FC = () => {
   const navigate = useNavigate()
   const { file, setUploadStatus, setUploadId, setError } = useFileUploadStore()
   const { theme, toggleTheme } = useTheme()
+  const { isAdmin } = useAuthStore()
   const { authorName, authorEmail, setAuthorName, setAuthorEmail, loadFromStorage } = useGitAuthorStore()
   const {
     getCachedProjects,
@@ -488,17 +490,19 @@ const SubmitPage: React.FC = () => {
       <div className="max-w-4xl mx-auto px-4">
         {/* Theme toggle, GitHub and Gerrit buttons */}
         <div className="flex justify-end mb-4 space-x-2">
-          <button
-            onClick={() => navigate('/settings')}
-            className={`p-2 rounded-lg transition-colors duration-200 ${
-              theme === 'dark'
-                ? 'bg-gradient-accent text-gradient-primary hover:bg-gradient-highlight'
-                : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-            }`}
-            title="Settings"
-          >
-            <Settings className="w-5 h-5" />
-          </button>
+          {isAdmin() && (
+            <button
+              onClick={() => navigate('/settings')}
+              className={`p-2 rounded-lg transition-colors duration-200 ${
+                theme === 'dark'
+                  ? 'bg-gradient-accent text-gradient-primary hover:bg-gradient-highlight'
+                  : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+              }`}
+              title="Settings"
+            >
+              <Settings className="w-5 h-5" />
+            </button>
+          )}
           <a
             href="https://github.com/ai-patchx/patchx"
             target="_blank"

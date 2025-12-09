@@ -11,7 +11,7 @@ import { useAuthStore } from './stores/authStore'
 
 function App() {
   const { theme } = useTheme()
-  const { user, workerUser, checkUser } = useAuthStore()
+  const { user, workerUser, checkUser, isAdmin } = useAuthStore()
   const [authChecked, setAuthChecked] = useState(false)
 
   useEffect(() => {
@@ -61,7 +61,7 @@ function App() {
           />
           <Route
             path="/settings"
-            element={(user || workerUser) ? <SettingsPage /> : <Navigate to="/" replace />}
+            element={isAdmin() ? <SettingsPage /> : <Navigate to="/submit" replace />}
           />
         </Routes>
       </div>

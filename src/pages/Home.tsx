@@ -11,7 +11,7 @@ export default function Home() {
   const { authorName, authorEmail, setAuthorName, setAuthorEmail, loadFromStorage } = useGitAuthorStore()
   const { theme, toggleTheme } = useTheme()
   const [showAuthModal, setShowAuthModal] = useState(false)
-  const { user, signOut } = useAuthStore()
+  const { user, signOut, isAdmin } = useAuthStore()
 
   useEffect(() => {
     loadFromStorage()
@@ -37,13 +37,15 @@ export default function Home() {
             <div className="flex space-x-2">
               {user ? (
                 <>
-                  <button
-                    onClick={() => navigate('/settings')}
-                    className={`${theme === 'dark' ? 'btn-gradient' : 'bg-blue-600 hover:bg-blue-700 text-white'} px-3 py-1 rounded-lg text-sm transition-colors duration-200 flex items-center`}
-                  >
-                    <Settings className="w-4 h-4 mr-1" />
-                    Settings
-                  </button>
+                  {isAdmin() && (
+                    <button
+                      onClick={() => navigate('/settings')}
+                      className={`${theme === 'dark' ? 'btn-gradient' : 'bg-blue-600 hover:bg-blue-700 text-white'} px-3 py-1 rounded-lg text-sm transition-colors duration-200 flex items-center`}
+                    >
+                      <Settings className="w-4 h-4 mr-1" />
+                      Settings
+                    </button>
+                  )}
                   <button
                     onClick={handleLogout}
                     className={`${theme === 'dark' ? 'bg-red-600 hover:bg-red-700' : 'bg-red-600 hover:bg-red-700'} text-white px-3 py-1 rounded-lg text-sm transition-colors duration-200`}

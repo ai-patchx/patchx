@@ -19,6 +19,7 @@ interface AuthState {
   signInWorker: (username: string, password: string) => Promise<void>
   signOut: () => Promise<void>
   checkUser: () => Promise<void>
+  isAdmin: () => boolean
 }
 
 export const useAuthStore = create<AuthState>((set, get) => ({
@@ -229,5 +230,11 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         set({ user: null, workerUser: null })
       }
     }
+  },
+
+  isAdmin: () => {
+    const state = get()
+    // Only worker users can be admins (regular Supabase users don't have role field)
+    return state.workerUser?.role === 'administrator'
   }
 }))
