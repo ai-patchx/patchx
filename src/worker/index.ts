@@ -529,12 +529,28 @@ async function handleSubmit(request: Request, env: Env, corsHeaders: Record<stri
     model?: string
     notificationEmails?: string[]
     notificationCc?: string[]
+    remoteNodeId?: string
+    gitRepository?: string
   }
-  const { uploadId, subject, description, branch, model } = body
+  const { uploadId, subject, description, branch, model, remoteNodeId, gitRepository } = body
 
   if (!uploadId || !subject || !branch) {
     return new Response(
       JSON.stringify({ success: false, error: '缺少必要参数' }),
+      {
+        status: 400,
+        headers: {
+          'Content-Type': 'application/json',
+          ...corsHeaders
+        }
+      }
+    )
+  }
+
+  // Validate: if remoteNodeId is provided, gitRepository should also be provided
+  if (remoteNodeId && !gitRepository) {
+    return new Response(
+      JSON.stringify({ success: false, error: 'Git repository URL is required when remote node is selected' }),
       {
         status: 400,
         headers: {
@@ -558,12 +574,14 @@ async function handleSubmit(request: Request, env: Env, corsHeaders: Record<stri
       branch,
       model,
       notificationEmails,
-      notificationCc
+      notificationCc,
+      remoteNodeId,
+      gitRepository
     )
 
-    // 异步提交到Gerrit（不等待完成）
+    // 异步提交到Gerrit或执行git命令（不等待完成）
     submissionService.submitToGerrit(submission.id).catch(error => {
-      console.error('Gerrit submission failed:', error)
+      console.error('Submission processing failed:', error)
     })
 
     return new Response(

@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { FileText, Settings, Send, Moon, Sun, Eye, Terminal, Github, Code, RefreshCw, Folder, GitBranch, Brain, MessageSquare, AlignLeft, User, Mail, Bell } from 'lucide-react'
+import { FileText, Settings, Send, Moon, Sun, Eye, Terminal, Github, Code, RefreshCw, Folder, GitBranch, Brain, MessageSquare, AlignLeft, User, Mail, Bell, Server, Link } from 'lucide-react'
 import FileUpload from '../components/FileUpload'
 import SearchableSelect from '../components/SearchableSelect'
 import useFileUploadStore from '../stores/fileUploadStore'
 import useGitAuthorStore from '../stores/gitAuthorStore'
 import useProjectCacheStore from '../stores/projectCacheStore'
+import useRemoteNodeStore from '../stores/remoteNodeStore'
 import { useTheme } from '../hooks/useTheme'
 import { useAuthStore } from '../stores/authStore'
 import UserInfo from '../components/UserInfo'
@@ -36,10 +37,13 @@ const SubmitPage: React.FC = () => {
     clearBranchesCache,
     loadFromStorage: loadCacheFromStorage
   } = useProjectCacheStore()
+  const { nodes, fetchNodes } = useRemoteNodeStore()
 
   const [selectedProject, setSelectedProject] = useState('')
   const [selectedBranch, setSelectedBranch] = useState('main')
   const [selectedModel, setSelectedModel] = useState('')
+  const [selectedRemoteNode, setSelectedRemoteNode] = useState('')
+  const [gitRepository, setGitRepository] = useState('')
   const [models, setModels] = useState<Array<{ id: string; name: string; provider: string }>>([])
   const [isLoadingModels, setIsLoadingModels] = useState(false)
   const [projects, setProjects] = useState<Array<{ id: string; name: string; description?: string }>>([])
@@ -67,7 +71,8 @@ const SubmitPage: React.FC = () => {
 
     fetchModels()
     fetchProjects()
-  }, [loadFromStorage, loadCacheFromStorage, getCachedProjects])
+    fetchNodes()
+  }, [loadFromStorage, loadCacheFromStorage, getCachedProjects, fetchNodes])
 
   useEffect(() => {
     if (selectedProject) {
@@ -375,6 +380,12 @@ const SubmitPage: React.FC = () => {
       return
     }
 
+    // Validate: if remote node is selected, git repository is required
+    if (selectedRemoteNode && !gitRepository) {
+      setError('Git repository URL is required when a remote node is selected')
+      return
+    }
+
     const invalidReceiver = findInvalidEmail(notificationReceiversInput)
     if (invalidReceiver) {
       setEmailValidationError(`Invalid receiver email: ${invalidReceiver}`)
@@ -443,7 +454,9 @@ const SubmitPage: React.FC = () => {
           description,
           branch: selectedBranch,
           model: selectedModel || undefined,
-          notificationEmails: notificationReceivers
+          notificationEmails: notificationReceivers,
+          remoteNodeId: selectedRemoteNode || undefined,
+          gitRepository: gitRepository || undefined
         })
       })
 
@@ -674,6 +687,67 @@ const SubmitPage: React.FC = () => {
             {/* Separator */}
             <div className={`border-t ${theme === 'dark' ? 'border-gray-700' : 'border-gray-200'}`}></div>
 
+            {/* Remote Node Selection */}
+            <div>
+              <label className={`block text-sm font-medium mb-2 ${
+                theme === 'dark' ? 'text-gradient-primary' : 'text-gray-700'
+              }`}>
+                <div className="flex items-center space-x-2">
+                  <Server className="w-5 h-5" />
+                  <span>Remote Node</span>
+                </div>
+              </label>
+              <SearchableSelect
+                options={nodes.map((node) => ({
+                  value: node.id,
+                  label: `${node.name} (${node.username}@${node.host}:${node.port})`
+                }))}
+                value={selectedRemoteNode}
+                onChange={setSelectedRemoteNode}
+                placeholder="Select a remote node (optional)"
+                disabled={nodes.length === 0}
+                isLoading={false}
+                emptyMessage="No remote nodes available. Configure nodes in Settings page."
+                loadingMessage="Loading remote nodes..."
+                theme={theme}
+              />
+            </div>
+
+            {/* Git Repository URL (Required if remote node is selected) */}
+            {selectedRemoteNode && (
+              <div>
+                <label className={`block text-sm font-medium mb-2 ${
+                  theme === 'dark' ? 'text-gradient-primary' : 'text-gray-700'
+                }`}>
+                  <div className="flex items-center space-x-2">
+                    <Link className="w-5 h-5" />
+                    <span>Git Repository URL</span>
+                    <span className="text-red-500">*</span>
+                  </div>
+                </label>
+                <input
+                  type="text"
+                  value={gitRepository}
+                  onChange={(e) => setGitRepository(e.target.value)}
+                  placeholder="https://github.com/user/repo.git or git@github.com:user/repo.git"
+                  className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent ${
+                    theme === 'dark'
+                      ? 'input-gradient border-gradient-accent'
+                      : 'border-gray-300 bg-white'
+                  }`}
+                  required={!!selectedRemoteNode}
+                />
+                <p className={`text-xs mt-1 ${
+                  theme === 'dark' ? 'text-gradient-secondary opacity-70' : 'text-gray-500'
+                }`}>
+                  Repository URL where git commands (clone, apply patch, etc.) will be executed on the remote node.
+                </p>
+              </div>
+            )}
+
+            {/* Separator */}
+            <div className={`border-t ${theme === 'dark' ? 'border-gray-700' : 'border-gray-200'}`}></div>
+
             {/* Model Selection for Commit Generation & Conflict Resolution */}
             <div>
               <label className={`block text-sm font-medium mb-2 ${
@@ -884,12 +958,12 @@ const SubmitPage: React.FC = () => {
               </button>
               <button
                 type="submit"
-                disabled={!file || !selectedProject || !subject || isSubmitting}
+                disabled={!file || !selectedProject || !subject || isSubmitting || (selectedRemoteNode && !gitRepository)}
                 className={`
                   flex items-center space-x-2 px-6 py-3 rounded-md font-medium
                   transition-colors duration-200
                   ${
-                    !file || !selectedProject || !subject || isSubmitting
+                    !file || !selectedProject || !subject || isSubmitting || (selectedRemoteNode && !gitRepository)
                       ? theme === 'dark'
                         ? 'bg-gradient-highlight text-gradient-secondary cursor-not-allowed'
                         : 'bg-gray-300 text-gray-500 cursor-not-allowed'

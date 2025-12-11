@@ -68,7 +68,8 @@ export interface Submission {
   model?: string
   notificationEmails?: string[]
   notificationCc?: string[]
+  remoteNodeId?: string
+  gitRepository?: string
   createdAt: string
   updatedAt: string
 }
-import type { KVNamespace } from '@cloudflare/workers-types'

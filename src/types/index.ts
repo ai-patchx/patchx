@@ -22,6 +22,8 @@ export interface Submission {
   error?: string
   notificationEmails?: string[]
   notificationCc?: string[]
+  remoteNodeId?: string
+  gitRepository?: string
   createdAt: string
   updatedAt: string
 }
