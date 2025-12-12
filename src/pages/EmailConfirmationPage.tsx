@@ -129,7 +129,7 @@ export default function EmailConfirmationPage() {
   }, [searchParams, navigate, checkUser])
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-dark px-4">
+    <div className="min-h-screen flex items-center justify-center px-4">
       <div className="max-w-md w-full bg-white dark:bg-gray-800 rounded-lg shadow-lg p-8 text-center">
         {status === 'loading' && (
           <>

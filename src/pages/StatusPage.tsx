@@ -109,7 +109,7 @@ const StatusPage: React.FC = () => {
 
   if (loading && !status) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="min-h-screen flex items-center justify-center px-4">
         <div className="text-center">
           <RefreshCw className={`w-12 h-12 animate-spin mx-auto mb-4 ${
             theme === 'dark' ? 'text-blue-400' : 'text-blue-500'
@@ -124,8 +124,8 @@ const StatusPage: React.FC = () => {
 
   if (error) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className={`rounded-lg shadow-lg p-8 max-w-md w-full mx-4 ${
+      <div className="min-h-screen flex items-center justify-center px-4">
+        <div className={`rounded-lg shadow-lg p-8 max-w-md w-full ${
           theme === 'dark' ? 'gradient-card' : 'bg-white'
         }`}>
           <div className="text-center">
@@ -154,8 +154,8 @@ const StatusPage: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen py-8">
-      <div className="max-w-4xl mx-auto px-4">
+    <div className="min-h-screen flex items-center justify-center py-8 px-4">
+      <div className="max-w-4xl w-full">
         {/* Theme toggle button */}
         <div className="flex justify-end mb-4">
           <button

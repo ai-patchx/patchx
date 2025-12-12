@@ -499,8 +499,8 @@ const SubmitPage: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen py-8 relative">
-      <div className="max-w-4xl mx-auto px-4">
+    <div className="min-h-screen flex items-center justify-center py-8 px-4 relative">
+      <div className="max-w-4xl w-full">
         {/* Theme toggle, GitHub and Gerrit buttons */}
         <div className="flex justify-end mb-4 space-x-2">
           {isAdmin() && (

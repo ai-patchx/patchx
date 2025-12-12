@@ -30,8 +30,8 @@ export default function Home() {
   const inputDark = 'input-gradient border focus:border-blue-500'
 
   return (
-    <div className="min-h-screen py-12 px-4 sm:px-6 lg:px-8">
-      <div className={`${theme === 'dark' ? 'gradient-card' : 'bg-white'} max-w-md mx-auto rounded-lg shadow-lg overflow-hidden`}>
+    <div className="min-h-screen flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
+      <div className={`${theme === 'dark' ? 'gradient-card' : 'bg-white'} max-w-md w-full rounded-lg shadow-lg overflow-hidden`}>
         <div className="px-6 py-6">
           <div className="flex justify-between items-center mb-4">
             <div className="flex space-x-2">

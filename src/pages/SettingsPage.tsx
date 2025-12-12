@@ -187,8 +187,8 @@ export default function SettingsPage() {
   }
 
   return (
-    <div className="min-h-screen py-12 px-4 sm:px-6 lg:px-8">
-      <div className={`${theme === 'dark' ? 'gradient-card' : 'bg-white'} max-w-4xl mx-auto rounded-lg shadow-lg overflow-hidden`}>
+    <div className="min-h-screen flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
+      <div className={`${theme === 'dark' ? 'gradient-card' : 'bg-white'} max-w-4xl w-full rounded-lg shadow-lg overflow-hidden`}>
         <div className="px-6 py-6">
           {/* Header */}
           <div className="flex justify-between items-center mb-6">
