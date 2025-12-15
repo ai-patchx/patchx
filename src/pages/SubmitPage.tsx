@@ -700,7 +700,8 @@ const SubmitPage: React.FC = () => {
               <SearchableSelect
                 options={nodes.map((node) => ({
                   value: node.id,
-                  label: `${node.name} (${node.username}@${node.host}:${node.port})`
+                  // Only show the display name to avoid exposing connection details
+                  label: node.name
                 }))}
                 value={selectedRemoteNode}
                 onChange={setSelectedRemoteNode}
