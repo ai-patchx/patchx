@@ -1,5 +1,5 @@
 export interface Env {
-  AOSP_PATCH_KV: KVNamespace
+  AOSP_PATCH_KV?: KVNamespace
   GERRIT_BASE_URL: string
   GERRIT_USERNAME: string
   GERRIT_PASSWORD: string

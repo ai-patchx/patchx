@@ -1,11 +1,14 @@
 import { Env, Upload } from '../types'
 import { generateId, validatePatchFile } from '../utils'
+import { getKvNamespace, KVLike } from '../kv'
 
 export class UploadService {
   private env: Env
+  private kv: KVLike
 
   constructor(env: Env) {
     this.env = env
+    this.kv = getKvNamespace(env)
   }
 
   async createUpload(file: File, project: string): Promise<Upload> {
@@ -27,13 +30,13 @@ export class UploadService {
     }
 
     // 存储到KV
-    await this.env.AOSP_PATCH_KV.put(`uploads:${id}`, JSON.stringify(upload))
+    await this.kv.put(`uploads:${id}`, JSON.stringify(upload))
 
     return upload
   }
 
   async getUpload(id: string): Promise<Upload | null> {
-    const data = await this.env.AOSP_PATCH_KV.get(`uploads:${id}`)
+    const data = await this.kv.get(`uploads:${id}`)
     return data ? JSON.parse(data) : null
   }
 

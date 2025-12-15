@@ -1,4 +1,5 @@
 import { Env } from '../types'
+import { getKvNamespace, KVLike } from '../kv'
 
 interface RemoteNodeData {
   id: string
@@ -21,16 +22,18 @@ interface GitCommandResult {
 
 export class GitService {
   private env: Env
+  private kv: KVLike
 
   constructor(env: Env) {
     this.env = env
+    this.kv = getKvNamespace(env)
   }
 
   /**
    * Get remote node data from KV storage
    */
   private async getRemoteNode(nodeId: string): Promise<RemoteNodeData | null> {
-    const nodeData = await this.env.AOSP_PATCH_KV.get(`remote_nodes:${nodeId}`, 'json')
+    const nodeData = await this.kv.get(`remote_nodes:${nodeId}`, 'json')
     return nodeData as RemoteNodeData | null
   }
 
@@ -51,12 +54,12 @@ export class GitService {
     // 1. Use a separate Node.js service that handles SSH and expose it via HTTP API
     // 2. Use a library like 'ssh2' in a separate service
     // 3. Use an external SSH service
-    
+
     // For now, this is a placeholder that shows the structure
     // In production, replace this with actual SSH execution
-    
+
     const fullCommand = workingDir ? `cd ${workingDir} && ${command}` : command
-    
+
     // Placeholder: In production, this would execute the command via SSH
     // Example using a separate SSH service:
     // const response = await fetch('https://your-ssh-service.com/execute', {
@@ -72,7 +75,7 @@ export class GitService {
     //     command: fullCommand
     //   })
     // })
-    
+
     throw new Error(
       'SSH execution not implemented. Please set up an SSH service or use a library that supports SSH in Cloudflare Workers.'
     )

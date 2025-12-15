@@ -39,6 +39,10 @@ export async function onRequest(context) {
     return proxyToWorker(request, 'https://patchx-service.angersax.workers.dev');
   }
 
+  if (pathname === '/api/nodes/test-config' && request.method === 'POST') {
+    return proxyToWorker(request, 'https://patchx-service.angersax.workers.dev');
+  }
+
   // Proxy /api/nodes/:id routes to Worker
   if (pathname.startsWith('/api/nodes/') && (request.method === 'PUT' || request.method === 'DELETE')) {
     return proxyToWorker(request, 'https://patchx-service.angersax.workers.dev');

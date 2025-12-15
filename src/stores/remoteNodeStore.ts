@@ -17,6 +17,7 @@ interface RemoteNodeActions {
   updateNode: (id: string, node: RemoteNodeFormData) => Promise<void>
   deleteNode: (id: string) => Promise<void>
   testConnection: (id: string) => Promise<boolean>
+  testConnectionConfig: (node: RemoteNodeFormData) => Promise<{ success: boolean; message: string }>
   setError: (error: string | null) => void
 }
 
@@ -189,6 +190,31 @@ const useRemoteNodeStore = create<RemoteNodeState & RemoteNodeActions>((set, get
         isLoading: false
       })
       return false
+    }
+  },
+
+  testConnectionConfig: async (nodeData: RemoteNodeFormData) => {
+    set({ error: null })
+    try {
+      const response = await fetch('/api/nodes/test-config', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(nodeData)
+      })
+
+      const result = await response.json().catch(() => ({ success: false, error: 'Connection test failed' })) as { success?: boolean; message?: string; error?: string }
+
+      if (!response.ok || !result.success) {
+        throw new Error(result.error || 'Connection test failed')
+      }
+
+      return { success: true, message: result.message || 'Connection test succeeded' }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Connection test failed'
+      set({ error: message })
+      return { success: false, message }
     }
   }
 }))

@@ -1,4 +1,5 @@
 import { Env, Submission } from '../types'
+import { getKvNamespace, KVLike } from '../kv'
 import { generateId } from '../utils'
 import { UploadService } from './uploadService'
 import { GerritService } from './gerritService'
@@ -11,9 +12,11 @@ export class SubmissionService {
   private gerritService: GerritService
   private emailService: EmailService
   private gitService: GitService
+  private kv: KVLike
 
   constructor(env: Env) {
     this.env = env
+    this.kv = getKvNamespace(env)
     this.uploadService = new UploadService(env)
     this.gerritService = new GerritService(env)
     this.emailService = new EmailService(env)
@@ -61,7 +64,7 @@ export class SubmissionService {
     }
 
     // 存储到KV
-    await this.env.AOSP_PATCH_KV.put(`submissions:${id}`, JSON.stringify(submission))
+    await this.kv.put(`submissions:${id}`, JSON.stringify(submission))
 
     return submission
   }
@@ -76,7 +79,7 @@ export class SubmissionService {
       // 更新状态为处理中
       submission.status = 'processing'
       submission.updatedAt = new Date().toISOString()
-      await this.env.AOSP_PATCH_KV.put(`submissions:${submissionId}`, JSON.stringify(submission))
+      await this.kv.put(`submissions:${submissionId}`, JSON.stringify(submission))
       await this.sendNotification(submission, 'processing')
 
       // 获取上传的文件内容
@@ -129,7 +132,7 @@ export class SubmissionService {
       submission.changeUrl = gerritResult.changeUrl
       submission.updatedAt = new Date().toISOString()
 
-      await this.env.AOSP_PATCH_KV.put(`submissions:${submissionId}`, JSON.stringify(submission))
+      await this.kv.put(`submissions:${submissionId}`, JSON.stringify(submission))
       await this.sendNotification(submission, 'completed')
 
       return submission
@@ -139,7 +142,7 @@ export class SubmissionService {
       submission.error = error instanceof Error ? error.message : '提交失败'
       submission.updatedAt = new Date().toISOString()
 
-      await this.env.AOSP_PATCH_KV.put(`submissions:${submissionId}`, JSON.stringify(submission))
+      await this.kv.put(`submissions:${submissionId}`, JSON.stringify(submission))
       await this.sendNotification(submission, 'failed')
 
       throw error
@@ -147,7 +150,7 @@ export class SubmissionService {
   }
 
   async getSubmission(id: string): Promise<Submission | null> {
-    const data = await this.env.AOSP_PATCH_KV.get(`submissions:${id}`)
+    const data = await this.kv.get(`submissions:${id}`)
     return data ? JSON.parse(data) : null
   }
 

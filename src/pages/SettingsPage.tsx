@@ -11,7 +11,7 @@ export default function SettingsPage() {
   const navigate = useNavigate()
   const { theme, toggleTheme } = useTheme()
   const { isAdmin } = useAuthStore()
-  const { nodes, isLoading, error, fetchNodes, addNode, updateNode, deleteNode, testConnection, setError } = useRemoteNodeStore()
+  const { nodes, isLoading, error, fetchNodes, addNode, updateNode, deleteNode, testConnection, testConnectionConfig, setError } = useRemoteNodeStore()
   const [showAddModal, setShowAddModal] = useState(false)
   const [editingNode, setEditingNode] = useState<RemoteNode | null>(null)
   const [formData, setFormData] = useState<RemoteNodeFormData>({
@@ -24,6 +24,8 @@ export default function SettingsPage() {
     password: ''
   })
   const [testingNodeId, setTestingNodeId] = useState<string | null>(null)
+  const [testingConfig, setTestingConfig] = useState(false)
+  const [testConfigResult, setTestConfigResult] = useState<{ success: boolean; message: string } | null>(null)
   const [testEmail, setTestEmail] = useState('')
   const [testingEmail, setTestingEmail] = useState(false)
   const [emailTestResult, setEmailTestResult] = useState<{ success: boolean; message: string } | null>(null)
@@ -54,6 +56,7 @@ export default function SettingsPage() {
     })
     setShowAddModal(true)
     setError(null)
+    setTestConfigResult(null)
   }
 
   const handleEditNode = (node: RemoteNode) => {
@@ -69,6 +72,7 @@ export default function SettingsPage() {
     })
     setShowAddModal(true)
     setError(null)
+    setTestConfigResult(null)
   }
 
   const handleDeleteNode = async (id: string) => {
@@ -94,6 +98,23 @@ export default function SettingsPage() {
       alert('Connection test failed. Please check the error message.')
     } finally {
       setTestingNodeId(null)
+    }
+  }
+
+  const handleTestNewNodeConnection = async () => {
+    setError(null)
+    setTestConfigResult(null)
+    setTestingConfig(true)
+    try {
+      const result = await testConnectionConfig(formData)
+      setTestConfigResult(result)
+    } catch (err) {
+      setTestConfigResult({
+        success: false,
+        message: err instanceof Error ? err.message : 'Connection test failed'
+      })
+    } finally {
+      setTestingConfig(false)
     }
   }
 
@@ -512,6 +533,35 @@ export default function SettingsPage() {
                 </div>
               )}
 
+              {testConfigResult && (
+                <div
+                  className={`p-3 rounded-lg ${
+                    testConfigResult.success
+                      ? theme === 'dark'
+                        ? 'bg-green-900/30 border border-green-700/50'
+                        : 'bg-green-50 border border-green-200'
+                      : theme === 'dark'
+                        ? 'bg-red-900/30 border border-red-700/50'
+                        : 'bg-red-50 border border-red-200'
+                  }`}
+                >
+                  <p
+                    className={`text-sm ${
+                      testConfigResult.success
+                        ? theme === 'dark'
+                          ? 'text-green-400'
+                          : 'text-green-800'
+                        : theme === 'dark'
+                          ? 'text-red-400'
+                          : 'text-red-800'
+                    }`}
+                  >
+                    {testConfigResult.success ? '✓ ' : '✗ '}
+                    {testConfigResult.message}
+                  </p>
+                </div>
+              )}
+
               <div className="flex justify-end space-x-3 pt-4">
                 <button
                   type="button"
@@ -519,10 +569,19 @@ export default function SettingsPage() {
                     setShowAddModal(false)
                     setEditingNode(null)
                     setError(null)
+                    setTestConfigResult(null)
                   }}
                   className={`${theme === 'dark' ? 'bg-gray-600 hover:bg-gray-700' : 'bg-gray-200 hover:bg-gray-300'} text-gray-800 dark:text-white px-4 py-2 rounded-lg transition-colors duration-200`}
                 >
                   Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={testingConfig}
+                  onClick={handleTestNewNodeConnection}
+                  className={`${theme === 'dark' ? 'bg-blue-600 hover:bg-blue-700' : 'bg-blue-600 hover:bg-blue-700'} text-white px-4 py-2 rounded-lg transition-colors duration-200 disabled:opacity-50`}
+                >
+                  {testingConfig ? 'Testing...' : 'Test Connection'}
                 </button>
                 <button
                   type="submit"
