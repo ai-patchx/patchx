@@ -1,3 +1,4 @@
+import { connect } from 'cloudflare:sockets'
 import { Env } from './types'
 import { UploadService } from './services/uploadService'
 import { SubmissionService } from './services/submissionService'
@@ -1594,6 +1595,66 @@ async function handleDeleteNode(path: string, env: Env, corsHeaders: Record<stri
   }
 }
 
+const sshBannerEncoder = new TextEncoder()
+const sshBannerDecoder = new TextDecoder()
+
+async function performSshConnectionTest(host: string, port: number, timeoutMs = 8000): Promise<{ banner: string; latencyMs: number }> {
+  if (!host) {
+    throw new Error('Host is required')
+  }
+
+  const targetPort = Number.isFinite(port) ? port : 22
+
+  if (typeof connect !== 'function') {
+    throw new Error('SSH testing is not supported in this runtime')
+  }
+
+  const startedAt = Date.now()
+  const socket = connect({ hostname: host, port: targetPort })
+
+  const timeoutId = setTimeout(() => {
+    try {
+      socket.close()
+    } catch (closeError) {
+      console.warn('Failed to close SSH socket after timeout:', closeError)
+    }
+  }, timeoutMs)
+
+  try {
+    // Send a client identification string to prompt the server banner
+    const writer = socket.writable.getWriter()
+    await writer.write(sshBannerEncoder.encode('SSH-2.0-PatchX\r\n'))
+    writer.releaseLock()
+
+    const reader = socket.readable.getReader()
+    const readResult = await Promise.race([
+      reader.read(),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('Timed out waiting for SSH banner')), timeoutMs))
+    ]) as { value?: Uint8Array; done?: boolean }
+    reader.releaseLock()
+
+    if (!readResult || readResult.done || !readResult.value || readResult.value.length === 0) {
+      throw new Error('No response from SSH server')
+    }
+
+    const banner = sshBannerDecoder.decode(readResult.value).trim()
+    if (!banner.startsWith('SSH-')) {
+      throw new Error(`Unexpected response from server: ${banner || '<empty>'}`)
+    }
+
+    return { banner, latencyMs: Date.now() - startedAt }
+  } catch (error) {
+    throw new Error(error instanceof Error ? error.message : 'Failed to read SSH banner')
+  } finally {
+    clearTimeout(timeoutId)
+    try {
+      socket.close()
+    } catch (closeError) {
+      console.warn('Failed to close SSH socket:', closeError)
+    }
+  }
+}
+
 async function handleTestNode(path: string, env: Env, corsHeaders: Record<string, string>): Promise<Response> {
   try {
     const kv = getKvNamespace(env)
@@ -1631,11 +1692,6 @@ async function handleTestNode(path: string, env: Env, corsHeaders: Record<string
         }
       )
     }
-
-    // Note: Actual SSH connection testing would require server-side SSH client
-    // For now, we'll just validate the configuration
-    // In a real implementation, you would use a library like ssh2 or execute SSH commands
-    // This is a placeholder that validates the node configuration
 
     if (!node.host || !node.username) {
       return new Response(
@@ -1685,17 +1741,12 @@ async function handleTestNode(path: string, env: Env, corsHeaders: Record<string
       )
     }
 
-    // TODO: Implement actual SSH connection test
-    // For now, we'll return success if configuration is valid
-    // In production, you would:
-    // 1. Use a server-side SSH client library
-    // 2. Attempt to connect to the remote node
-    // 3. Return success/failure based on actual connection result
+    const { banner, latencyMs } = await performSshConnectionTest(node.host, node.port || 22)
 
     return new Response(
       JSON.stringify({
         success: true,
-        message: 'Node configuration is valid. Note: Actual connection test not implemented yet.'
+        message: `SSH reachable. Banner: ${banner}. Latency: ${latencyMs}ms`
       }),
       {
         status: 200,
@@ -1783,10 +1834,12 @@ async function handleTestNodeConfig(request: Request, corsHeaders: Record<string
       )
     }
 
+    const { banner, latencyMs } = await performSshConnectionTest(body.host, body.port || 22)
+
     return new Response(
       JSON.stringify({
         success: true,
-        message: 'Configuration looks valid. Note: actual SSH connection test not implemented yet.'
+        message: `SSH reachable. Banner: ${banner}. Latency: ${latencyMs}ms`
       }),
       {
         status: 200,
