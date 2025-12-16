@@ -21,7 +21,8 @@ export default function SettingsPage() {
     username: '',
     authType: 'key',
     sshKey: '',
-    password: ''
+    password: '',
+    workingHome: ''
   })
   const [testingNodeId, setTestingNodeId] = useState<string | null>(null)
   const [testingConfig, setTestingConfig] = useState(false)
@@ -52,7 +53,8 @@ export default function SettingsPage() {
       username: '',
       authType: 'key',
       sshKey: '',
-      password: ''
+      password: '',
+      workingHome: ''
     })
     setShowAddModal(true)
     setError(null)
@@ -68,7 +70,8 @@ export default function SettingsPage() {
       username: node.username,
       authType: node.authType,
       sshKey: node.sshKey || '',
-      password: '' // Don't show password, user needs to re-enter
+      password: '', // Don't show password, user needs to re-enter
+      workingHome: node.workingHome || ''
     })
     setShowAddModal(true)
     setError(null)
@@ -173,7 +176,8 @@ export default function SettingsPage() {
         username: '',
         authType: 'key',
         sshKey: '',
-        password: ''
+        password: '',
+        workingHome: ''
       })
     } catch (err) {
       // Error is handled by store
@@ -289,6 +293,12 @@ export default function SettingsPage() {
                             </>
                           )}
                         </div>
+                        {node.workingHome && (
+                          <div className="flex items-center space-x-2">
+                            <Globe className="w-4 h-4" />
+                            <span>Working Home: {node.workingHome}</span>
+                          </div>
+                        )}
                         <div className="text-xs opacity-75">
                           Created: {new Date(node.createdAt).toLocaleDateString()}
                         </div>
@@ -475,6 +485,23 @@ export default function SettingsPage() {
                   className={`${inputBase} ${theme === 'dark' ? inputDark : inputLight}`}
                   placeholder="ubuntu"
                 />
+              </div>
+
+              <div>
+                <label htmlFor="workingHome" className={`block text-sm font-medium mb-2 ${theme === 'dark' ? 'text-gradient-primary' : 'text-gray-700'}`}>
+                  Working Home
+                </label>
+                <input
+                  type="text"
+                  id="workingHome"
+                  value={formData.workingHome || ''}
+                  onChange={(e) => setFormData({ ...formData, workingHome: e.target.value })}
+                  className={`${inputBase} ${theme === 'dark' ? inputDark : inputLight}`}
+                  placeholder="/home/username"
+                />
+                <p className={`mt-1 text-xs ${theme === 'dark' ? 'text-gradient-secondary' : 'text-gray-500'}`}>
+                  Working directory path on the remote node where git operations will be performed. Leave empty to use default.
+                </p>
               </div>
 
               <div>

@@ -63,6 +63,7 @@ export interface RemoteNode {
   authType: 'key' | 'password'
   sshKey?: string // Private SSH key content
   password?: string // Encrypted password
+  workingHome?: string // Working directory path on the remote node
   createdAt: string
   updatedAt: string
 }
@@ -75,4 +76,5 @@ export interface RemoteNodeFormData {
   authType: 'key' | 'password'
   sshKey?: string
   password?: string
+  workingHome?: string // Working directory path on the remote node
 }

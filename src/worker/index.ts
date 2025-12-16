@@ -5,6 +5,7 @@ import { SubmissionService } from './services/submissionService'
 import { EnhancedPatchService } from './services/enhancedPatchService'
 import { GerritService } from './services/gerritService'
 import { getKvNamespace } from './kv'
+import { executeSSHCommandDirect } from './ssh-client'
 
 interface RemoteNodeData {
   id: string
@@ -15,6 +16,7 @@ interface RemoteNodeData {
   authType: 'key' | 'password'
   sshKey?: string
   password?: string
+  workingHome?: string // Working directory path on the remote node
   createdAt: string
   updatedAt: string
 }
@@ -133,7 +135,7 @@ export default {
       } else if (path === '/api/nodes' && method === 'POST') {
         return await handleCreateNode(request, env, corsHeaders)
       } else if (path === '/api/nodes/test-config' && method === 'POST') {
-        return await handleTestNodeConfig(request, corsHeaders)
+        return await handleTestNodeConfig(request, env, corsHeaders)
       } else if (path.startsWith('/api/nodes/') && method === 'PUT') {
         return await handleUpdateNode(path, request, env, corsHeaders)
       } else if (path.startsWith('/api/nodes/') && method === 'DELETE') {
@@ -1316,6 +1318,7 @@ async function handleCreateNode(request: Request, env: Env, corsHeaders: Record<
       authType: 'key' | 'password'
       sshKey?: string
       password?: string
+      workingHome?: string
     }
 
     // Validate required fields
@@ -1379,6 +1382,7 @@ async function handleCreateNode(request: Request, env: Env, corsHeaders: Record<
       authType: body.authType,
       sshKey: body.authType === 'key' ? body.sshKey : undefined,
       password: body.authType === 'password' ? body.password : undefined, // In production, encrypt this
+      workingHome: body.workingHome,
       createdAt: now,
       updatedAt: now
     }
@@ -1475,6 +1479,7 @@ async function handleUpdateNode(path: string, request: Request, env: Env, corsHe
       authType?: 'key' | 'password'
       sshKey?: string
       password?: string
+      workingHome?: string
     }
 
     // Update node
@@ -1490,6 +1495,7 @@ async function handleUpdateNode(path: string, request: Request, env: Env, corsHe
       // If authType changed, clear the other auth method
       ...(body.authType === 'key' && { password: undefined }),
       ...(body.authType === 'password' && { sshKey: undefined }),
+      ...(body.workingHome !== undefined && { workingHome: body.workingHome }),
       updatedAt: new Date().toISOString()
     }
 
@@ -1598,6 +1604,27 @@ async function handleDeleteNode(path: string, env: Env, corsHeaders: Record<stri
 const sshBannerEncoder = new TextEncoder()
 const sshBannerDecoder = new TextDecoder()
 
+// Helper to read SSH packet (simplified - assumes unencrypted for initial handshake)
+async function readSSHPacket(reader: ReadableStreamDefaultReader<Uint8Array>, timeoutMs = 10000): Promise<Uint8Array> {
+  const readResult = await Promise.race([
+    reader.read(),
+    new Promise<{ value?: Uint8Array; done?: boolean }>((_, reject) =>
+      setTimeout(() => reject(new Error('Timeout reading SSH packet')), timeoutMs)
+    )
+  ])
+
+  if (readResult.done || !readResult.value) {
+    throw new Error('No data received from SSH server')
+  }
+
+  return readResult.value
+}
+
+// Helper to write SSH packet
+async function writeSSHPacket(writer: WritableStreamDefaultWriter<Uint8Array>, data: Uint8Array): Promise<void> {
+  await writer.write(data)
+}
+
 async function performSshConnectionTest(host: string, port: number, timeoutMs = 8000): Promise<{ banner: string; latencyMs: number }> {
   if (!host) {
     throw new Error('Host is required')
@@ -1652,6 +1679,123 @@ async function performSshConnectionTest(host: string, port: number, timeoutMs = 
     } catch (closeError) {
       console.warn('Failed to close SSH socket:', closeError)
     }
+  }
+}
+
+/**
+ * Execute an SSH command on a remote host using direct socket connection
+ * Delegates to the SSH client implementation
+ */
+async function executeSSHCommand(
+  host: string,
+  port: number,
+  username: string,
+  authType: 'key' | 'password',
+  sshKey: string | undefined,
+  password: string | undefined,
+  command: string,
+  env?: Env,
+  timeoutMs = 15000
+): Promise<{ success: boolean; output: string; error?: string }> {
+  return await executeSSHCommandDirect(
+    host,
+    port,
+    username,
+    authType,
+    sshKey,
+    password,
+    command,
+    timeoutMs
+  )
+}
+
+/**
+ * Verify that a working home directory exists and is accessible on the remote node
+ * Uses SSH commands (cd and pwd) to verify the directory
+ */
+async function verifyWorkingHomeDirectory(
+  host: string,
+  port: number,
+  username: string,
+  authType: 'key' | 'password',
+  sshKey: string | undefined,
+  password: string | undefined,
+  workingHome: string | undefined,
+  env?: Env,
+  timeoutMs = 10000
+): Promise<{ exists: boolean; message: string }> {
+  if (!workingHome || !workingHome.trim()) {
+    return { exists: true, message: 'Working home not specified (optional)' }
+  }
+
+  const workingHomePath = workingHome.trim()
+
+  // Basic path validation
+  if (!workingHomePath.startsWith('/')) {
+    return { exists: false, message: `Invalid path: working home must be an absolute path (start with /)` }
+  }
+
+  // Execute SSH command to verify directory exists and is accessible
+  // Use: ls command to check if the directory exists and is accessible
+  const verifyCommand = `ls -d "${workingHomePath}" 2>&1`
+
+  const result = await executeSSHCommand(
+    host,
+    port,
+    username,
+    authType,
+    sshKey,
+    password,
+    verifyCommand,
+    env,
+    timeoutMs
+  )
+
+  if (!result.success) {
+    // If SSH command execution failed, check if it's because SSH protocol isn't fully implemented
+    if (result.error?.includes('SSH protocol implementation')) {
+      return {
+        exists: false,
+        message: `Directory verification requires SSH command execution. ${result.error}`
+      }
+    }
+    return {
+      exists: false,
+      message: `Directory verification failed: ${result.error || 'Unknown error'}`
+    }
+  }
+
+  const output = result.output.trim()
+
+  // If ls command succeeded, the output should be the directory path
+  // If it failed, there will be an error message in the output
+  if (output === workingHomePath) {
+    return {
+      exists: true,
+      message: `Directory verified: ${workingHomePath} exists and is accessible`
+    }
+  }
+
+  // Check for common error messages
+  if (output.includes('No such file or directory') || output.includes('cannot access')) {
+    return {
+      exists: false,
+      message: `Directory does not exist: ${workingHomePath}`
+    }
+  }
+
+  // If we got output but it's not the expected path, the directory might exist but have issues
+  if (output.length > 0) {
+    return {
+      exists: false,
+      message: `Directory verification failed: ${output}`
+    }
+  }
+
+  // No output - directory might not exist
+  return {
+    exists: false,
+    message: `Directory verification failed: No output from ls command. Directory may not exist: ${workingHomePath}`
   }
 }
 
@@ -1743,10 +1887,15 @@ async function handleTestNode(path: string, env: Env, corsHeaders: Record<string
 
     const { banner, latencyMs } = await performSshConnectionTest(node.host, node.port || 22)
 
+    let message = `SSH reachable. Banner: ${banner}. Latency: ${latencyMs}ms`
+
+    // Note: Working home verification is skipped in connection test
+    // as it requires full SSH protocol implementation for command execution
+
     return new Response(
       JSON.stringify({
         success: true,
-        message: `SSH reachable. Banner: ${banner}. Latency: ${latencyMs}ms`
+        message
       }),
       {
         status: 200,
@@ -1774,7 +1923,7 @@ async function handleTestNode(path: string, env: Env, corsHeaders: Record<string
   }
 }
 
-async function handleTestNodeConfig(request: Request, corsHeaders: Record<string, string>): Promise<Response> {
+async function handleTestNodeConfig(request: Request, env: Env, corsHeaders: Record<string, string>): Promise<Response> {
   try {
     const body = await request.json() as {
       name?: string
@@ -1784,6 +1933,7 @@ async function handleTestNodeConfig(request: Request, corsHeaders: Record<string
       authType?: 'key' | 'password'
       sshKey?: string
       password?: string
+      workingHome?: string
     }
 
     if (!body.host || !body.username || !body.authType) {
@@ -1834,12 +1984,30 @@ async function handleTestNodeConfig(request: Request, corsHeaders: Record<string
       )
     }
 
-    const { banner, latencyMs } = await performSshConnectionTest(body.host, body.port || 22)
+    let banner: string
+    let latencyMs: number
+
+    try {
+      const result = await performSshConnectionTest(body.host, body.port || 22)
+      banner = result.banner
+      latencyMs = result.latencyMs
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : 'Unknown error'
+      throw new Error(`SSH connection test failed: ${errorMsg}. Please check that the host (${body.host}:${body.port || 22}) is reachable and the SSH service is running.`)
+    }
+
+    let message = `SSH reachable. Banner: ${banner}. Latency: ${latencyMs}ms`
+
+    // Note: Working home verification is skipped in connection test
+    // as it requires full SSH protocol implementation for command execution
+    if (body.workingHome) {
+      message += `. Working home configured: ${body.workingHome} (verification skipped)`
+    }
 
     return new Response(
       JSON.stringify({
         success: true,
-        message: `SSH reachable. Banner: ${banner}. Latency: ${latencyMs}ms`
+        message
       }),
       {
         status: 200,
@@ -1851,13 +2019,15 @@ async function handleTestNodeConfig(request: Request, corsHeaders: Record<string
     )
   } catch (error) {
     console.error('Error testing node config:', error)
+    const errorMessage = error instanceof Error ? error.message : 'Failed to test node configuration'
     return new Response(
       JSON.stringify({
         success: false,
-        error: error instanceof Error ? error.message : 'Failed to test node configuration'
+        error: errorMessage,
+        message: errorMessage
       }),
       {
-        status: 500,
+        status: 200, // Return 200 so frontend can read the error message
         headers: {
           'Content-Type': 'application/json',
           ...corsHeaders

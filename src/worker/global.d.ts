@@ -17,4 +17,5 @@ interface Env {
   MAILCHANNELS_FROM_NAME?: string
   MAILCHANNELS_REPLY_TO_EMAIL?: string
   MAILCHANNELS_API_ENDPOINT?: string
+  SSH_SERVICE_API_URL?: string
 }

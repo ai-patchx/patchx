@@ -206,8 +206,13 @@ const useRemoteNodeStore = create<RemoteNodeState & RemoteNodeActions>((set, get
 
       const result = await response.json().catch(() => ({ success: false, error: 'Connection test failed' })) as { success?: boolean; message?: string; error?: string }
 
-      if (!response.ok || !result.success) {
-        throw new Error(result.error || 'Connection test failed')
+      if (!response.ok) {
+        // If response is not OK, use the error from the response
+        throw new Error(result.error || result.message || `Connection test failed: ${response.status} ${response.statusText}`)
+      }
+
+      if (!result.success) {
+        throw new Error(result.error || result.message || 'Connection test failed')
       }
 
       return { success: true, message: result.message || 'Connection test succeeded' }
