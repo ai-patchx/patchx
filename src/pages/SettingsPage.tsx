@@ -507,9 +507,6 @@ export default function SettingsPage() {
                   className={`${inputBase} ${theme === 'dark' ? inputDark : inputLight}`}
                   placeholder="/home/username"
                 />
-                <p className={`mt-1 text-xs ${theme === 'dark' ? 'text-gradient-secondary' : 'text-gray-500'}`}>
-                  Working directory path on the remote node where git operations will be performed. Leave empty to use default.
-                </p>
               </div>
 
               <div>
@@ -522,11 +519,8 @@ export default function SettingsPage() {
                   value={formData.sshServiceApiUrl || ''}
                   onChange={(e) => setFormData({ ...formData, sshServiceApiUrl: e.target.value })}
                   className={`${inputBase} ${theme === 'dark' ? inputDark : inputLight}`}
-                  placeholder="https://your-ssh-service.com"
+                  placeholder="https://your-ssh-service.com (optional)"
                 />
-                <p className={`mt-1 text-xs ${theme === 'dark' ? 'text-gradient-secondary' : 'text-gray-500'}`}>
-                  Optional: URL of the SSH service API for executing commands on the remote node. Leave empty to skip working home verification.
-                </p>
               </div>
 
               <div>
@@ -541,9 +535,6 @@ export default function SettingsPage() {
                   className={`${inputBase} ${theme === 'dark' ? inputDark : inputLight}`}
                   placeholder={editingNode ? 'Leave empty to keep current key' : 'Enter API key (optional)'}
                 />
-                <p className={`mt-1 text-xs ${theme === 'dark' ? 'text-gradient-secondary' : 'text-gray-500'}`}>
-                  Optional: API key for authenticating with the SSH service API. Required if the SSH service requires authentication.
-                </p>
               </div>
 
               <div>
