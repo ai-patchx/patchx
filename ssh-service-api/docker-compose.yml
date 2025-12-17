@@ -1,0 +1,19 @@
+version: '3.8'
+
+services:
+  ssh-service-api:
+    build: .
+    container_name: ssh-service-api
+    ports:
+      - "3000:3000"
+    environment:
+      - PORT=3000
+      - API_KEY=${API_KEY}
+      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-*}
+    restart: unless-stopped
+    networks:
+      - ssh-service-network
+
+networks:
+  ssh-service-network:
+    driver: bridge
