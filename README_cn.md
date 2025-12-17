@@ -93,6 +93,7 @@ GERRIT_USERNAME=your-gerrit-username
 GERRIT_PASSWORD=your-gerrit-password-or-token
 CACHE_VERSION=v1
 SSH_SERVICE_API_URL=https://your-ssh-service.com
+SSH_SERVICE_API_KEY=your-secure-api-key-here
 ```
 `VITE_PUBLIC_SITE_URL` 用于邮箱验证。本地开发可保持为 `http://localhost:5173`，线上部署时请设置为实际站点地址（如 `https://patchx.pages.dev`）。
 
@@ -521,6 +522,7 @@ LITELLM_API_KEY = "<your-litellm-api-key>"
 1. **设置环境变量**在 `wrangler.toml` 或 Cloudflare Workers 设置中：
    ```toml
    SSH_SERVICE_API_URL = "https://your-ssh-service.com"
+   SSH_SERVICE_API_KEY = "your-secure-api-key-here"
    ```
 
 2. **SSH 服务 API 要求**:

@@ -1739,17 +1739,24 @@ async function executeSSHCommand(
 ): Promise<{ success: boolean; output: string; error?: string }> {
   // Check for SSH service API endpoint (if configured via environment variable)
   const sshServiceUrl = env?.SSH_SERVICE_API_URL
+  const sshServiceApiKey = env?.SSH_SERVICE_API_KEY
 
   if (sshServiceUrl) {
     try {
       const controller = new AbortController()
       const timeoutId = setTimeout(() => controller.abort(), timeoutMs)
 
+      // Build headers with optional Authorization header if API key is provided
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json'
+      }
+      if (sshServiceApiKey) {
+        headers['Authorization'] = `Bearer ${sshServiceApiKey}`
+      }
+
       const response = await fetch(`${sshServiceUrl}/execute`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
+        headers,
         body: JSON.stringify({
           host,
           port,

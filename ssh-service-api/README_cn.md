@@ -265,17 +265,27 @@ curl -X POST http://localhost:3000/execute \
 
 ## 在 Cloudflare Workers 中配置
 
-在 `.env.local` 中设置 `SSH_SERVICE_API_URL`：
+为了让 Cloudflare Worker（PatchX 后端）能够调用此 SSH 服务 API，并使用 API 密钥进行认证：
 
-```bash
-SSH_SERVICE_API_URL=https://your-domain.com
-```
+1. **在 `.env.local` 中设置环境变量**（由 `scripts/sync-env-to-wrangler.js` 同步到 `wrangler.toml`）：
 
-或在 `wrangler.toml` 中：
+   ```bash
+   SSH_SERVICE_API_URL=https://your-domain.com
+   SSH_SERVICE_API_KEY=your-secure-api-key-here
+   ```
 
-```toml
-SSH_SERVICE_API_URL = "https://your-domain.com"
-```
+2. **或直接在 `wrangler.toml` 中配置**：
+
+   ```toml
+   SSH_SERVICE_API_URL = "https://your-domain.com"
+   SSH_SERVICE_API_KEY = "your-secure-api-key-here"
+   ```
+
+Worker 将会：
+
+- 从环境变量中读取 `SSH_SERVICE_API_URL` 和 `SSH_SERVICE_API_KEY`
+- 向 `${SSH_SERVICE_API_URL}/execute` 发送请求
+- 在 **“添加远程节点”** 页面执行“测试连接”和验证工作主目录时，自动附加请求头 `Authorization: Bearer SSH_SERVICE_API_KEY`。
 
 ## 故障排除
 

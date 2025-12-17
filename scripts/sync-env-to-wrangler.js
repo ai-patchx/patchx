@@ -35,6 +35,7 @@ let cacheVersion = ''
 let testUserPassword = ''
 let adminUserPassword = ''
 let sshServiceApiUrl = ''
+let sshServiceApiKey = ''
 
 try {
   const envLocalPath = join(rootDir, '.env.local')
@@ -82,6 +83,8 @@ try {
       adminUserPassword = trimmed.split('=')[1]?.trim().replace(/^["']|["']$/g, '') || ''
     } else if (trimmed.startsWith('SSH_SERVICE_API_URL=')) {
       sshServiceApiUrl = trimmed.split('=')[1]?.trim().replace(/^["']|["']$/g, '') || ''
+    } else if (trimmed.startsWith('SSH_SERVICE_API_KEY=')) {
+      sshServiceApiKey = trimmed.split('=')[1]?.trim().replace(/^["']|["']$/g, '') || ''
     }
   }
 } catch (error) {
@@ -151,6 +154,10 @@ if (!adminUserPassword) {
 
 if (!sshServiceApiUrl) {
   console.warn('⚠️  Warning: SSH_SERVICE_API_URL not found in .env.local. Working home verification will be skipped.')
+}
+
+if (!sshServiceApiKey) {
+  console.warn('⚠️  Warning: SSH_SERVICE_API_KEY not found in .env.local. SSH service API authentication will be skipped.')
 }
 
 // Read wrangler.toml
@@ -790,6 +797,84 @@ if (sshServiceApiUrl) {
 
     if (stagingCacheVersionIndex >= 0) {
       lines3.splice(stagingCacheVersionIndex + 1, 0, `SSH_SERVICE_API_URL = "${sshServiceApiUrl}"`)
+      wranglerContent = lines3.join('\n')
+    }
+  }
+}
+
+// Update SSH_SERVICE_API_KEY in all sections
+if (sshServiceApiKey) {
+  // Update SSH_SERVICE_API_KEY using regex replacement (works for all sections)
+  wranglerContent = wranglerContent.replace(
+    /SSH_SERVICE_API_KEY\s*=\s*"[^"]*"/g,
+    `SSH_SERVICE_API_KEY = "${sshServiceApiKey}"`
+  )
+
+  // If SSH_SERVICE_API_KEY doesn't exist yet, add it after SSH_SERVICE_API_URL in all sections
+  if (!wranglerContent.includes('SSH_SERVICE_API_KEY =')) {
+    // Add to default [vars] section
+    const lines = wranglerContent.split('\n')
+    let inVarsSection = false
+    let varsSshServiceUrlIndex = -1
+
+    for (let i = 0; i < lines.length; i++) {
+      if (lines[i].trim() === '[vars]') {
+        inVarsSection = true
+      } else if (lines[i].trim().startsWith('[') && lines[i].trim() !== '[vars]') {
+        if (inVarsSection) {
+          break
+        }
+      }
+      if (inVarsSection && lines[i].includes('SSH_SERVICE_API_URL =')) {
+        varsSshServiceUrlIndex = i
+      }
+    }
+
+    if (varsSshServiceUrlIndex >= 0) {
+      lines.splice(varsSshServiceUrlIndex + 1, 0, `SSH_SERVICE_API_KEY = "${sshServiceApiKey}"`)
+      wranglerContent = lines.join('\n')
+    }
+
+    // Add to [env.production.vars] section
+    const lines2 = wranglerContent.split('\n')
+    let inProductionSection = false
+    let productionSshServiceUrlIndex = -1
+
+    for (let i = 0; i < lines2.length; i++) {
+      if (lines2[i].trim() === '[env.production.vars]') {
+        inProductionSection = true
+      } else if (lines2[i].trim().startsWith('[') && lines2[i].trim() !== '[env.production.vars]') {
+        if (inProductionSection && lines2[i].trim() === '[env.staging.vars]') {
+          break
+        }
+      }
+      if (inProductionSection && lines2[i].includes('SSH_SERVICE_API_URL =')) {
+        productionSshServiceUrlIndex = i
+      }
+    }
+
+    if (productionSshServiceUrlIndex >= 0) {
+      lines2.splice(productionSshServiceUrlIndex + 1, 0, `SSH_SERVICE_API_KEY = "${sshServiceApiKey}"`)
+      wranglerContent = lines2.join('\n')
+    }
+
+    // Add to [env.staging.vars] section
+    const lines3 = wranglerContent.split('\n')
+    let inStagingSection = false
+    let stagingSshServiceUrlIndex = -1
+
+    for (let i = 0; i < lines3.length; i++) {
+      if (lines3[i].trim() === '[env.staging.vars]') {
+        inStagingSection = true
+      }
+      if (inStagingSection && lines3[i].includes('SSH_SERVICE_API_URL =')) {
+        stagingSshServiceUrlIndex = i
+        break
+      }
+    }
+
+    if (stagingSshServiceUrlIndex >= 0) {
+      lines3.splice(stagingSshServiceUrlIndex + 1, 0, `SSH_SERVICE_API_KEY = "${sshServiceApiKey}"`)
       wranglerContent = lines3.join('\n')
     }
   }

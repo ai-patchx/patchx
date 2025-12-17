@@ -93,6 +93,7 @@ GERRIT_USERNAME=your-gerrit-username
 GERRIT_PASSWORD=your-gerrit-password-or-token
 CACHE_VERSION=v1
 SSH_SERVICE_API_URL=https://your-ssh-service.com
+SSH_SERVICE_API_KEY=your-secure-api-key-here
 ```
 `VITE_PUBLIC_SITE_URL` is used for email verification. For local development, you can keep it as `http://localhost:5173`. In deployed environments, set it to your public site URL (e.g., `https://patchx.pages.dev`).
 
@@ -500,9 +501,10 @@ Remote nodes allow you to execute git operations on remote servers via SSH. This
 
 For working home directory verification, you can configure an external SSH service API:
 
-1. **Set Environment Variable** in `wrangler.toml` or Cloudflare Workers settings:
+1. **Set Environment Variables** in `wrangler.toml` or Cloudflare Workers settings:
    ```toml
    SSH_SERVICE_API_URL = "https://your-ssh-service.com"
+   SSH_SERVICE_API_KEY = "your-secure-api-key-here"
    ```
 
 2. **SSH Service API Requirements**:

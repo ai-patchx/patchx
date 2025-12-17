@@ -265,17 +265,27 @@ curl -X POST http://localhost:3000/execute \
 
 ## Configuration in Cloudflare Workers
 
-Set `SSH_SERVICE_API_URL` in your `.env.local`:
+To allow your Cloudflare Worker (PatchX backend) to call this SSH Service API and authenticate with the API key:
 
-```bash
-SSH_SERVICE_API_URL=https://your-domain.com
-```
+1. **Set environment variables in `.env.local`** (used by `scripts/sync-env-to-wrangler.js`):
 
-Or in `wrangler.toml`:
+   ```bash
+   SSH_SERVICE_API_URL=https://your-domain.com
+   SSH_SERVICE_API_KEY=your-secure-api-key-here
+   ```
 
-```toml
-SSH_SERVICE_API_URL = "https://your-domain.com"
-```
+2. **Or configure directly in `wrangler.toml`**:
+
+   ```toml
+   SSH_SERVICE_API_URL = "https://your-domain.com"
+   SSH_SERVICE_API_KEY = "your-secure-api-key-here"
+   ```
+
+The Worker will:
+
+- Read `SSH_SERVICE_API_URL` and `SSH_SERVICE_API_KEY` from the environment
+- Call `${SSH_SERVICE_API_URL}/execute`
+- Send the header `Authorization: Bearer SSH_SERVICE_API_KEY` when testing connections and verifying the working home directory on the **Add Remote Node** page.
 
 ## Troubleshooting
 
