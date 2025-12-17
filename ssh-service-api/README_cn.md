@@ -51,8 +51,8 @@ npm install
 创建 `.env` 文件（可选）：
 
 ```bash
-# 监听端口（默认：3000）
-PORT=3000
+# 监听端口（默认：7000）
+PORT=7000
 
 # API 密钥用于认证（可选但推荐）
 API_KEY=your-secure-api-key-here
@@ -83,7 +83,7 @@ Type=simple
 User=www-data
 WorkingDirectory=/opt/ssh-service-api
 Environment="NODE_ENV=production"
-Environment="PORT=3000"
+Environment="PORT=7000"
 Environment="API_KEY=your-secure-api-key-here"
 Environment="ALLOWED_ORIGINS=https://patchx.pages.dev"
 ExecStart=/usr/bin/node /opt/ssh-service-api/server.js
@@ -143,7 +143,7 @@ RUN npm install --production
 
 COPY server.js ./
 
-EXPOSE 3000
+EXPOSE 7000
 
 CMD ["node", "server.js"]
 ```
@@ -154,8 +154,8 @@ CMD ["node", "server.js"]
 docker build -t ssh-service-api .
 docker run -d \
   --name ssh-service-api \
-  -p 3000:3000 \
-  -e PORT=3000 \
+  -p 7000:7000 \
+  -e PORT=7000 \
   -e API_KEY=your-secure-api-key-here \
   --restart unless-stopped \
   ssh-service-api
@@ -185,7 +185,7 @@ server {
     server_name your-domain.com;
 
     location / {
-        proxy_pass http://localhost:3000;
+        proxy_pass http://localhost:7000;
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection 'upgrade';
@@ -218,13 +218,13 @@ sudo certbot --nginx -d your-domain.com
 测试健康检查端点：
 
 ```bash
-curl http://localhost:3000/health
+curl http://localhost:7000/health
 ```
 
 测试 SSH 命令执行：
 
 ```bash
-curl -X POST http://localhost:3000/execute \
+curl -X POST http://localhost:7000/execute \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer your-api-key" \
   -d '{
@@ -263,29 +263,40 @@ curl -X POST http://localhost:3000/execute \
 }
 ```
 
-## 在 Cloudflare Workers 中配置
+## 在 PatchX 中配置
 
-为了让 Cloudflare Worker（PatchX 后端）能够调用此 SSH 服务 API，并使用 API 密钥进行认证：
+SSH 服务 API 配置现在存储在 Supabase 中，每个远程节点可以有自己的 SSH 服务 API 端点和认证密钥。
 
-1. **在 `.env.local` 中设置环境变量**（由 `scripts/sync-env-to-wrangler.js` 同步到 `wrangler.toml`）：
+### 为远程节点设置 SSH 服务 API
 
-   ```bash
-   SSH_SERVICE_API_URL=https://your-domain.com
-   SSH_SERVICE_API_KEY=your-secure-api-key-here
-   ```
+1. **访问设置页面**：在 PatchX 中进入设置页面（仅管理员）
+2. **添加或编辑远程节点**：点击"添加远程节点"或编辑现有节点
+3. **配置 SSH 服务 API**：
+   - **SSH Service API URL**：输入您的 SSH 服务 API 的 URL（例如：`https://your-domain.com`）
+   - **SSH Service API Key**：输入用于 SSH 服务 API 认证的 API 密钥（可选，但如果您的 SSH 服务需要认证，则推荐配置）
 
-2. **或直接在 `wrangler.toml` 中配置**：
+4. **测试连接**：点击"测试连接"以验证：
+   - SSH 连接性（主机、端口、横幅、延迟）
+   - 工作主目录验证（如果配置了 SSH Service API URL）
 
-   ```toml
-   SSH_SERVICE_API_URL = "https://your-domain.com"
-   SSH_SERVICE_API_KEY = "your-secure-api-key-here"
-   ```
+### 工作原理
 
 Worker 将会：
 
-- 从环境变量中读取 `SSH_SERVICE_API_URL` 和 `SSH_SERVICE_API_KEY`
-- 向 `${SSH_SERVICE_API_URL}/execute` 发送请求
-- 在 **“添加远程节点”** 页面执行“测试连接”和验证工作主目录时，自动附加请求头 `Authorization: Bearer SSH_SERVICE_API_KEY`。
+- 从 Supabase 中的节点配置读取 `SSH Service API URL` 和 `SSH Service API Key`
+- 在执行 SSH 命令时调用 `${SSH_SERVICE_API_URL}/execute`
+- 当配置了 API 密钥时，自动发送请求头 `Authorization: Bearer ${SSH_SERVICE_API_KEY}`
+- 使用 SSH 服务 API 进行：
+  - 在 **"添加远程节点"** 页面上测试连接
+  - 验证工作主目录
+  - 在远程节点上执行 git 操作
+
+### 每节点配置的优势
+
+- **灵活性**：每个节点可以使用不同的 SSH 服务端点
+- **组织性**：SSH 服务设置与节点数据一起存储
+- **安全性**：API 密钥安全地存储在 Supabase 中，每个节点独立
+- **可扩展性**：易于管理具有不同 SSH 服务配置的多个节点
 
 ## 故障排除
 
@@ -306,5 +317,5 @@ sudo systemctl status ssh-service-api
 sudo journalctl -u ssh-service-api -n 50
 
 # 检查端口是否在监听
-sudo netstat -tlnp | grep 3000
+sudo netstat -tlnp | grep 7000
 ```

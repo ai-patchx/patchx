@@ -11,6 +11,8 @@ interface RemoteNodeData {
   sshKey?: string
   password?: string
   workingHome?: string // Working directory path on the remote node
+  sshServiceApiUrl?: string // SSH service API URL for command execution
+  sshServiceApiKey?: string // SSH service API key for authentication
   createdAt: string
   updatedAt: string
 }
@@ -61,24 +63,56 @@ export class GitService {
 
     const fullCommand = workingDir ? `cd ${workingDir} && ${command}` : command
 
-    // Placeholder: In production, this would execute the command via SSH
-    // Example using a separate SSH service:
-    // const response = await fetch('https://your-ssh-service.com/execute', {
-    //   method: 'POST',
-    //   headers: { 'Content-Type': 'application/json' },
-    //   body: JSON.stringify({
-    //     host: node.host,
-    //     port: node.port,
-    //     username: node.username,
-    //     authType: node.authType,
-    //     sshKey: node.sshKey,
-    //     password: node.password,
-    //     command: fullCommand
-    //   })
-    // })
+    // Use SSH service API if configured
+    if (node.sshServiceApiUrl) {
+      try {
+        const headers: Record<string, string> = {
+          'Content-Type': 'application/json'
+        }
+        if (node.sshServiceApiKey) {
+          headers['Authorization'] = `Bearer ${node.sshServiceApiKey}`
+        }
+
+        const response = await fetch(`${node.sshServiceApiUrl}/execute`, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({
+            host: node.host,
+            port: node.port,
+            username: node.username,
+            authType: node.authType,
+            sshKey: node.sshKey,
+            password: node.password,
+            command: fullCommand
+          })
+        })
+
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({ error: 'Failed to execute SSH command' })) as { error?: string }
+          return {
+            success: false,
+            output: '',
+            error: errorData.error || 'Unknown error'
+          }
+        }
+
+        const result = await response.json() as { success: boolean; output?: string; error?: string }
+        return {
+          success: result.success,
+          output: result.output || '',
+          error: result.error
+        }
+      } catch (error) {
+        return {
+          success: false,
+          output: '',
+          error: `Failed to execute SSH command via service: ${error instanceof Error ? error.message : 'Unknown error'}`
+        }
+      }
+    }
 
     throw new Error(
-      'SSH execution not implemented. Please set up an SSH service or use a library that supports SSH in Cloudflare Workers.'
+      'SSH execution not implemented. Please configure SSH Service API URL in the remote node settings or set up an SSH service.'
     )
   }
 

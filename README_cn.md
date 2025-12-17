@@ -92,9 +92,9 @@ GERRIT_BASE_URL=https://android-review.googlesource.com
 GERRIT_USERNAME=your-gerrit-username
 GERRIT_PASSWORD=your-gerrit-password-or-token
 CACHE_VERSION=v1
-SSH_SERVICE_API_URL=https://your-ssh-service.com
-SSH_SERVICE_API_KEY=your-secure-api-key-here
 ```
+
+**注意：** SSH 服务 API 配置（SSH_SERVICE_API_URL 和 SSH_SERVICE_API_KEY）现在在设置页面中按节点配置，不再作为环境变量。请参阅下面的远程节点配置部分。
 `VITE_PUBLIC_SITE_URL` 用于邮箱验证。本地开发可保持为 `http://localhost:5173`，线上部署时请设置为实际站点地址（如 `https://patchx.pages.dev`）。
 
 在 Supabase 中启用 GitHub OAuth：
@@ -508,22 +508,22 @@ LITELLM_API_KEY = "<your-litellm-api-key>"
    - **端口**: SSH 端口（默认：22）
    - **用户名**: SSH 用户名
    - **工作主目录**: 可选的工作目录路径（例如：`/home/username/my-tmp/patchx`）
+   - **SSH Service API URL**: 可选的 SSH 服务 API URL，用于执行命令（例如：`https://your-ssh-service.com`）
+   - **SSH Service API Key**: 可选的 API 密钥，用于 SSH 服务 API 认证
    - **认证类型**: 选择 SSH 密钥或密码
    - **SSH 密钥/密码**: 提供认证凭据
 
 4. **测试连接**: 点击"测试连接"以验证：
    - SSH 连接性（主机、端口、横幅、延迟）
-   - 工作主目录（如果配置了 SSH 服务 API）
+   - 工作主目录（如果配置了 SSH Service API URL）
 
 #### SSH 服务 API 配置（可选）
 
-为了验证工作主目录，您可以配置外部 SSH 服务 API：
+为了验证工作主目录和执行 git 操作，您可以按节点配置外部 SSH 服务 API：
 
-1. **设置环境变量**在 `wrangler.toml` 或 Cloudflare Workers 设置中：
-   ```toml
-   SSH_SERVICE_API_URL = "https://your-ssh-service.com"
-   SSH_SERVICE_API_KEY = "your-secure-api-key-here"
-   ```
+1. **在设置页面中配置**: 添加或编辑远程节点时，填写：
+   - **SSH Service API URL**: 您的 SSH 服务 API 端点 URL
+   - **SSH Service API Key**: 用于认证的 API 密钥（可选，但如果您的 SSH 服务需要认证，则推荐配置）
 
 2. **SSH 服务 API 要求**:
    - 端点: `POST /execute`
@@ -547,8 +547,14 @@ LITELLM_API_KEY = "<your-litellm-api-key>"
        "error": "string"
      }
      ```
+   - 认证: 如果提供了 API 密钥，Worker 将发送 `Authorization: Bearer <api-key>` 请求头
 
-3. **没有 SSH 服务 API**: 连接测试仍会验证 SSH 连接性，但工作主目录验证将被跳过。
+3. **每节点配置的优势**:
+   - 每个节点可以使用不同的 SSH 服务端点
+   - API 密钥安全地存储在 Supabase 中，每个节点独立
+   - 更好的组织性和灵活性
+
+4. **没有 SSH 服务 API**: 连接测试仍会验证 SSH 连接性，但工作主目录验证和 git 操作将被跳过。
 
 #### 数据库设置
 
@@ -562,6 +568,7 @@ LITELLM_API_KEY = "<your-litellm-api-key>"
 - 节点元数据（名称、主机、端口、用户名）
 - 认证凭据（SSH 密钥或密码）
 - 工作主目录路径
+- SSH 服务 API 配置（SSH Service API URL 和 Key）
 - 时间戳（created_at, updated_at）
 
 #### 使用远程节点

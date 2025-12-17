@@ -51,8 +51,8 @@ npm install
 Create a `.env` file (optional):
 
 ```bash
-# Port to listen on (default: 3000)
-PORT=3000
+# Port to listen on (default: 7000)
+PORT=7000
 
 # API key for authentication (optional but recommended)
 API_KEY=your-secure-api-key-here
@@ -83,7 +83,7 @@ Type=simple
 User=www-data
 WorkingDirectory=/opt/ssh-service-api
 Environment="NODE_ENV=production"
-Environment="PORT=3000"
+Environment="PORT=7000"
 Environment="API_KEY=your-secure-api-key-here"
 Environment="ALLOWED_ORIGINS=https://patchx.pages.dev"
 ExecStart=/usr/bin/node /opt/ssh-service-api/server.js
@@ -143,7 +143,7 @@ RUN npm install --production
 
 COPY server.js ./
 
-EXPOSE 3000
+EXPOSE 7000
 
 CMD ["node", "server.js"]
 ```
@@ -154,8 +154,8 @@ Build and run:
 docker build -t ssh-service-api .
 docker run -d \
   --name ssh-service-api \
-  -p 3000:3000 \
-  -e PORT=3000 \
+  -p 7000:7000 \
+  -e PORT=7000 \
   -e API_KEY=your-secure-api-key-here \
   --restart unless-stopped \
   ssh-service-api
@@ -185,7 +185,7 @@ server {
     server_name your-domain.com;
 
     location / {
-        proxy_pass http://localhost:3000;
+        proxy_pass http://localhost:7000;
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection 'upgrade';
@@ -218,13 +218,13 @@ sudo certbot --nginx -d your-domain.com
 Test the health endpoint:
 
 ```bash
-curl http://localhost:3000/health
+curl http://localhost:7000/health
 ```
 
 Test SSH command execution:
 
 ```bash
-curl -X POST http://localhost:3000/execute \
+curl -X POST http://localhost:7000/execute \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer your-api-key" \
   -d '{
@@ -263,29 +263,40 @@ curl -X POST http://localhost:3000/execute \
 }
 ```
 
-## Configuration in Cloudflare Workers
+## Configuration in PatchX
 
-To allow your Cloudflare Worker (PatchX backend) to call this SSH Service API and authenticate with the API key:
+SSH Service API configuration is now stored per-node in Supabase, allowing each remote node to have its own SSH service API endpoint and authentication key.
 
-1. **Set environment variables in `.env.local`** (used by `scripts/sync-env-to-wrangler.js`):
+### Setting Up SSH Service API for a Remote Node
 
-   ```bash
-   SSH_SERVICE_API_URL=https://your-domain.com
-   SSH_SERVICE_API_KEY=your-secure-api-key-here
-   ```
+1. **Navigate to Settings Page**: Go to the Settings page (admin only) in PatchX
+2. **Add or Edit Remote Node**: Click "Add Remote Node" or edit an existing node
+3. **Configure SSH Service API**:
+   - **SSH Service API URL**: Enter the URL of your SSH service API (e.g., `https://your-domain.com`)
+   - **SSH Service API Key**: Enter the API key for authenticating with the SSH service API (optional, but recommended if your SSH service requires authentication)
 
-2. **Or configure directly in `wrangler.toml`**:
+4. **Test Connection**: Click "Test Connection" to verify:
+   - SSH connectivity (host, port, banner, latency)
+   - Working home directory verification (if SSH Service API URL is configured)
 
-   ```toml
-   SSH_SERVICE_API_URL = "https://your-domain.com"
-   SSH_SERVICE_API_KEY = "your-secure-api-key-here"
-   ```
+### How It Works
 
 The Worker will:
 
-- Read `SSH_SERVICE_API_URL` and `SSH_SERVICE_API_KEY` from the environment
-- Call `${SSH_SERVICE_API_URL}/execute`
-- Send the header `Authorization: Bearer SSH_SERVICE_API_KEY` when testing connections and verifying the working home directory on the **Add Remote Node** page.
+- Read `SSH Service API URL` and `SSH Service API Key` from the node configuration in Supabase
+- Call `${SSH_SERVICE_API_URL}/execute` when executing SSH commands
+- Automatically send the header `Authorization: Bearer ${SSH_SERVICE_API_KEY}` when the API key is configured
+- Use the SSH service API for:
+  - Testing connections on the **Add Remote Node** page
+  - Verifying working home directories
+  - Executing git operations on remote nodes
+
+### Benefits of Per-Node Configuration
+
+- **Flexibility**: Each node can use a different SSH service endpoint
+- **Organization**: SSH service settings are stored with node data
+- **Security**: API keys are stored securely in Supabase per node
+- **Scalability**: Easy to manage multiple nodes with different SSH service configurations
 
 ## Troubleshooting
 
@@ -306,5 +317,5 @@ sudo systemctl status ssh-service-api
 sudo journalctl -u ssh-service-api -n 50
 
 # Check if port is listening
-sudo netstat -tlnp | grep 3000
+sudo netstat -tlnp | grep 7000
 ```

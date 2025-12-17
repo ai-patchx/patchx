@@ -22,7 +22,9 @@ export default function SettingsPage() {
     authType: 'key',
     sshKey: '',
     password: '',
-    workingHome: ''
+    workingHome: '',
+    sshServiceApiUrl: '',
+    sshServiceApiKey: ''
   })
   const [testingNodeId, setTestingNodeId] = useState<string | null>(null)
   const [testingConfig, setTestingConfig] = useState(false)
@@ -54,7 +56,9 @@ export default function SettingsPage() {
       authType: 'key',
       sshKey: '',
       password: '',
-      workingHome: ''
+      workingHome: '',
+      sshServiceApiUrl: '',
+      sshServiceApiKey: ''
     })
     setShowAddModal(true)
     setError(null)
@@ -71,7 +75,9 @@ export default function SettingsPage() {
       authType: node.authType,
       sshKey: node.sshKey || '',
       password: '', // Don't show password, user needs to re-enter
-      workingHome: node.workingHome || ''
+      workingHome: node.workingHome || '',
+      sshServiceApiUrl: node.sshServiceApiUrl || '',
+      sshServiceApiKey: node.sshServiceApiKey || ''
     })
     setShowAddModal(true)
     setError(null)
@@ -177,7 +183,9 @@ export default function SettingsPage() {
         authType: 'key',
         sshKey: '',
         password: '',
-        workingHome: ''
+        workingHome: '',
+        sshServiceApiUrl: '',
+        sshServiceApiKey: ''
       })
     } catch (err) {
       // Error is handled by store
@@ -501,6 +509,40 @@ export default function SettingsPage() {
                 />
                 <p className={`mt-1 text-xs ${theme === 'dark' ? 'text-gradient-secondary' : 'text-gray-500'}`}>
                   Working directory path on the remote node where git operations will be performed. Leave empty to use default.
+                </p>
+              </div>
+
+              <div>
+                <label htmlFor="sshServiceApiUrl" className={`block text-sm font-medium mb-2 ${theme === 'dark' ? 'text-gradient-primary' : 'text-gray-700'}`}>
+                  SSH Service API URL
+                </label>
+                <input
+                  type="url"
+                  id="sshServiceApiUrl"
+                  value={formData.sshServiceApiUrl || ''}
+                  onChange={(e) => setFormData({ ...formData, sshServiceApiUrl: e.target.value })}
+                  className={`${inputBase} ${theme === 'dark' ? inputDark : inputLight}`}
+                  placeholder="https://your-ssh-service.com"
+                />
+                <p className={`mt-1 text-xs ${theme === 'dark' ? 'text-gradient-secondary' : 'text-gray-500'}`}>
+                  Optional: URL of the SSH service API for executing commands on the remote node. Leave empty to skip working home verification.
+                </p>
+              </div>
+
+              <div>
+                <label htmlFor="sshServiceApiKey" className={`block text-sm font-medium mb-2 ${theme === 'dark' ? 'text-gradient-primary' : 'text-gray-700'}`}>
+                  SSH Service API Key
+                </label>
+                <input
+                  type="password"
+                  id="sshServiceApiKey"
+                  value={formData.sshServiceApiKey || ''}
+                  onChange={(e) => setFormData({ ...formData, sshServiceApiKey: e.target.value })}
+                  className={`${inputBase} ${theme === 'dark' ? inputDark : inputLight}`}
+                  placeholder={editingNode ? 'Leave empty to keep current key' : 'Enter API key (optional)'}
+                />
+                <p className={`mt-1 text-xs ${theme === 'dark' ? 'text-gradient-secondary' : 'text-gray-500'}`}>
+                  Optional: API key for authenticating with the SSH service API. Required if the SSH service requires authentication.
                 </p>
               </div>
 

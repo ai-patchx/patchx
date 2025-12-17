@@ -92,9 +92,9 @@ GERRIT_BASE_URL=https://android-review.googlesource.com
 GERRIT_USERNAME=your-gerrit-username
 GERRIT_PASSWORD=your-gerrit-password-or-token
 CACHE_VERSION=v1
-SSH_SERVICE_API_URL=https://your-ssh-service.com
-SSH_SERVICE_API_KEY=your-secure-api-key-here
 ```
+
+**Note:** SSH Service API configuration (SSH_SERVICE_API_URL and SSH_SERVICE_API_KEY) is now configured per-node in the Settings page, not as environment variables. See the Remote Node Configuration section below.
 `VITE_PUBLIC_SITE_URL` is used for email verification. For local development, you can keep it as `http://localhost:5173`. In deployed environments, set it to your public site URL (e.g., `https://patchx.pages.dev`).
 
 Legacy test account (for Worker API testing only):
@@ -490,22 +490,22 @@ Remote nodes allow you to execute git operations on remote servers via SSH. This
    - **Port**: SSH port (default: 22)
    - **Username**: SSH username
    - **Working Home**: Optional working directory path (e.g., `/home/username/my-tmp/patchx`)
+   - **SSH Service API URL**: Optional URL of the SSH service API for executing commands (e.g., `https://your-ssh-service.com`)
+   - **SSH Service API Key**: Optional API key for authenticating with the SSH service API
    - **Authentication Type**: Choose either SSH Key or Password
    - **SSH Key/Password**: Provide authentication credentials
 
 4. **Test Connection**: Click "Test Connection" to verify:
    - SSH connectivity (host, port, banner, latency)
-   - Working home directory (if SSH service API is configured)
+   - Working home directory (if SSH Service API URL is configured)
 
 #### SSH Service API Configuration (Optional)
 
-For working home directory verification, you can configure an external SSH service API:
+For working home directory verification and executing git operations, you can configure an external SSH service API per node:
 
-1. **Set Environment Variables** in `wrangler.toml` or Cloudflare Workers settings:
-   ```toml
-   SSH_SERVICE_API_URL = "https://your-ssh-service.com"
-   SSH_SERVICE_API_KEY = "your-secure-api-key-here"
-   ```
+1. **Configure in Settings Page**: When adding or editing a remote node, fill in:
+   - **SSH Service API URL**: The URL of your SSH service API endpoint
+   - **SSH Service API Key**: The API key for authentication (optional, but recommended if your SSH service requires authentication)
 
 2. **SSH Service API Requirements**:
    - Endpoint: `POST /execute`
@@ -529,8 +529,14 @@ For working home directory verification, you can configure an external SSH servi
        "error": "string"
      }
      ```
+   - Authentication: If API key is provided, the Worker will send `Authorization: Bearer <api-key>` header
 
-3. **Without SSH Service API**: Connection test will still verify SSH connectivity, but working home verification will be skipped.
+3. **Benefits of Per-Node Configuration**:
+   - Each node can use a different SSH service endpoint
+   - API keys are stored securely in Supabase per node
+   - Better organization and flexibility
+
+4. **Without SSH Service API**: Connection test will still verify SSH connectivity, but working home verification and git operations will be skipped.
 
 #### Database Setup
 
@@ -544,6 +550,7 @@ The table includes:
 - Node metadata (name, host, port, username)
 - Authentication credentials (SSH key or password)
 - Working home directory path
+- SSH Service API configuration (SSH Service API URL and Key)
 - Timestamps (created_at, updated_at)
 
 #### Using Remote Nodes

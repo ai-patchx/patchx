@@ -41,8 +41,6 @@ export interface Env {
   MAILCHANNELS_API_ENDPOINT?: string
   MAILCHANNELS_API_KEY?: string
   CACHE_VERSION?: string
-  SSH_SERVICE_API_URL?: string
-  SSH_SERVICE_API_KEY?: string
 }
 
 export interface Upload {

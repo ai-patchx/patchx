@@ -33,7 +33,7 @@ const os = require('os')
 const crypto = require('crypto')
 
 const app = express()
-const PORT = process.env.PORT || 3000
+const PORT = process.env.PORT || 7000
 const API_KEY = process.env.API_KEY || '' // Optional API key for authentication
 
 // Middleware

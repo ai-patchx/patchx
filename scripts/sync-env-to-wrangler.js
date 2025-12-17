@@ -1,9 +1,12 @@
 #!/usr/bin/env node
 
 /**
- * Sync Supabase, LiteLLM, Resend, MailChannels, Gerrit, and SSH Service API environment variables from .env.local to wrangler.toml
+ * Sync Supabase, LiteLLM, Resend, MailChannels, and Gerrit environment variables from .env.local to wrangler.toml
  * This allows the Worker to expose Supabase config via /api/config/public
  * so the frontend can use it even if Cloudflare Pages env vars aren't set.
+ *
+ * Note: SSH Service API configuration (SSH_SERVICE_API_URL and SSH_SERVICE_API_KEY) is now stored
+ * per-node in Supabase instead of as environment variables.
  */
 
 import { readFileSync, writeFileSync } from 'fs'
@@ -34,8 +37,6 @@ let gerritPassword = ''
 let cacheVersion = ''
 let testUserPassword = ''
 let adminUserPassword = ''
-let sshServiceApiUrl = ''
-let sshServiceApiKey = ''
 
 try {
   const envLocalPath = join(rootDir, '.env.local')
@@ -81,10 +82,6 @@ try {
       testUserPassword = trimmed.split('=')[1]?.trim().replace(/^["']|["']$/g, '') || ''
     } else if (trimmed.startsWith('ADMIN_USER_PASSWORD=')) {
       adminUserPassword = trimmed.split('=')[1]?.trim().replace(/^["']|["']$/g, '') || ''
-    } else if (trimmed.startsWith('SSH_SERVICE_API_URL=')) {
-      sshServiceApiUrl = trimmed.split('=')[1]?.trim().replace(/^["']|["']$/g, '') || ''
-    } else if (trimmed.startsWith('SSH_SERVICE_API_KEY=')) {
-      sshServiceApiKey = trimmed.split('=')[1]?.trim().replace(/^["']|["']$/g, '') || ''
     }
   }
 } catch (error) {
@@ -152,13 +149,6 @@ if (!adminUserPassword) {
   console.warn('⚠️  Warning: ADMIN_USER_PASSWORD not found in .env.local. Using existing value in wrangler.toml.')
 }
 
-if (!sshServiceApiUrl) {
-  console.warn('⚠️  Warning: SSH_SERVICE_API_URL not found in .env.local. Working home verification will be skipped.')
-}
-
-if (!sshServiceApiKey) {
-  console.warn('⚠️  Warning: SSH_SERVICE_API_KEY not found in .env.local. SSH service API authentication will be skipped.')
-}
 
 // Read wrangler.toml
 const wranglerPath = join(rootDir, 'wrangler.toml')
@@ -724,161 +714,6 @@ if (cacheVersion) {
   }
 }
 
-// Update SSH_SERVICE_API_URL in all sections
-if (sshServiceApiUrl) {
-  // Update SSH_SERVICE_API_URL using regex replacement (works for all sections)
-  wranglerContent = wranglerContent.replace(
-    /SSH_SERVICE_API_URL\s*=\s*"[^"]*"/g,
-    `SSH_SERVICE_API_URL = "${sshServiceApiUrl}"`
-  )
-
-  // If SSH_SERVICE_API_URL doesn't exist yet, add it after CACHE_VERSION in all sections
-  if (!wranglerContent.includes('SSH_SERVICE_API_URL =')) {
-    // Add to default [vars] section
-    const lines = wranglerContent.split('\n')
-    let inVarsSection = false
-    let varsCacheVersionIndex = -1
-
-    for (let i = 0; i < lines.length; i++) {
-      if (lines[i].trim() === '[vars]') {
-        inVarsSection = true
-      } else if (lines[i].trim().startsWith('[') && lines[i].trim() !== '[vars]') {
-        if (inVarsSection) {
-          break
-        }
-      }
-      if (inVarsSection && lines[i].includes('CACHE_VERSION =')) {
-        varsCacheVersionIndex = i
-      }
-    }
-
-    if (varsCacheVersionIndex >= 0) {
-      lines.splice(varsCacheVersionIndex + 1, 0, `SSH_SERVICE_API_URL = "${sshServiceApiUrl}"`)
-      wranglerContent = lines.join('\n')
-    }
-
-    // Add to [env.production.vars] section
-    const lines2 = wranglerContent.split('\n')
-    let inProductionSection = false
-    let productionCacheVersionIndex = -1
-
-    for (let i = 0; i < lines2.length; i++) {
-      if (lines2[i].trim() === '[env.production.vars]') {
-        inProductionSection = true
-      } else if (lines2[i].trim().startsWith('[') && lines2[i].trim() !== '[env.production.vars]') {
-        if (inProductionSection && lines2[i].trim() === '[env.staging.vars]') {
-          break
-        }
-      }
-      if (inProductionSection && lines2[i].includes('CACHE_VERSION =')) {
-        productionCacheVersionIndex = i
-      }
-    }
-
-    if (productionCacheVersionIndex >= 0) {
-      lines2.splice(productionCacheVersionIndex + 1, 0, `SSH_SERVICE_API_URL = "${sshServiceApiUrl}"`)
-      wranglerContent = lines2.join('\n')
-    }
-
-    // Add to [env.staging.vars] section
-    const lines3 = wranglerContent.split('\n')
-    let inStagingSection = false
-    let stagingCacheVersionIndex = -1
-
-    for (let i = 0; i < lines3.length; i++) {
-      if (lines3[i].trim() === '[env.staging.vars]') {
-        inStagingSection = true
-      }
-      if (inStagingSection && lines3[i].includes('CACHE_VERSION =')) {
-        stagingCacheVersionIndex = i
-        break
-      }
-    }
-
-    if (stagingCacheVersionIndex >= 0) {
-      lines3.splice(stagingCacheVersionIndex + 1, 0, `SSH_SERVICE_API_URL = "${sshServiceApiUrl}"`)
-      wranglerContent = lines3.join('\n')
-    }
-  }
-}
-
-// Update SSH_SERVICE_API_KEY in all sections
-if (sshServiceApiKey) {
-  // Update SSH_SERVICE_API_KEY using regex replacement (works for all sections)
-  wranglerContent = wranglerContent.replace(
-    /SSH_SERVICE_API_KEY\s*=\s*"[^"]*"/g,
-    `SSH_SERVICE_API_KEY = "${sshServiceApiKey}"`
-  )
-
-  // If SSH_SERVICE_API_KEY doesn't exist yet, add it after SSH_SERVICE_API_URL in all sections
-  if (!wranglerContent.includes('SSH_SERVICE_API_KEY =')) {
-    // Add to default [vars] section
-    const lines = wranglerContent.split('\n')
-    let inVarsSection = false
-    let varsSshServiceUrlIndex = -1
-
-    for (let i = 0; i < lines.length; i++) {
-      if (lines[i].trim() === '[vars]') {
-        inVarsSection = true
-      } else if (lines[i].trim().startsWith('[') && lines[i].trim() !== '[vars]') {
-        if (inVarsSection) {
-          break
-        }
-      }
-      if (inVarsSection && lines[i].includes('SSH_SERVICE_API_URL =')) {
-        varsSshServiceUrlIndex = i
-      }
-    }
-
-    if (varsSshServiceUrlIndex >= 0) {
-      lines.splice(varsSshServiceUrlIndex + 1, 0, `SSH_SERVICE_API_KEY = "${sshServiceApiKey}"`)
-      wranglerContent = lines.join('\n')
-    }
-
-    // Add to [env.production.vars] section
-    const lines2 = wranglerContent.split('\n')
-    let inProductionSection = false
-    let productionSshServiceUrlIndex = -1
-
-    for (let i = 0; i < lines2.length; i++) {
-      if (lines2[i].trim() === '[env.production.vars]') {
-        inProductionSection = true
-      } else if (lines2[i].trim().startsWith('[') && lines2[i].trim() !== '[env.production.vars]') {
-        if (inProductionSection && lines2[i].trim() === '[env.staging.vars]') {
-          break
-        }
-      }
-      if (inProductionSection && lines2[i].includes('SSH_SERVICE_API_URL =')) {
-        productionSshServiceUrlIndex = i
-      }
-    }
-
-    if (productionSshServiceUrlIndex >= 0) {
-      lines2.splice(productionSshServiceUrlIndex + 1, 0, `SSH_SERVICE_API_KEY = "${sshServiceApiKey}"`)
-      wranglerContent = lines2.join('\n')
-    }
-
-    // Add to [env.staging.vars] section
-    const lines3 = wranglerContent.split('\n')
-    let inStagingSection = false
-    let stagingSshServiceUrlIndex = -1
-
-    for (let i = 0; i < lines3.length; i++) {
-      if (lines3[i].trim() === '[env.staging.vars]') {
-        inStagingSection = true
-      }
-      if (inStagingSection && lines3[i].includes('SSH_SERVICE_API_URL =')) {
-        stagingSshServiceUrlIndex = i
-        break
-      }
-    }
-
-    if (stagingSshServiceUrlIndex >= 0) {
-      lines3.splice(stagingSshServiceUrlIndex + 1, 0, `SSH_SERVICE_API_KEY = "${sshServiceApiKey}"`)
-      wranglerContent = lines3.join('\n')
-    }
-  }
-}
 
 // Write back
 writeFileSync(wranglerPath, wranglerContent, 'utf-8')

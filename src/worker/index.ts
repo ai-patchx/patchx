@@ -18,6 +18,8 @@ interface RemoteNodeData {
   sshKey?: string
   password?: string
   workingHome?: string // Working directory path on the remote node
+  sshServiceApiUrl?: string // SSH service API URL for command execution
+  sshServiceApiKey?: string // SSH service API key for authentication
   createdAt: string
   updatedAt: string
 }
@@ -1261,7 +1263,7 @@ async function handleGetNodes(env: Env, corsHeaders: Record<string, string>): Pr
     // Get all nodes from Supabase
     const { data: nodes, error } = await supabase
       .from('remote_nodes')
-      .select('id, name, host, port, username, auth_type, working_home, created_at, updated_at')
+      .select('id, name, host, port, username, auth_type, working_home, ssh_service_api_url, ssh_service_api_key, created_at, updated_at')
       .order('created_at', { ascending: false })
 
     if (error) {
@@ -1277,6 +1279,8 @@ async function handleGetNodes(env: Env, corsHeaders: Record<string, string>): Pr
       username: node.username,
       authType: node.auth_type,
       workingHome: node.working_home,
+      sshServiceApiUrl: node.ssh_service_api_url,
+      sshServiceApiKey: node.ssh_service_api_key,
       createdAt: node.created_at,
       updatedAt: node.updated_at
     }))
@@ -1325,6 +1329,8 @@ async function handleCreateNode(request: Request, env: Env, corsHeaders: Record<
       sshKey?: string
       password?: string
       workingHome?: string
+      sshServiceApiUrl?: string
+      sshServiceApiKey?: string
     }
 
     // Validate required fields
@@ -1387,9 +1393,11 @@ async function handleCreateNode(request: Request, env: Env, corsHeaders: Record<
         auth_type: body.authType,
         ssh_key: body.authType === 'key' ? body.sshKey : null,
         password: body.authType === 'password' ? body.password : null, // In production, encrypt this
-        working_home: body.workingHome || null
+        working_home: body.workingHome || null,
+        ssh_service_api_url: body.sshServiceApiUrl || null,
+        ssh_service_api_key: body.sshServiceApiKey || null
       })
-      .select('id, name, host, port, username, auth_type, working_home, created_at, updated_at')
+      .select('id, name, host, port, username, auth_type, working_home, ssh_service_api_url, ssh_service_api_key, created_at, updated_at')
       .single()
 
     if (error) {
@@ -1405,6 +1413,8 @@ async function handleCreateNode(request: Request, env: Env, corsHeaders: Record<
       username: node.username,
       authType: node.auth_type,
       workingHome: node.working_home,
+      sshServiceApiUrl: node.ssh_service_api_url,
+      sshServiceApiKey: node.ssh_service_api_key,
       createdAt: node.created_at,
       updatedAt: node.updated_at
     }
@@ -1493,6 +1503,8 @@ async function handleUpdateNode(path: string, request: Request, env: Env, corsHe
       sshKey?: string
       password?: string
       workingHome?: string
+      sshServiceApiUrl?: string
+      sshServiceApiKey?: string
     }
 
     // Build update object
@@ -1503,6 +1515,8 @@ async function handleUpdateNode(path: string, request: Request, env: Env, corsHe
     if (body.username !== undefined) updateData.username = body.username
     if (body.authType !== undefined) updateData.auth_type = body.authType
     if (body.workingHome !== undefined) updateData.working_home = body.workingHome
+    if (body.sshServiceApiUrl !== undefined) updateData.ssh_service_api_url = body.sshServiceApiUrl || null
+    if (body.sshServiceApiKey !== undefined) updateData.ssh_service_api_key = body.sshServiceApiKey || null
 
     // Handle authentication credentials
     if (body.authType === 'key') {
@@ -1529,7 +1543,7 @@ async function handleUpdateNode(path: string, request: Request, env: Env, corsHe
       .from('remote_nodes')
       .update(updateData)
       .eq('id', nodeId)
-      .select('id, name, host, port, username, auth_type, working_home, created_at, updated_at')
+      .select('id, name, host, port, username, auth_type, working_home, ssh_service_api_url, ssh_service_api_key, created_at, updated_at')
       .single()
 
     if (updateError) {
@@ -1545,6 +1559,8 @@ async function handleUpdateNode(path: string, request: Request, env: Env, corsHe
       username: updatedNode.username,
       authType: updatedNode.auth_type,
       workingHome: updatedNode.working_home,
+      sshServiceApiUrl: updatedNode.ssh_service_api_url,
+      sshServiceApiKey: updatedNode.ssh_service_api_key,
       createdAt: updatedNode.created_at,
       updatedAt: updatedNode.updated_at
     }
@@ -1734,14 +1750,12 @@ async function executeSSHCommand(
   sshKey: string | undefined,
   password: string | undefined,
   command: string,
-  env?: Env,
+  sshServiceApiUrl?: string,
+  sshServiceApiKey?: string,
   timeoutMs = 15000
 ): Promise<{ success: boolean; output: string; error?: string }> {
-  // Check for SSH service API endpoint (if configured via environment variable)
-  const sshServiceUrl = env?.SSH_SERVICE_API_URL
-  const sshServiceApiKey = env?.SSH_SERVICE_API_KEY
-
-  if (sshServiceUrl) {
+  // Check for SSH service API endpoint (if configured in node data)
+  if (sshServiceApiUrl) {
     try {
       const controller = new AbortController()
       const timeoutId = setTimeout(() => controller.abort(), timeoutMs)
@@ -1754,7 +1768,7 @@ async function executeSSHCommand(
         headers['Authorization'] = `Bearer ${sshServiceApiKey}`
       }
 
-      const response = await fetch(`${sshServiceUrl}/execute`, {
+      const response = await fetch(`${sshServiceApiUrl}/execute`, {
         method: 'POST',
         headers,
         body: JSON.stringify({
@@ -1819,11 +1833,16 @@ async function verifyWorkingHomeDirectory(
   sshKey: string | undefined,
   password: string | undefined,
   workingHome: string | undefined,
-  env?: Env,
+  sshServiceApiUrl?: string,
+  sshServiceApiKey?: string,
   timeoutMs = 10000
 ): Promise<{ exists: boolean; message: string }> {
   if (!workingHome || !workingHome.trim()) {
     return { exists: true, message: 'Working home not specified (optional)' }
+  }
+
+  if (!sshServiceApiUrl) {
+    return { exists: false, message: 'SSH service API URL not configured. Cannot verify working home directory.' }
   }
 
   const workingHomePath = workingHome.trim()
@@ -1845,7 +1864,8 @@ async function verifyWorkingHomeDirectory(
     sshKey,
     password,
     verifyCommand,
-    env,
+    sshServiceApiUrl,
+    sshServiceApiKey,
     timeoutMs
   )
 
@@ -1952,6 +1972,8 @@ async function handleTestNode(path: string, env: Env, corsHeaders: Record<string
       sshKey: node.ssh_key || undefined,
       password: node.password || undefined,
       workingHome: node.working_home || undefined,
+      sshServiceApiUrl: node.ssh_service_api_url || undefined,
+      sshServiceApiKey: node.ssh_service_api_key || undefined,
       createdAt: node.created_at,
       updatedAt: node.updated_at
     }
@@ -2053,6 +2075,8 @@ async function handleTestNodeConfig(request: Request, env: Env, corsHeaders: Rec
       sshKey?: string
       password?: string
       workingHome?: string
+      sshServiceApiUrl?: string
+      sshServiceApiKey?: string
     }
 
     if (!body.host || !body.username || !body.authType) {
@@ -2118,7 +2142,7 @@ async function handleTestNodeConfig(request: Request, env: Env, corsHeaders: Rec
     let message = `SSH reachable. Banner: ${banner}. Latency: ${latencyMs}ms`
 
     // Test working home directory if provided and SSH service is available
-    if (body.workingHome && env?.SSH_SERVICE_API_URL) {
+    if (body.workingHome && body.sshServiceApiUrl) {
       try {
         const dirVerification = await verifyWorkingHomeDirectory(
           body.host,
@@ -2128,7 +2152,8 @@ async function handleTestNodeConfig(request: Request, env: Env, corsHeaders: Rec
           body.sshKey,
           body.password,
           body.workingHome,
-          env
+          body.sshServiceApiUrl,
+          body.sshServiceApiKey
         )
 
         if (dirVerification.exists) {
@@ -2140,7 +2165,7 @@ async function handleTestNodeConfig(request: Request, env: Env, corsHeaders: Rec
         message += `. Working home verification error: ${error instanceof Error ? error.message : 'Unknown error'}`
       }
     } else if (body.workingHome) {
-      message += `. Working home configured: ${body.workingHome} (verification requires SSH_SERVICE_API_URL)`
+      message += `. Working home configured: ${body.workingHome} (verification requires SSH Service API URL)`
     }
 
     return new Response(

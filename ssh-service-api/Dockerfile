@@ -10,7 +10,7 @@ RUN npm install --production
 
 COPY server.js ./
 
-EXPOSE 3000
+EXPOSE 7000
 
 USER node
 

@@ -64,6 +64,8 @@ export interface RemoteNode {
   sshKey?: string // Private SSH key content
   password?: string // Encrypted password
   workingHome?: string // Working directory path on the remote node
+  sshServiceApiUrl?: string // SSH service API URL for command execution
+  sshServiceApiKey?: string // SSH service API key for authentication
   createdAt: string
   updatedAt: string
 }
@@ -77,4 +79,6 @@ export interface RemoteNodeFormData {
   sshKey?: string
   password?: string
   workingHome?: string // Working directory path on the remote node
+  sshServiceApiUrl?: string // SSH service API URL for command execution
+  sshServiceApiKey?: string // SSH service API key for authentication
 }

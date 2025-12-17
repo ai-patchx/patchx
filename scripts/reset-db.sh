@@ -355,6 +355,8 @@ CREATE TABLE IF NOT EXISTS remote_nodes (
   ssh_key TEXT, -- SSH private key (encrypted in production)
   password TEXT, -- SSH password (encrypted in production)
   working_home TEXT, -- Working directory path on the remote node
+  ssh_service_api_url TEXT, -- SSH service API URL for command execution
+  ssh_service_api_key TEXT, -- SSH service API key for authentication
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
