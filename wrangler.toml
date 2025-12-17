@@ -46,6 +46,7 @@ MAILCHANNELS_REPLY_TO_EMAIL = "support@supagraph.ai"
 MAILCHANNELS_API_ENDPOINT = "https://api.mailchannels.net/tx/v1/send"
 MAILCHANNELS_API_KEY = "your-api-key-here"
 CACHE_VERSION = "v1"
+SSH_SERVICE_API_URL = "https://your-ssh-service.com"
 
 # 环境变量配置
 [env.production.vars]
@@ -73,6 +74,7 @@ MAILCHANNELS_REPLY_TO_EMAIL = "support@supagraph.ai"
 MAILCHANNELS_API_ENDPOINT = "https://api.mailchannels.net/tx/v1/send"
 MAILCHANNELS_API_KEY = "your-api-key-here"
 CACHE_VERSION = "v1"
+SSH_SERVICE_API_URL = "https://your-ssh-service.com"
 
 # AI提供商配置 - OpenAI
 OPENAI_BASE_URL = "https://api.openai.com/v1"
@@ -117,6 +119,7 @@ MAILCHANNELS_REPLY_TO_EMAIL = "support@supagraph.ai"
 MAILCHANNELS_API_ENDPOINT = "https://api.mailchannels.net/tx/v1/send"
 MAILCHANNELS_API_KEY = "your-api-key-here"
 CACHE_VERSION = "v1"
+SSH_SERVICE_API_URL = "https://your-ssh-service.com"
 
 # AI提供商配置 - OpenAI
 OPENAI_BASE_URL = "https://api.openai.com/v1"

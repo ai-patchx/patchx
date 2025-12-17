@@ -6,6 +6,7 @@ import { EnhancedPatchService } from './services/enhancedPatchService'
 import { GerritService } from './services/gerritService'
 import { getKvNamespace } from './kv'
 import { executeSSHCommandDirect } from './ssh-client'
+import { getSupabaseClient } from './supabase'
 
 interface RemoteNodeData {
   id: string
@@ -1255,25 +1256,30 @@ async function handleProjectBranches(
 // Remote Node Management Handlers
 async function handleGetNodes(env: Env, corsHeaders: Record<string, string>): Promise<Response> {
   try {
-    const kv = getKvNamespace(env)
+    const supabase = getSupabaseClient(env)
 
-    // Get all nodes from KV
-    const nodesList: any[] = []
-    // Note: KV doesn't support listing all keys directly, so we'll need to maintain a list
-    // For now, we'll use a single key to store all nodes
-    const nodesData = await kv.get('remote_nodes:list', 'json')
+    // Get all nodes from Supabase
+    const { data: nodes, error } = await supabase
+      .from('remote_nodes')
+      .select('id, name, host, port, username, auth_type, working_home, created_at, updated_at')
+      .order('created_at', { ascending: false })
 
-    if (nodesData && Array.isArray(nodesData)) {
-      // Fetch each node's full data
-      for (const nodeId of nodesData) {
-        const nodeData = await kv.get(`remote_nodes:${nodeId}`, 'json') as RemoteNodeData | null
-        if (nodeData) {
-          // Don't return sensitive data (password/sshKey) in list
-          const { password, sshKey, ...safeNode } = nodeData
-          nodesList.push(safeNode)
-        }
-      }
+    if (error) {
+      throw new Error(`Failed to fetch nodes from Supabase: ${error.message}`)
     }
+
+    // Map Supabase data to RemoteNode format
+    const nodesList = (nodes || []).map((node: any) => ({
+      id: node.id,
+      name: node.name,
+      host: node.host,
+      port: node.port,
+      username: node.username,
+      authType: node.auth_type,
+      workingHome: node.working_home,
+      createdAt: node.created_at,
+      updatedAt: node.updated_at
+    }))
 
     return new Response(
       JSON.stringify({
@@ -1308,7 +1314,7 @@ async function handleGetNodes(env: Env, corsHeaders: Record<string, string>): Pr
 
 async function handleCreateNode(request: Request, env: Env, corsHeaders: Record<string, string>): Promise<Response> {
   try {
-    const kv = getKvNamespace(env)
+    const supabase = getSupabaseClient(env)
 
     const body = await request.json() as {
       name: string
@@ -1370,37 +1376,38 @@ async function handleCreateNode(request: Request, env: Env, corsHeaders: Record<
       )
     }
 
-    const nodeId = `node_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
-    const now = new Date().toISOString()
+    // Insert node into Supabase
+    const { data: node, error } = await supabase
+      .from('remote_nodes')
+      .insert({
+        name: body.name,
+        host: body.host,
+        port: body.port || 22,
+        username: body.username,
+        auth_type: body.authType,
+        ssh_key: body.authType === 'key' ? body.sshKey : null,
+        password: body.authType === 'password' ? body.password : null, // In production, encrypt this
+        working_home: body.workingHome || null
+      })
+      .select('id, name, host, port, username, auth_type, working_home, created_at, updated_at')
+      .single()
 
-    const node: RemoteNodeData = {
-      id: nodeId,
-      name: body.name,
-      host: body.host,
-      port: body.port || 22,
-      username: body.username,
-      authType: body.authType,
-      sshKey: body.authType === 'key' ? body.sshKey : undefined,
-      password: body.authType === 'password' ? body.password : undefined, // In production, encrypt this
-      workingHome: body.workingHome,
-      createdAt: now,
-      updatedAt: now
+    if (error) {
+      throw new Error(`Failed to create node in Supabase: ${error.message}`)
     }
 
-    // Store node
-    await kv.put(`remote_nodes:${nodeId}`, JSON.stringify(node))
-
-    // Update nodes list
-    const nodesList = (await kv.get('remote_nodes:list', 'json')) || []
-    if (Array.isArray(nodesList)) {
-      nodesList.push(nodeId)
-      await kv.put('remote_nodes:list', JSON.stringify(nodesList))
-    } else {
-      await kv.put('remote_nodes:list', JSON.stringify([nodeId]))
+    // Map Supabase data to RemoteNode format
+    const safeNode = {
+      id: node.id,
+      name: node.name,
+      host: node.host,
+      port: node.port,
+      username: node.username,
+      authType: node.auth_type,
+      workingHome: node.working_home,
+      createdAt: node.created_at,
+      updatedAt: node.updated_at
     }
-
-    // Return node without sensitive data
-    const { password, sshKey, ...safeNode } = node
 
     return new Response(
       JSON.stringify({
@@ -1435,7 +1442,7 @@ async function handleCreateNode(request: Request, env: Env, corsHeaders: Record<
 
 async function handleUpdateNode(path: string, request: Request, env: Env, corsHeaders: Record<string, string>): Promise<Response> {
   try {
-    const kv = getKvNamespace(env)
+    const supabase = getSupabaseClient(env)
 
     const nodeId = path.split('/')[3] // /api/nodes/{id}
     if (!nodeId) {
@@ -1454,8 +1461,14 @@ async function handleUpdateNode(path: string, request: Request, env: Env, corsHe
       )
     }
 
-    const existingNode = await kv.get(`remote_nodes:${nodeId}`, 'json') as RemoteNodeData | null
-    if (!existingNode) {
+    // Check if node exists
+    const { data: existingNode, error: fetchError } = await supabase
+      .from('remote_nodes')
+      .select('*')
+      .eq('id', nodeId)
+      .single()
+
+    if (fetchError || !existingNode) {
       return new Response(
         JSON.stringify({
           success: false,
@@ -1482,32 +1495,59 @@ async function handleUpdateNode(path: string, request: Request, env: Env, corsHe
       workingHome?: string
     }
 
-    // Update node
-    const updatedNode: RemoteNodeData = {
-      ...existingNode,
-      ...(body.name && { name: body.name }),
-      ...(body.host && { host: body.host }),
-      ...(body.port && { port: body.port }),
-      ...(body.username && { username: body.username }),
-      ...(body.authType && { authType: body.authType }),
-      ...(body.authType === 'key' && body.sshKey && { sshKey: body.sshKey }),
-      ...(body.authType === 'password' && body.password && { password: body.password }), // In production, encrypt this
-      // If authType changed, clear the other auth method
-      ...(body.authType === 'key' && { password: undefined }),
-      ...(body.authType === 'password' && { sshKey: undefined }),
-      ...(body.workingHome !== undefined && { workingHome: body.workingHome }),
-      updatedAt: new Date().toISOString()
+    // Build update object
+    const updateData: any = {}
+    if (body.name !== undefined) updateData.name = body.name
+    if (body.host !== undefined) updateData.host = body.host
+    if (body.port !== undefined) updateData.port = body.port
+    if (body.username !== undefined) updateData.username = body.username
+    if (body.authType !== undefined) updateData.auth_type = body.authType
+    if (body.workingHome !== undefined) updateData.working_home = body.workingHome
+
+    // Handle authentication credentials
+    if (body.authType === 'key') {
+      if (body.sshKey !== undefined) {
+        updateData.ssh_key = body.sshKey
+      }
+      updateData.password = null // Clear password when switching to key auth
+    } else if (body.authType === 'password') {
+      if (body.password !== undefined && body.password !== '') {
+        updateData.password = body.password
+      } else if (body.password === '' && existingNode.password) {
+        // Keep existing password if empty string provided
+        updateData.password = existingNode.password
+      }
+      updateData.ssh_key = null // Clear SSH key when switching to password auth
+    } else if (body.sshKey !== undefined) {
+      updateData.ssh_key = body.sshKey
+    } else if (body.password !== undefined && body.password !== '') {
+      updateData.password = body.password
     }
 
-    // If password is empty string and we're editing, keep existing password
-    if (body.authType === 'password' && body.password === '' && existingNode.password) {
-      updatedNode.password = existingNode.password
+    // Update node in Supabase
+    const { data: updatedNode, error: updateError } = await supabase
+      .from('remote_nodes')
+      .update(updateData)
+      .eq('id', nodeId)
+      .select('id, name, host, port, username, auth_type, working_home, created_at, updated_at')
+      .single()
+
+    if (updateError) {
+      throw new Error(`Failed to update node in Supabase: ${updateError.message}`)
     }
 
-    await kv.put(`remote_nodes:${nodeId}`, JSON.stringify(updatedNode))
-
-    // Return node without sensitive data
-    const { password, sshKey, ...safeNode } = updatedNode
+    // Map Supabase data to RemoteNode format
+    const safeNode = {
+      id: updatedNode.id,
+      name: updatedNode.name,
+      host: updatedNode.host,
+      port: updatedNode.port,
+      username: updatedNode.username,
+      authType: updatedNode.auth_type,
+      workingHome: updatedNode.working_home,
+      createdAt: updatedNode.created_at,
+      updatedAt: updatedNode.updated_at
+    }
 
     return new Response(
       JSON.stringify({
@@ -1542,7 +1582,7 @@ async function handleUpdateNode(path: string, request: Request, env: Env, corsHe
 
 async function handleDeleteNode(path: string, env: Env, corsHeaders: Record<string, string>): Promise<Response> {
   try {
-    const kv = getKvNamespace(env)
+    const supabase = getSupabaseClient(env)
 
     const nodeId = path.split('/')[3] // /api/nodes/{id}
     if (!nodeId) {
@@ -1561,14 +1601,14 @@ async function handleDeleteNode(path: string, env: Env, corsHeaders: Record<stri
       )
     }
 
-    // Delete node
-    await kv.delete(`remote_nodes:${nodeId}`)
+    // Delete node from Supabase
+    const { error } = await supabase
+      .from('remote_nodes')
+      .delete()
+      .eq('id', nodeId)
 
-    // Update nodes list
-    const nodesList = (await kv.get('remote_nodes:list', 'json')) || []
-    if (Array.isArray(nodesList)) {
-      const updatedList = nodesList.filter((id: string) => id !== nodeId)
-      await kv.put('remote_nodes:list', JSON.stringify(updatedList))
+    if (error) {
+      throw new Error(`Failed to delete node from Supabase: ${error.message}`)
     }
 
     return new Response(
@@ -1683,8 +1723,8 @@ async function performSshConnectionTest(host: string, port: number, timeoutMs = 
 }
 
 /**
- * Execute an SSH command on a remote host using direct socket connection
- * Delegates to the SSH client implementation
+ * Execute an SSH command on a remote host
+ * Uses SSH service API if available, otherwise attempts direct execution
  */
 async function executeSSHCommand(
   host: string,
@@ -1697,6 +1737,57 @@ async function executeSSHCommand(
   env?: Env,
   timeoutMs = 15000
 ): Promise<{ success: boolean; output: string; error?: string }> {
+  // Check for SSH service API endpoint (if configured via environment variable)
+  const sshServiceUrl = env?.SSH_SERVICE_API_URL
+
+  if (sshServiceUrl) {
+    try {
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), timeoutMs)
+
+      const response = await fetch(`${sshServiceUrl}/execute`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          host,
+          port,
+          username,
+          authType,
+          sshKey,
+          password,
+          command
+        }),
+        signal: controller.signal
+      })
+
+      clearTimeout(timeoutId)
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: 'Failed to execute SSH command' })) as { error?: string }
+        return { success: false, output: '', error: errorData.error || 'Unknown error' }
+      }
+
+      const result = await response.json() as { success: boolean; output?: string; error?: string }
+      return {
+        success: result.success,
+        output: result.output || '',
+        error: result.error
+      }
+    } catch (error) {
+      if (error instanceof Error && error.name === 'AbortError') {
+        return { success: false, output: '', error: 'SSH command execution timed out' }
+      }
+      return {
+        success: false,
+        output: '',
+        error: `Failed to execute SSH command via service: ${error instanceof Error ? error.message : 'Unknown error'}`
+      }
+    }
+  }
+
+  // Fallback to direct execution (limited functionality)
   return await executeSSHCommandDirect(
     host,
     port,
@@ -1801,7 +1892,7 @@ async function verifyWorkingHomeDirectory(
 
 async function handleTestNode(path: string, env: Env, corsHeaders: Record<string, string>): Promise<Response> {
   try {
-    const kv = getKvNamespace(env)
+    const supabase = getSupabaseClient(env)
 
     const nodeId = path.split('/')[3] // /api/nodes/{id}/test
     if (!nodeId) {
@@ -1820,8 +1911,14 @@ async function handleTestNode(path: string, env: Env, corsHeaders: Record<string
       )
     }
 
-    const node = await kv.get(`remote_nodes:${nodeId}`, 'json') as RemoteNodeData | null
-    if (!node) {
+    // Fetch node from Supabase (including sensitive data for testing)
+    const { data: node, error: fetchError } = await supabase
+      .from('remote_nodes')
+      .select('*')
+      .eq('id', nodeId)
+      .single()
+
+    if (fetchError || !node) {
       return new Response(
         JSON.stringify({
           success: false,
@@ -1837,7 +1934,22 @@ async function handleTestNode(path: string, env: Env, corsHeaders: Record<string
       )
     }
 
-    if (!node.host || !node.username) {
+    // Map Supabase data to RemoteNodeData format
+    const nodeData: RemoteNodeData = {
+      id: node.id,
+      name: node.name,
+      host: node.host,
+      port: node.port,
+      username: node.username,
+      authType: node.auth_type,
+      sshKey: node.ssh_key || undefined,
+      password: node.password || undefined,
+      workingHome: node.working_home || undefined,
+      createdAt: node.created_at,
+      updatedAt: node.updated_at
+    }
+
+    if (!nodeData.host || !nodeData.username) {
       return new Response(
         JSON.stringify({
           success: false,
@@ -1853,7 +1965,7 @@ async function handleTestNode(path: string, env: Env, corsHeaders: Record<string
       )
     }
 
-    if (node.authType === 'key' && !node.sshKey) {
+    if (nodeData.authType === 'key' && !nodeData.sshKey) {
       return new Response(
         JSON.stringify({
           success: false,
@@ -1869,7 +1981,7 @@ async function handleTestNode(path: string, env: Env, corsHeaders: Record<string
       )
     }
 
-    if (node.authType === 'password' && !node.password) {
+    if (nodeData.authType === 'password' && !nodeData.password) {
       return new Response(
         JSON.stringify({
           success: false,
@@ -1885,7 +1997,7 @@ async function handleTestNode(path: string, env: Env, corsHeaders: Record<string
       )
     }
 
-    const { banner, latencyMs } = await performSshConnectionTest(node.host, node.port || 22)
+    const { banner, latencyMs } = await performSshConnectionTest(nodeData.host, nodeData.port || 22)
 
     let message = `SSH reachable. Banner: ${banner}. Latency: ${latencyMs}ms`
 
@@ -1998,10 +2110,30 @@ async function handleTestNodeConfig(request: Request, env: Env, corsHeaders: Rec
 
     let message = `SSH reachable. Banner: ${banner}. Latency: ${latencyMs}ms`
 
-    // Note: Working home verification is skipped in connection test
-    // as it requires full SSH protocol implementation for command execution
-    if (body.workingHome) {
-      message += `. Working home configured: ${body.workingHome} (verification skipped)`
+    // Test working home directory if provided and SSH service is available
+    if (body.workingHome && env?.SSH_SERVICE_API_URL) {
+      try {
+        const dirVerification = await verifyWorkingHomeDirectory(
+          body.host,
+          body.port || 22,
+          body.username,
+          body.authType,
+          body.sshKey,
+          body.password,
+          body.workingHome,
+          env
+        )
+
+        if (dirVerification.exists) {
+          message += `. Working home verified: ${dirVerification.message}`
+        } else {
+          message += `. Working home verification failed: ${dirVerification.message}`
+        }
+      } catch (error) {
+        message += `. Working home verification error: ${error instanceof Error ? error.message : 'Unknown error'}`
+      }
+    } else if (body.workingHome) {
+      message += `. Working home configured: ${body.workingHome} (verification requires SSH_SERVICE_API_URL)`
     }
 
     return new Response(

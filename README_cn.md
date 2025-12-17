@@ -18,13 +18,16 @@
 - 🌿 **动态分支列表**: 自动获取所选项目的所有分支
 - 🔍 **可搜索下拉框**: 支持实时搜索和过滤项目和分支
 - ⚡ **智能缓存**: 项目和分支数据本地缓存 10 分钟，提升性能并减少 API 调用
+- 🖥️ **远程节点管理**: 配置和管理用于 git 操作的 SSH 远程节点
+- 🔐 **SSH 认证**: 支持 SSH 密钥和密码两种认证方式
+- 📁 **工作目录**: 为远程 git 操作指定工作主目录
 
 ## 🛠️ 技术栈
 
 - **前端**: React 18 + TypeScript + Tailwind CSS
 - **后端**: Cloudflare Workers + TypeScript
 - **AI集成**: 支持 OpenAI、Anthropic 等第三方大模型
-- **存储**: Cloudflare KV
+- **存储**: Supabase（用于用户数据和远程节点），Cloudflare KV（用于缓存）
 - **部署**: Cloudflare Workers + Pages
 
 ## 🤖 AI 冲突解决特性
@@ -89,6 +92,7 @@ GERRIT_BASE_URL=https://android-review.googlesource.com
 GERRIT_USERNAME=your-gerrit-username
 GERRIT_PASSWORD=your-gerrit-password-or-token
 CACHE_VERSION=v1
+SSH_SERVICE_API_URL=https://your-ssh-service.com
 ```
 `VITE_PUBLIC_SITE_URL` 用于邮箱验证。本地开发可保持为 `http://localhost:5173`，线上部署时请设置为实际站点地址（如 `https://patchx.pages.dev`）。
 
@@ -480,6 +484,94 @@ LITELLM_API_KEY = "<your-litellm-api-key>"
 ```
 2. Worker 提供公共配置端点 `/api/config/public`，返回 `{ supabaseUrl, supabaseAnonKey }`。
 3. 前端采用惰性初始化 Supabase，当未设置 `SUPABASE_*` 时将回退到该端点。
+
+### 远程节点配置
+
+远程节点允许您通过 SSH 在远程服务器上执行 git 操作。这对于在远程构建服务器上应用补丁和管理 git 仓库非常有用。
+
+#### 功能特性
+
+- **SSH 连接管理**: 配置远程服务器的主机、端口和用户名
+- **身份认证**: 支持 SSH 密钥和密码两种认证方式
+- **工作主目录**: 为 git 操作指定工作目录路径
+- **连接测试**: 测试 SSH 连接并验证工作主目录
+- **Supabase 存储**: 远程节点配置存储在 Supabase 数据库中
+
+#### 设置远程节点
+
+1. **访问设置页面**: 导航到设置页面（仅管理员）
+2. **添加远程节点**: 点击"添加远程节点"按钮
+3. **配置节点**:
+   - **名称**: 节点的描述性名称（例如："Ubuntu 构建服务器 1"）
+   - **主机**: 远程服务器的 IP 地址或主机名
+   - **端口**: SSH 端口（默认：22）
+   - **用户名**: SSH 用户名
+   - **工作主目录**: 可选的工作目录路径（例如：`/home/username/my-tmp/patchx`）
+   - **认证类型**: 选择 SSH 密钥或密码
+   - **SSH 密钥/密码**: 提供认证凭据
+
+4. **测试连接**: 点击"测试连接"以验证：
+   - SSH 连接性（主机、端口、横幅、延迟）
+   - 工作主目录（如果配置了 SSH 服务 API）
+
+#### SSH 服务 API 配置（可选）
+
+为了验证工作主目录，您可以配置外部 SSH 服务 API：
+
+1. **设置环境变量**在 `wrangler.toml` 或 Cloudflare Workers 设置中：
+   ```toml
+   SSH_SERVICE_API_URL = "https://your-ssh-service.com"
+   ```
+
+2. **SSH 服务 API 要求**:
+   - 端点: `POST /execute`
+   - 请求体:
+     ```json
+     {
+       "host": "string",
+       "port": number,
+       "username": "string",
+       "authType": "key" | "password",
+       "sshKey": "string",
+       "password": "string",
+       "command": "string"
+     }
+     ```
+   - 响应:
+     ```json
+     {
+       "success": boolean,
+       "output": "string",
+       "error": "string"
+     }
+     ```
+
+3. **没有 SSH 服务 API**: 连接测试仍会验证 SSH 连接性，但工作主目录验证将被跳过。
+
+#### 数据库设置
+
+运行数据库重置脚本时会自动创建 `remote_nodes` 表：
+
+```bash
+./scripts/reset-db.sh --confirm
+```
+
+该表包括：
+- 节点元数据（名称、主机、端口、用户名）
+- 认证凭据（SSH 密钥或密码）
+- 工作主目录路径
+- 时间戳（created_at, updated_at）
+
+#### 使用远程节点
+
+提交补丁时：
+1. 从下拉菜单中选择远程节点（可选）
+2. 如果选择了远程节点，请提供 Git 仓库 URL
+3. 系统将在远程节点上执行 git 操作：
+   - 克隆仓库
+   - 应用补丁
+   - 如有需要，执行冲突解决
+   - 提交并推送更改
 
 ### Gerrit 配置
 

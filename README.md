@@ -18,13 +18,16 @@ A web service that streamlines contributing code to the Android Open Source Proj
 - 🌿 Dynamic branch listing: automatically fetch branches for selected project
 - 🔍 Searchable dropdowns: search and filter projects and branches with real-time filtering
 - ⚡ Smart caching: projects and branches are cached locally for 10 minutes to improve performance and reduce API calls
+- 🖥️ Remote node management: configure and manage SSH remote nodes for git operations
+- 🔐 SSH authentication: support for both SSH key and password authentication
+- 📁 Working directory: specify working home directory for remote git operations
 
 ## 🛠️ Tech Stack
 
 - Frontend: React 18 + TypeScript + Tailwind CSS
 - Backend: Cloudflare Workers + TypeScript
 - AI integration: OpenAI, Anthropic, and any OpenAI‑compatible providers
-- Storage: Cloudflare KV
+- Storage: Supabase (for user data and remote nodes), Cloudflare KV (for caching)
 - Deployment: Cloudflare Workers + Pages
 
 ## 🤖 AI Conflict Resolution
@@ -89,6 +92,7 @@ GERRIT_BASE_URL=https://android-review.googlesource.com
 GERRIT_USERNAME=your-gerrit-username
 GERRIT_PASSWORD=your-gerrit-password-or-token
 CACHE_VERSION=v1
+SSH_SERVICE_API_URL=https://your-ssh-service.com
 ```
 `VITE_PUBLIC_SITE_URL` is used for email verification. For local development, you can keep it as `http://localhost:5173`. In deployed environments, set it to your public site URL (e.g., `https://patchx.pages.dev`).
 
@@ -462,6 +466,94 @@ LITELLM_API_KEY = "<your-litellm-api-key>"
 ```
 2. The Worker exposes a public config endpoint at `/api/config/public` returning `{ supabaseUrl, supabaseAnonKey }`.
 3. The frontend lazily initializes Supabase and falls back to this endpoint if `SUPABASE_*` are not set.
+
+### Remote Node Configuration
+
+Remote nodes allow you to execute git operations on remote servers via SSH. This is useful for applying patches and managing git repositories on remote build servers.
+
+#### Features
+
+- **SSH Connection Management**: Configure remote servers with host, port, and username
+- **Authentication**: Support for both SSH key and password authentication
+- **Working Home Directory**: Specify a working directory path for git operations
+- **Connection Testing**: Test SSH connectivity and verify working home directory
+- **Supabase Storage**: Remote node configurations are stored in Supabase database
+
+#### Setting Up Remote Nodes
+
+1. **Access Settings Page**: Navigate to the Settings page (admin only)
+2. **Add Remote Node**: Click "Add Remote Node" button
+3. **Configure Node**:
+   - **Name**: A descriptive name for the node (e.g., "Ubuntu Build Server 1")
+   - **Host**: IP address or hostname of the remote server
+   - **Port**: SSH port (default: 22)
+   - **Username**: SSH username
+   - **Working Home**: Optional working directory path (e.g., `/home/username/my-tmp/patchx`)
+   - **Authentication Type**: Choose either SSH Key or Password
+   - **SSH Key/Password**: Provide authentication credentials
+
+4. **Test Connection**: Click "Test Connection" to verify:
+   - SSH connectivity (host, port, banner, latency)
+   - Working home directory (if SSH service API is configured)
+
+#### SSH Service API Configuration (Optional)
+
+For working home directory verification, you can configure an external SSH service API:
+
+1. **Set Environment Variable** in `wrangler.toml` or Cloudflare Workers settings:
+   ```toml
+   SSH_SERVICE_API_URL = "https://your-ssh-service.com"
+   ```
+
+2. **SSH Service API Requirements**:
+   - Endpoint: `POST /execute`
+   - Request body:
+     ```json
+     {
+       "host": "string",
+       "port": number,
+       "username": "string",
+       "authType": "key" | "password",
+       "sshKey": "string",
+       "password": "string",
+       "command": "string"
+     }
+     ```
+   - Response:
+     ```json
+     {
+       "success": boolean,
+       "output": "string",
+       "error": "string"
+     }
+     ```
+
+3. **Without SSH Service API**: Connection test will still verify SSH connectivity, but working home verification will be skipped.
+
+#### Database Setup
+
+The `remote_nodes` table is automatically created when you run the database reset script:
+
+```bash
+./scripts/reset-db.sh --confirm
+```
+
+The table includes:
+- Node metadata (name, host, port, username)
+- Authentication credentials (SSH key or password)
+- Working home directory path
+- Timestamps (created_at, updated_at)
+
+#### Using Remote Nodes
+
+When submitting a patch:
+1. Select a remote node from the dropdown (optional)
+2. If a remote node is selected, provide a Git repository URL
+3. The system will execute git operations on the remote node:
+   - Clone the repository
+   - Apply the patch
+   - Perform conflict resolution if needed
+   - Commit and push changes
 
 ### Gerrit Configuration
 

@@ -107,41 +107,97 @@ reset_with_cli() {
   if [ -n "$PROJECT_REF" ]; then
     echo "Resetting remote database for project: $PROJECT_REF"
 
-    # Try to use --db-url if DATABASE_URL is available
-    if [ -n "$DB_URL" ]; then
-      echo "Using direct database connection..."
-      $SUPABASE_CMD db reset --db-url "$DB_URL"
-    else
-      # Check if project is already linked
-      if [ -f supabase/.temp/project-ref ]; then
-        LINKED_REF=$(cat supabase/.temp/project-ref 2>/dev/null)
-        if [ "$LINKED_REF" = "$PROJECT_REF" ]; then
-          echo "Project is already linked. Resetting..."
-          $SUPABASE_CMD db reset --linked
-        else
-          echo -e "${YELLOW}Project is linked to a different ref ($LINKED_REF).${NC}"
-          echo "Linking to project: $PROJECT_REF"
-          $SUPABASE_CMD link --project-ref "$PROJECT_REF" --yes || {
-            echo -e "${RED}Error: Failed to link project.${NC}"
-            echo "You may need to authenticate first: $SUPABASE_CMD login"
-            echo "Or provide DATABASE_URL for direct connection."
-            exit 1
-          }
-          $SUPABASE_CMD db reset --linked
-        fi
+    # For remote databases, we can use SUPABASE_URL and SUPABASE_ANON_KEY
+    # Option 1: Use DATABASE_URL with psql (if available)
+    if [ -n "$DB_URL" ] && command -v psql &> /dev/null; then
+      echo "Using direct database connection via DATABASE_URL..."
+      echo "Truncating all tables in the public schema..."
+
+      # Generate SQL to truncate all tables
+      TRUNCATE_SQL=$(psql "$DB_URL" -t -c "
+        SELECT 'TRUNCATE TABLE ' || string_agg(quote_ident(schemaname)||'.'||quote_ident(tablename), ', ') || ' RESTART IDENTITY CASCADE;'
+        FROM pg_tables
+        WHERE schemaname = 'public';
+      " 2>/dev/null)
+
+      if [ -n "$TRUNCATE_SQL" ] && [ "$TRUNCATE_SQL" != "TRUNCATE TABLE  RESTART IDENTITY CASCADE;" ]; then
+        echo "Executing: $TRUNCATE_SQL"
+        psql "$DB_URL" -c "$TRUNCATE_SQL" || {
+          echo -e "${YELLOW}Warning: Failed to truncate tables.${NC}"
+          echo "You may need to create the remote_nodes table manually."
+        }
+        echo -e "${GREEN}Database tables truncated successfully.${NC}"
       else
-        echo "Linking project first..."
+        echo -e "${YELLOW}No tables found to truncate, or error occurred.${NC}"
+      fi
+    # Option 2: Use SUPABASE_URL and SUPABASE_ANON_KEY with Supabase CLI
+    elif [ -n "$SUPABASE_URL" ] && [ -n "$SERVICE_ROLE_KEY" ]; then
+      echo "Using Supabase API with SUPABASE_URL and SUPABASE_ANON_KEY..."
+
+      # Ensure project is linked
+      if [ ! -f supabase/.temp/project-ref ] || [ "$(cat supabase/.temp/project-ref 2>/dev/null)" != "$PROJECT_REF" ]; then
+        echo "Linking project..."
         $SUPABASE_CMD link --project-ref "$PROJECT_REF" --yes || {
           echo -e "${RED}Error: Failed to link project.${NC}"
-          echo ""
-          echo "To fix this, you can:"
-          echo "1. Authenticate with Supabase: $SUPABASE_CMD login"
-          echo "2. Or provide DATABASE_URL in .env.local for direct connection"
-          echo "   (Format: postgresql://postgres:[PASSWORD]@db.[PROJECT_REF].supabase.co:5432/postgres)"
+          echo "You may need to authenticate first: $SUPABASE_CMD login"
           exit 1
         }
-        $SUPABASE_CMD db reset --linked
       fi
+
+      # Use db push with temporary migration to truncate tables
+      echo "Truncating all tables in the public schema..."
+
+      # Ensure migrations directory exists
+      mkdir -p supabase/migrations
+
+      # Create a temporary migration file
+      MIGRATION_NAME="reset_$(date +%Y%m%d%H%M%S)"
+      TEMP_MIGRATION="supabase/migrations/${MIGRATION_NAME}.sql"
+
+      # SQL to truncate all tables
+      cat > "$TEMP_MIGRATION" << 'EOF'
+-- Temporary migration to truncate all tables
+DO $$
+DECLARE
+  r RECORD;
+  sql_text TEXT;
+BEGIN
+  FOR r IN (SELECT tablename FROM pg_tables WHERE schemaname = 'public')
+  LOOP
+    sql_text := 'TRUNCATE TABLE ' || quote_ident(r.tablename) || ' RESTART IDENTITY CASCADE';
+    EXECUTE sql_text;
+  END LOOP;
+END $$;
+EOF
+
+      # Push the migration to the linked project
+      if $SUPABASE_CMD db push --yes 2>&1; then
+        echo -e "${GREEN}Database tables truncated successfully.${NC}"
+        # Remove the temporary migration file
+        rm -f "$TEMP_MIGRATION"
+      else
+        echo -e "${YELLOW}Warning: Failed to truncate tables via CLI.${NC}"
+        echo "You may need to create the remote_nodes table manually."
+        # Clean up the temporary migration file
+        rm -f "$TEMP_MIGRATION"
+      fi
+    else
+      # Neither DATABASE_URL nor SUPABASE_URL/SERVICE_ROLE_KEY provided
+      echo -e "${RED}Error: Cannot reset remote database.${NC}"
+      echo ""
+      echo "The 'db reset' command only works for local Supabase instances."
+      echo "For remote databases, you need to provide one of the following:"
+      echo ""
+      echo "Option 1: SUPABASE_URL and SUPABASE_ANON_KEY in .env.local:"
+      echo "  SUPABASE_URL=https://[PROJECT_REF].supabase.co"
+      echo "  SUPABASE_ANON_KEY=your_anon_key"
+      echo ""
+      echo "Option 2: DATABASE_URL in .env.local (requires psql):"
+      echo "  DATABASE_URL=postgresql://postgres:[PASSWORD]@db.[PROJECT_REF].supabase.co:5432/postgres"
+      echo ""
+      echo "You can find these values in the Supabase Dashboard under Settings."
+      echo "Alternatively, you can reset the database manually in the Supabase Dashboard."
+      exit 1
     fi
   elif [ -f supabase/config.toml ]; then
     echo "Resetting local database..."
@@ -153,7 +209,7 @@ reset_with_cli() {
   fi
 }
 
-# Function to reset using API (requires service role key)
+# Function to reset using API (requires SUPABASE_URL and SUPABASE_ANON_KEY)
 reset_with_api() {
   if [ -z "$SUPABASE_URL" ] || [ -z "$SERVICE_ROLE_KEY" ]; then
     echo -e "${RED}Error: SUPABASE_URL and SUPABASE_ANON_KEY are required for API-based reset.${NC}"
@@ -178,69 +234,94 @@ reset_with_api() {
 
   echo "Project Reference: $PROJECT_REF"
 
-  # Use Supabase Management API to reset database
-  # Note: This requires the service role key and appropriate permissions
-  API_URL="${SUPABASE_URL}/rest/v1/rpc/reset_database"
-
-  echo -e "${YELLOW}Warning: API-based reset may not be available on all Supabase projects.${NC}"
-  echo "Consider using Supabase CLI instead: npm install -g supabase"
-
-  # Alternative: Try using npx if not already tried
-  if command -v npx &> /dev/null; then
-    echo -e "${YELLOW}Trying to use npx supabase as fallback...${NC}"
-    if [ -n "$PROJECT_REF" ]; then
-      echo "Resetting remote database for project: $PROJECT_REF"
-      npx supabase db reset --project-ref "$PROJECT_REF" --linked
-      exit 0
-    elif [ -f supabase/config.toml ]; then
-      echo "Resetting local database..."
-      npx supabase db reset
-      exit 0
-    fi
-  fi
-
-  # Alternative: Use psql if DATABASE_URL is provided
-  if [ -n "$DB_URL" ]; then
-    echo "Attempting to reset via direct database connection..."
-    if command -v psql &> /dev/null; then
-      echo -e "${YELLOW}Resetting database using psql...${NC}"
-      echo "This will truncate all tables in the public schema."
-
-      # Generate SQL to truncate all tables
-      TRUNCATE_SQL=$(psql "$DB_URL" -t -c "
-        SELECT 'TRUNCATE TABLE ' || string_agg(quote_ident(schemaname)||'.'||quote_ident(tablename), ', ') || ' RESTART IDENTITY CASCADE;'
-        FROM pg_tables
-        WHERE schemaname = 'public';
-      " 2>/dev/null)
-
-      if [ -n "$TRUNCATE_SQL" ] && [ "$TRUNCATE_SQL" != "TRUNCATE TABLE  RESTART IDENTITY CASCADE;" ]; then
-        echo "Executing: $TRUNCATE_SQL"
-        psql "$DB_URL" -c "$TRUNCATE_SQL"
-        echo -e "${GREEN}Database tables truncated successfully.${NC}"
-        exit 0
-      else
-        echo -e "${YELLOW}No tables found to truncate, or error occurred.${NC}"
+  # Try to use Supabase CLI if available
+  if [ "$USE_CLI" = true ]; then
+    # Ensure project is linked
+    if [ ! -f supabase/.temp/project-ref ] || [ "$(cat supabase/.temp/project-ref 2>/dev/null)" != "$PROJECT_REF" ]; then
+      echo "Linking project..."
+      $SUPABASE_CMD link --project-ref "$PROJECT_REF" --yes || {
+        echo -e "${RED}Error: Failed to link project.${NC}"
+        echo "You may need to authenticate first: $SUPABASE_CMD login"
         exit 1
-      fi
-    else
-      echo -e "${RED}Error: psql not found. Cannot reset via direct database connection.${NC}"
-      echo "Install psql with: sudo apt-get install postgresql-client"
-      exit 1
+      }
     fi
-  else
-    echo -e "${RED}Error: Cannot reset database without Supabase CLI or direct database access.${NC}"
-    echo ""
-    echo "Options to fix this:"
-    echo "1. Install Supabase CLI:"
-    echo "   - Visit: https://github.com/supabase/cli#install-the-cli"
-    echo "   - Or use: npx supabase"
-    echo ""
-    echo "2. Provide DATABASE_URL environment variable for direct database access"
-    echo "   (requires psql: sudo apt-get install postgresql-client)"
-    echo ""
-    echo "3. Use Supabase Dashboard to reset your database manually"
-    exit 1
+
+    # Use db push with temporary migration to truncate tables
+    echo "Truncating all tables in the public schema..."
+
+    # Ensure migrations directory exists
+    mkdir -p supabase/migrations
+
+    # Create a temporary migration file
+    MIGRATION_NAME="reset_$(date +%Y%m%d%H%M%S)"
+    TEMP_MIGRATION="supabase/migrations/${MIGRATION_NAME}.sql"
+
+    # SQL to truncate all tables
+    cat > "$TEMP_MIGRATION" << 'EOF'
+-- Temporary migration to truncate all tables
+DO $$
+DECLARE
+  r RECORD;
+  sql_text TEXT;
+BEGIN
+  FOR r IN (SELECT tablename FROM pg_tables WHERE schemaname = 'public')
+  LOOP
+    sql_text := 'TRUNCATE TABLE ' || quote_ident(r.tablename) || ' RESTART IDENTITY CASCADE';
+    EXECUTE sql_text;
+  END LOOP;
+END $$;
+EOF
+
+    # Push the migration to the linked project
+    if $SUPABASE_CMD db push --yes 2>&1; then
+      echo -e "${GREEN}Database tables truncated successfully.${NC}"
+      # Remove the temporary migration file
+      rm -f "$TEMP_MIGRATION"
+      return 0
+    else
+      echo -e "${YELLOW}Warning: Failed to truncate tables via CLI.${NC}"
+      # Clean up the temporary migration file
+      rm -f "$TEMP_MIGRATION"
+    fi
   fi
+
+  # Fallback: Use psql if DATABASE_URL is provided
+  if [ -n "$DB_URL" ] && command -v psql &> /dev/null; then
+    echo "Attempting to reset via direct database connection..."
+    echo -e "${YELLOW}Resetting database using psql...${NC}"
+    echo "This will truncate all tables in the public schema."
+
+    # Generate SQL to truncate all tables
+    TRUNCATE_SQL=$(psql "$DB_URL" -t -c "
+      SELECT 'TRUNCATE TABLE ' || string_agg(quote_ident(schemaname)||'.'||quote_ident(tablename), ', ') || ' RESTART IDENTITY CASCADE;'
+      FROM pg_tables
+      WHERE schemaname = 'public';
+    " 2>/dev/null)
+
+    if [ -n "$TRUNCATE_SQL" ] && [ "$TRUNCATE_SQL" != "TRUNCATE TABLE  RESTART IDENTITY CASCADE;" ]; then
+      echo "Executing: $TRUNCATE_SQL"
+      psql "$DB_URL" -c "$TRUNCATE_SQL"
+      echo -e "${GREEN}Database tables truncated successfully.${NC}"
+      return 0
+    else
+      echo -e "${YELLOW}No tables found to truncate, or error occurred.${NC}"
+    fi
+  fi
+
+  # If we get here, all methods failed
+  echo -e "${RED}Error: Cannot reset database.${NC}"
+  echo ""
+  echo "Options to fix this:"
+  echo "1. Install Supabase CLI:"
+  echo "   - Visit: https://github.com/supabase/cli#install-the-cli"
+  echo "   - Or use: npx supabase"
+  echo "   - Then authenticate: $SUPABASE_CMD login"
+  echo ""
+  echo "2. Provide DATABASE_URL environment variable for direct database access"
+  echo "   (requires psql: sudo apt-get install postgresql-client)"
+  echo ""
+  echo "3. Use Supabase Dashboard to reset your database manually"
+  exit 1
 }
 
 # Confirmation prompt
@@ -255,12 +336,141 @@ if [ "$CONFIRM" = false ]; then
   fi
 fi
 
+# Function to create remote_nodes table
+create_remote_nodes_table() {
+  echo -e "${GREEN}Creating remote_nodes table...${NC}"
+
+  # SQL for creating remote_nodes table
+  CREATE_TABLE_SQL="
+-- Create remote_nodes table in Supabase
+-- This table stores remote node configuration for SSH connections
+
+CREATE TABLE IF NOT EXISTS remote_nodes (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name TEXT NOT NULL,
+  host TEXT NOT NULL,
+  port INTEGER NOT NULL DEFAULT 22,
+  username TEXT NOT NULL,
+  auth_type TEXT NOT NULL CHECK (auth_type IN ('key', 'password')),
+  ssh_key TEXT, -- SSH private key (encrypted in production)
+  password TEXT, -- SSH password (encrypted in production)
+  working_home TEXT, -- Working directory path on the remote node
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- Create index on host and username for faster lookups
+CREATE INDEX IF NOT EXISTS idx_remote_nodes_host ON remote_nodes(host);
+CREATE INDEX IF NOT EXISTS idx_remote_nodes_username ON remote_nodes(username);
+
+-- Create updated_at trigger to automatically update the timestamp
+CREATE OR REPLACE FUNCTION update_updated_at_column()
+RETURNS TRIGGER AS \$\$
+BEGIN
+  NEW.updated_at = NOW();
+  RETURN NEW;
+END;
+\$\$ language 'plpgsql';
+
+CREATE TRIGGER update_remote_nodes_updated_at
+  BEFORE UPDATE ON remote_nodes
+  FOR EACH ROW
+  EXECUTE FUNCTION update_updated_at_column();
+"
+
+  # Try to execute SQL using available methods
+  if [ -n "$DB_URL" ] && command -v psql &> /dev/null; then
+    echo "Executing SQL via psql..."
+    if echo "$CREATE_TABLE_SQL" | psql "$DB_URL" > /dev/null 2>&1; then
+      echo -e "${GREEN}remote_nodes table created successfully.${NC}"
+    else
+      # Check if table already exists (which is fine)
+      if echo "$CREATE_TABLE_SQL" | psql "$DB_URL" 2>&1 | grep -q "already exists"; then
+        echo -e "${GREEN}remote_nodes table already exists.${NC}"
+      else
+        echo -e "${YELLOW}Warning: Failed to create remote_nodes table via psql.${NC}"
+        echo "You may need to create it manually in Supabase SQL Editor."
+      fi
+    fi
+  elif [ "$USE_CLI" = true ] && [ -n "$PROJECT_REF" ]; then
+    # Try using Supabase CLI with db push to create table
+    echo "Attempting to create table via Supabase CLI..."
+
+    # Ensure migrations directory exists
+    mkdir -p supabase/migrations
+
+    # Create a temporary migration file
+    MIGRATION_NAME="create_remote_nodes_$(date +%Y%m%d%H%M%S)"
+    TEMP_MIGRATION="supabase/migrations/${MIGRATION_NAME}.sql"
+    echo "$CREATE_TABLE_SQL" > "$TEMP_MIGRATION"
+
+    # Try different CLI methods
+    if [ -n "$DB_URL" ]; then
+      # For direct database connection, use psql instead
+      if command -v psql &> /dev/null; then
+        if echo "$CREATE_TABLE_SQL" | psql "$DB_URL" > /dev/null 2>&1; then
+          echo -e "${GREEN}remote_nodes table created successfully.${NC}"
+        else
+          if echo "$CREATE_TABLE_SQL" | psql "$DB_URL" 2>&1 | grep -q "already exists"; then
+            echo -e "${GREEN}remote_nodes table already exists.${NC}"
+          else
+            echo -e "${YELLOW}Warning: Failed to create remote_nodes table via psql.${NC}"
+            echo "You may need to create it manually in Supabase SQL Editor."
+          fi
+        fi
+      else
+        echo -e "${YELLOW}Warning: psql not found. Cannot create table via direct connection.${NC}"
+        echo "You may need to create it manually in Supabase SQL Editor."
+      fi
+      rm -f "$TEMP_MIGRATION"
+    elif [ -f supabase/.temp/project-ref ] || [ -n "$SUPABASE_URL" ]; then
+      # Project is linked or can be linked, use db push
+      if [ ! -f supabase/.temp/project-ref ] && [ -n "$SUPABASE_URL" ] && [ -n "$SERVICE_ROLE_KEY" ]; then
+        echo "Linking project to create table..."
+        $SUPABASE_CMD link --project-ref "$PROJECT_REF" --yes 2>/dev/null || {
+          echo -e "${YELLOW}Note: Cannot automatically link project.${NC}"
+          echo "Please run the SQL manually in Supabase SQL Editor."
+          rm -f "$TEMP_MIGRATION"
+          return
+        }
+      fi
+
+      # Push the migration to create the table
+      if $SUPABASE_CMD db push --yes 2>&1; then
+        echo -e "${GREEN}remote_nodes table created successfully.${NC}"
+      else
+        # Check if table already exists (which is fine)
+        if $SUPABASE_CMD db push --yes 2>&1 | grep -q "already exists\|duplicate\|exists"; then
+          echo -e "${GREEN}remote_nodes table already exists.${NC}"
+        else
+          echo -e "${YELLOW}Warning: Failed to create remote_nodes table via CLI.${NC}"
+          echo "You may need to create it manually in Supabase SQL Editor."
+        fi
+      fi
+      rm -f "$TEMP_MIGRATION"
+    else
+      echo -e "${YELLOW}Note: Cannot automatically create remote_nodes table via CLI.${NC}"
+      echo "Please run the SQL manually in Supabase SQL Editor."
+      rm -f "$TEMP_MIGRATION"
+    fi
+  else
+    echo -e "${YELLOW}Note: Cannot automatically create remote_nodes table.${NC}"
+    echo "Please run the following SQL in Supabase SQL Editor:"
+    echo ""
+    echo "$CREATE_TABLE_SQL"
+    echo ""
+  fi
+}
+
 # Perform reset
 if [ "$USE_CLI" = true ]; then
   reset_with_cli
 else
   reset_with_api
 fi
+
+# Create remote_nodes table after reset
+create_remote_nodes_table
 
 echo -e "${GREEN}Database reset completed successfully!${NC}"
 
