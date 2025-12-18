@@ -173,8 +173,11 @@ export default function SettingsPage() {
       } else {
         await addNode(formData)
       }
+      // Clear any errors and close modal only if operation was successful
+      setError(null)
       setShowAddModal(false)
       setEditingNode(null)
+      setTestConfigResult(null)
       setFormData({
         name: '',
         host: '',
@@ -188,7 +191,10 @@ export default function SettingsPage() {
         sshServiceApiKey: ''
       })
     } catch (err) {
-      // Error is handled by store
+      // Error is handled by store and will be displayed in the modal
+      // The modal will remain open so user can fix the issue
+      console.error('Failed to save remote node:', err)
+      // Error state is already set by the store, so it will be displayed
     }
   }
 
@@ -618,6 +624,24 @@ export default function SettingsPage() {
                   >
                     {testConfigResult.success ? '✓ ' : '✗ '}
                     {testConfigResult.message}
+                  </p>
+                </div>
+              )}
+
+              {error && (
+                <div
+                  className={`p-3 rounded-lg ${
+                    theme === 'dark'
+                      ? 'bg-red-900/30 border border-red-700/50'
+                      : 'bg-red-50 border border-red-200'
+                  }`}
+                >
+                  <p
+                    className={`text-sm ${
+                      theme === 'dark' ? 'text-red-400' : 'text-red-800'
+                    }`}
+                  >
+                    ✗ {error}
                   </p>
                 </div>
               )}

@@ -20,6 +20,7 @@ const rootDir = join(__dirname, '..')
 // Read .env.local
 let supabaseUrl = ''
 let supabaseAnonKey = ''
+let supabaseServiceRoleKey = ''
 let publicSiteUrl = ''
 let litellmBaseUrl = ''
 let litellmApiKey = ''
@@ -48,6 +49,8 @@ try {
       supabaseUrl = trimmed.split('=')[1].trim().replace(/^["']|["']$/g, '')
     } else if (trimmed.startsWith('SUPABASE_ANON_KEY=')) {
       supabaseAnonKey = trimmed.split('=')[1].trim().replace(/^["']|["']$/g, '')
+    } else if (trimmed.startsWith('SUPABASE_SERVICE_ROLE_KEY=')) {
+      supabaseServiceRoleKey = trimmed.split('=')[1].trim().replace(/^["']|["']$/g, '')
     } else if (trimmed.startsWith('VITE_PUBLIC_SITE_URL=')) {
       publicSiteUrl = trimmed.split('=')[1]?.trim().replace(/^["']|["']$/g, '') || ''
     } else if (trimmed.startsWith('LITELLM_BASE_URL=')) {
@@ -101,6 +104,10 @@ if (!litellmBaseUrl || !litellmApiKey) {
 
 if (!publicSiteUrl) {
   console.warn('⚠️  Warning: VITE_PUBLIC_SITE_URL not found in .env.local. Using existing value in wrangler.toml.')
+}
+
+if (!supabaseServiceRoleKey) {
+  console.warn('⚠️  Warning: SUPABASE_SERVICE_ROLE_KEY not found in .env.local. Using anon key for backend operations (RLS policies may restrict access).')
 }
 
 if (!resendApiKey) {
@@ -163,6 +170,80 @@ wranglerContent = wranglerContent.replace(
   /SUPABASE_ANON_KEY = ".*"/g,
   `SUPABASE_ANON_KEY = "${supabaseAnonKey}"`
 )
+
+// Update SUPABASE_SERVICE_ROLE_KEY if it exists in .env.local
+if (supabaseServiceRoleKey) {
+  // First, remove all existing SUPABASE_SERVICE_ROLE_KEY entries to avoid duplicates
+  wranglerContent = wranglerContent.replace(/^SUPABASE_SERVICE_ROLE_KEY\s*=.*$/gm, '')
+  // Clean up multiple consecutive empty lines
+  wranglerContent = wranglerContent.replace(/\n\n\n+/g, '\n\n')
+
+  // Add to default [vars] section after SUPABASE_ANON_KEY
+  const lines = wranglerContent.split('\n')
+  let inVarsSection = false
+  let varsAnonKeyIndex = -1
+
+  for (let i = 0; i < lines.length; i++) {
+    if (lines[i].trim() === '[vars]') {
+      inVarsSection = true
+    } else if (lines[i].trim().startsWith('[') && lines[i].trim() !== '[vars]') {
+      if (inVarsSection) {
+        break
+      }
+    }
+    if (inVarsSection && lines[i].includes('SUPABASE_ANON_KEY =')) {
+      varsAnonKeyIndex = i
+    }
+  }
+
+  if (varsAnonKeyIndex >= 0) {
+    lines.splice(varsAnonKeyIndex + 1, 0, `SUPABASE_SERVICE_ROLE_KEY = "${supabaseServiceRoleKey}"`)
+    wranglerContent = lines.join('\n')
+  }
+
+  // Add to [env.production.vars] after SUPABASE_ANON_KEY
+  const lines2 = wranglerContent.split('\n')
+  let inProductionSection = false
+  let productionAnonKeyIndex = -1
+
+  for (let i = 0; i < lines2.length; i++) {
+    if (lines2[i].trim() === '[env.production.vars]') {
+      inProductionSection = true
+    } else if (lines2[i].trim().startsWith('[') && lines2[i].trim() !== '[env.production.vars]') {
+      if (inProductionSection && lines2[i].trim() === '[env.staging.vars]') {
+        break
+      }
+    }
+    if (inProductionSection && lines2[i].includes('SUPABASE_ANON_KEY =')) {
+      productionAnonKeyIndex = i
+    }
+  }
+
+  if (productionAnonKeyIndex >= 0) {
+    lines2.splice(productionAnonKeyIndex + 1, 0, `SUPABASE_SERVICE_ROLE_KEY = "${supabaseServiceRoleKey}"`)
+    wranglerContent = lines2.join('\n')
+  }
+
+  // Add to [env.staging.vars] after SUPABASE_ANON_KEY
+  const lines3 = wranglerContent.split('\n')
+  let inStagingSection = false
+  let stagingAnonKeyIndex = -1
+
+  for (let i = 0; i < lines3.length; i++) {
+    if (lines3[i].trim() === '[env.staging.vars]') {
+      inStagingSection = true
+    }
+    if (inStagingSection && lines3[i].includes('SUPABASE_ANON_KEY =')) {
+      stagingAnonKeyIndex = i
+      break
+    }
+  }
+
+  if (stagingAnonKeyIndex >= 0) {
+    lines3.splice(stagingAnonKeyIndex + 1, 0, `SUPABASE_SERVICE_ROLE_KEY = "${supabaseServiceRoleKey}"`)
+    wranglerContent = lines3.join('\n')
+  }
+}
 
 // Update Gerrit variables
 if (gerritBaseUrl) {

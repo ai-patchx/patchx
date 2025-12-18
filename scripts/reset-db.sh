@@ -151,7 +151,9 @@ reset_with_cli() {
       mkdir -p supabase/migrations
 
       # Create a temporary migration file
-      MIGRATION_NAME="reset_$(date +%Y%m%d%H%M%S)"
+      # Supabase CLI requires format: <timestamp>_name.sql
+      MIGRATION_TIMESTAMP=$(date +%Y%m%d%H%M%S)
+      MIGRATION_NAME="${MIGRATION_TIMESTAMP}_reset_tables"
       TEMP_MIGRATION="supabase/migrations/${MIGRATION_NAME}.sql"
 
       # SQL to truncate all tables
@@ -170,14 +172,31 @@ BEGIN
 END $$;
 EOF
 
+      # Try to repair migration history if there are previous migrations
+      # Extract migration timestamps from existing migration files
+      if [ -d "supabase/migrations" ]; then
+        PREVIOUS_MIGRATIONS=$(ls -1 supabase/migrations/*.sql 2>/dev/null | sed 's/.*\/\([0-9]*\)_.*/\1/' | head -1)
+        if [ -n "$PREVIOUS_MIGRATIONS" ]; then
+          echo "Attempting to repair migration history..."
+          $SUPABASE_CMD migration repair --status reverted "$PREVIOUS_MIGRATIONS" 2>/dev/null || true
+        fi
+      fi
+
       # Push the migration to the linked project
-      if $SUPABASE_CMD db push --yes 2>&1; then
+      PUSH_OUTPUT=$($SUPABASE_CMD db push --yes 2>&1)
+      if echo "$PUSH_OUTPUT" | grep -q "Finished\|successfully\|Applied migration"; then
         echo -e "${GREEN}Database tables truncated successfully.${NC}"
         # Remove the temporary migration file
         rm -f "$TEMP_MIGRATION"
       else
-        echo -e "${YELLOW}Warning: Failed to truncate tables via CLI.${NC}"
-        echo "You may need to create the remote_nodes table manually."
+        # Check if the error is just about migration history (which we can ignore if tables are empty)
+        if echo "$PUSH_OUTPUT" | grep -q "Remote migration versions not found"; then
+          echo -e "${YELLOW}Warning: Migration history mismatch during truncate, but continuing...${NC}"
+          echo "This is usually safe if the database is empty or you're resetting."
+        else
+          echo -e "${YELLOW}Warning: Failed to truncate tables via CLI.${NC}"
+          echo "Error: $PUSH_OUTPUT"
+        fi
         # Clean up the temporary migration file
         rm -f "$TEMP_MIGRATION"
       fi
@@ -253,7 +272,9 @@ reset_with_api() {
     mkdir -p supabase/migrations
 
     # Create a temporary migration file
-    MIGRATION_NAME="reset_$(date +%Y%m%d%H%M%S)"
+    # Supabase CLI requires format: <timestamp>_name.sql
+    MIGRATION_TIMESTAMP=$(date +%Y%m%d%H%M%S)
+    MIGRATION_NAME="${MIGRATION_TIMESTAMP}_reset_tables"
     TEMP_MIGRATION="supabase/migrations/${MIGRATION_NAME}.sql"
 
     # SQL to truncate all tables
@@ -272,14 +293,29 @@ BEGIN
 END $$;
 EOF
 
+    # Repair migration history first if there were previous migrations
+    echo "Checking migration history before truncate..."
+    REPAIR_OUTPUT=$($SUPABASE_CMD migration repair --status reverted 20251218181329 2>&1 || true)
+    if echo "$REPAIR_OUTPUT" | grep -q "Finished\|repaired"; then
+      echo "Migration history repaired."
+    fi
+
     # Push the migration to the linked project
-    if $SUPABASE_CMD db push --yes 2>&1; then
+    PUSH_OUTPUT=$($SUPABASE_CMD db push --yes 2>&1)
+    if echo "$PUSH_OUTPUT" | grep -q "Finished\|successfully\|Applied migration"; then
       echo -e "${GREEN}Database tables truncated successfully.${NC}"
       # Remove the temporary migration file
       rm -f "$TEMP_MIGRATION"
       return 0
     else
-      echo -e "${YELLOW}Warning: Failed to truncate tables via CLI.${NC}"
+      # Check if the error is just about migration history (which we can ignore if tables are empty)
+      if echo "$PUSH_OUTPUT" | grep -q "Remote migration versions not found"; then
+        echo -e "${YELLOW}Warning: Migration history mismatch, but continuing...${NC}"
+        echo "This is usually safe if the database is empty or you're resetting."
+      else
+        echo -e "${YELLOW}Warning: Failed to truncate tables via CLI.${NC}"
+        echo "Error: $PUSH_OUTPUT"
+      fi
       # Clean up the temporary migration file
       rm -f "$TEMP_MIGRATION"
     fi
@@ -378,19 +414,39 @@ CREATE TRIGGER update_remote_nodes_updated_at
   BEFORE UPDATE ON remote_nodes
   FOR EACH ROW
   EXECUTE FUNCTION update_updated_at_column();
+
+-- Enable Row Level Security (RLS)
+ALTER TABLE remote_nodes ENABLE ROW LEVEL SECURITY;
+
+-- Drop existing policy if it exists to avoid conflicts
+DROP POLICY IF EXISTS \"Service role can manage remote_nodes\" ON remote_nodes;
+
+-- Create a policy that allows all access (for backend operations)
+-- Note: Service role key bypasses RLS automatically, but this policy
+-- allows anon key to work as well (useful for development/testing)
+-- In production, prefer using SUPABASE_SERVICE_ROLE_KEY in the worker
+CREATE POLICY \"Service role can manage remote_nodes\" ON remote_nodes
+  FOR ALL
+  USING (true)
+  WITH CHECK (true);
 "
 
   # Try to execute SQL using available methods
+  # Prefer psql (direct database connection) as it bypasses migration history issues
   if [ -n "$DB_URL" ] && command -v psql &> /dev/null; then
-    echo "Executing SQL via psql..."
-    if echo "$CREATE_TABLE_SQL" | psql "$DB_URL" > /dev/null 2>&1; then
+    echo "Executing SQL via psql (direct database connection)..."
+    if echo "$CREATE_TABLE_SQL" | psql "$DB_URL" 2>&1; then
       echo -e "${GREEN}remote_nodes table created successfully.${NC}"
+      return 0
     else
       # Check if table already exists (which is fine)
-      if echo "$CREATE_TABLE_SQL" | psql "$DB_URL" 2>&1 | grep -q "already exists"; then
+      OUTPUT=$(echo "$CREATE_TABLE_SQL" | psql "$DB_URL" 2>&1)
+      if echo "$OUTPUT" | grep -q "already exists\|duplicate"; then
         echo -e "${GREEN}remote_nodes table already exists.${NC}"
+        return 0
       else
         echo -e "${YELLOW}Warning: Failed to create remote_nodes table via psql.${NC}"
+        echo "Error output: $OUTPUT"
         echo "You may need to create it manually in Supabase SQL Editor."
       fi
     fi
@@ -402,27 +458,31 @@ CREATE TRIGGER update_remote_nodes_updated_at
     mkdir -p supabase/migrations
 
     # Create a temporary migration file
-    MIGRATION_NAME="create_remote_nodes_$(date +%Y%m%d%H%M%S)"
+    # Supabase CLI requires format: <timestamp>_name.sql
+    MIGRATION_TIMESTAMP=$(date +%Y%m%d%H%M%S)
+    MIGRATION_NAME="${MIGRATION_TIMESTAMP}_create_remote_nodes"
     TEMP_MIGRATION="supabase/migrations/${MIGRATION_NAME}.sql"
     echo "$CREATE_TABLE_SQL" > "$TEMP_MIGRATION"
 
     # Try different CLI methods
-    if [ -n "$DB_URL" ]; then
-      # For direct database connection, use psql instead
-      if command -v psql &> /dev/null; then
-        if echo "$CREATE_TABLE_SQL" | psql "$DB_URL" > /dev/null 2>&1; then
-          echo -e "${GREEN}remote_nodes table created successfully.${NC}"
-        else
-          if echo "$CREATE_TABLE_SQL" | psql "$DB_URL" 2>&1 | grep -q "already exists"; then
-            echo -e "${GREEN}remote_nodes table already exists.${NC}"
-          else
-            echo -e "${YELLOW}Warning: Failed to create remote_nodes table via psql.${NC}"
-            echo "You may need to create it manually in Supabase SQL Editor."
-          fi
-        fi
+    if [ -n "$DB_URL" ] && command -v psql &> /dev/null; then
+      # For direct database connection, use psql instead (bypasses migration history)
+      echo "Using psql for direct database connection (bypasses migration history)..."
+      OUTPUT=$(echo "$CREATE_TABLE_SQL" | psql "$DB_URL" 2>&1)
+      if [ $? -eq 0 ]; then
+        echo -e "${GREEN}remote_nodes table created successfully.${NC}"
+        rm -f "$TEMP_MIGRATION"
+        return 0
       else
-        echo -e "${YELLOW}Warning: psql not found. Cannot create table via direct connection.${NC}"
-        echo "You may need to create it manually in Supabase SQL Editor."
+        if echo "$OUTPUT" | grep -q "already exists\|duplicate"; then
+          echo -e "${GREEN}remote_nodes table already exists.${NC}"
+          rm -f "$TEMP_MIGRATION"
+          return 0
+        else
+          echo -e "${YELLOW}Warning: Failed to create remote_nodes table via psql.${NC}"
+          echo "Error output: $OUTPUT"
+          echo "You may need to create it manually in Supabase SQL Editor."
+        fi
       fi
       rm -f "$TEMP_MIGRATION"
     elif [ -f supabase/.temp/project-ref ] || [ -n "$SUPABASE_URL" ]; then
@@ -437,17 +497,35 @@ CREATE TRIGGER update_remote_nodes_updated_at
         }
       fi
 
-      # Push the migration to create the table
-      if $SUPABASE_CMD db push --yes 2>&1; then
-        echo -e "${GREEN}remote_nodes table created successfully.${NC}"
-      else
-        # Check if table already exists (which is fine)
-        if $SUPABASE_CMD db push --yes 2>&1 | grep -q "already exists\|duplicate\|exists"; then
-          echo -e "${GREEN}remote_nodes table already exists.${NC}"
-        else
-          echo -e "${YELLOW}Warning: Failed to create remote_nodes table via CLI.${NC}"
-          echo "You may need to create it manually in Supabase SQL Editor."
+      # Try to repair migration history if there are previous migrations
+      # Extract migration timestamps from existing migration files (including the reset migration we just created)
+      if [ -d "supabase/migrations" ]; then
+        PREVIOUS_MIGRATIONS=$(ls -1 supabase/migrations/*.sql 2>/dev/null | sed 's/.*\/\([0-9]*\)_.*/\1/' | sort -r | head -1)
+        if [ -n "$PREVIOUS_MIGRATIONS" ]; then
+          echo "Checking migration history before creating table..."
+          REPAIR_OUTPUT=$($SUPABASE_CMD migration repair --status reverted "$PREVIOUS_MIGRATIONS" 2>&1 || true)
+          if echo "$REPAIR_OUTPUT" | grep -q "Finished\|repaired"; then
+            echo "Migration history repaired."
+          fi
         fi
+      fi
+
+      # Push the migration to create the table
+      echo "Pushing migration to create remote_nodes table..."
+      PUSH_OUTPUT=$($SUPABASE_CMD db push --yes 2>&1)
+      if echo "$PUSH_OUTPUT" | grep -q "Finished\|successfully\|Applied migration"; then
+        echo -e "${GREEN}remote_nodes table created successfully.${NC}"
+      elif echo "$PUSH_OUTPUT" | grep -q "already exists\|duplicate\|exists"; then
+        echo -e "${GREEN}remote_nodes table already exists.${NC}"
+      else
+        echo -e "${YELLOW}Warning: Failed to create remote_nodes table via CLI.${NC}"
+        echo "Migration history may be out of sync. Error output:"
+        echo "$PUSH_OUTPUT"
+        echo ""
+        echo "You can try:"
+        echo "  1. Run the SQL manually in Supabase SQL Editor (recommended)"
+        echo "  2. Or repair migration history: supabase migration repair --status reverted 20251218180930"
+        echo "  3. Or use DATABASE_URL with psql for direct connection"
       fi
       rm -f "$TEMP_MIGRATION"
     else

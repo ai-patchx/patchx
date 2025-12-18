@@ -1267,6 +1267,27 @@ async function handleGetNodes(env: Env, corsHeaders: Record<string, string>): Pr
       .order('created_at', { ascending: false })
 
     if (error) {
+      // Check if table doesn't exist
+      if (error.message.includes('Could not find the table') ||
+          error.message.includes('relation') ||
+          error.message.includes('does not exist') ||
+          error.code === '42P01') {
+        console.error('[GetNodes] Table does not exist')
+        return new Response(
+          JSON.stringify({
+            success: false,
+            error: 'Database table \'remote_nodes\' does not exist. Please run \'./scripts/reset-db.sh --confirm\' to create it.',
+            data: []
+          }),
+          {
+            status: 200, // Return 200 with empty data so UI doesn't break
+            headers: {
+              'Content-Type': 'application/json',
+              ...corsHeaders
+            }
+          }
+        )
+      }
       throw new Error(`Failed to fetch nodes from Supabase: ${error.message}`)
     }
 
@@ -1318,6 +1339,8 @@ async function handleGetNodes(env: Env, corsHeaders: Record<string, string>): Pr
 
 async function handleCreateNode(request: Request, env: Env, corsHeaders: Record<string, string>): Promise<Response> {
   try {
+    console.log('[CreateNode] Starting node creation')
+    console.log('[CreateNode] SUPABASE_SERVICE_ROLE_KEY available:', !!env.SUPABASE_SERVICE_ROLE_KEY)
     const supabase = getSupabaseClient(env)
 
     const body = await request.json() as {
@@ -1401,7 +1424,43 @@ async function handleCreateNode(request: Request, env: Env, corsHeaders: Record<
       .single()
 
     if (error) {
+      console.error('Supabase insert error:', error)
+      console.error('Error code:', error.code)
+      console.error('Error details:', error.details)
+      console.error('Error hint:', error.hint)
+      console.error('Using key type:', env.SUPABASE_SERVICE_ROLE_KEY ? 'SERVICE_ROLE' : 'ANON')
+
+      // Provide helpful error message if table doesn't exist
+      if (error.message.includes('Could not find the table') ||
+          error.message.includes('relation') ||
+          error.message.includes('does not exist') ||
+          error.code === '42P01') {
+        const keyType = env.SUPABASE_SERVICE_ROLE_KEY ? 'SERVICE_ROLE' : 'ANON'
+        throw new Error(
+          `Database table 'remote_nodes' does not exist. ` +
+          `Please run './scripts/reset-db.sh --confirm' to create it. ` +
+          `Current Supabase key: ${keyType}. ` +
+          `See README.md for instructions.`
+        )
+      }
+
+      // Check for RLS/permission issues
+      if (error.message.includes('permission denied') ||
+          error.message.includes('policy') ||
+          error.code === '42501') {
+        throw new Error(
+          `Permission denied. The table exists but RLS policies may be blocking access. ` +
+          `Please run './scripts/reset-db.sh --confirm' again to update RLS policies, ` +
+          `or ensure SUPABASE_SERVICE_ROLE_KEY is set in your environment.`
+        )
+      }
+
       throw new Error(`Failed to create node in Supabase: ${error.message}`)
+    }
+
+    if (!node) {
+      console.error('No node data returned from Supabase insert')
+      throw new Error('Failed to create node: No data returned from database')
     }
 
     // Map Supabase data to RemoteNode format
