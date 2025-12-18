@@ -1393,9 +1393,9 @@ async function handleCreateNode(request: Request, env: Env, corsHeaders: Record<
         auth_type: body.authType,
         ssh_key: body.authType === 'key' ? body.sshKey : null,
         password: body.authType === 'password' ? body.password : null, // In production, encrypt this
-        working_home: body.workingHome || null,
-        ssh_service_api_url: body.sshServiceApiUrl || null,
-        ssh_service_api_key: body.sshServiceApiKey || null
+        working_home: body.workingHome ? body.workingHome.trim() : null,
+        ssh_service_api_url: body.sshServiceApiUrl ? body.sshServiceApiUrl.trim() : null,
+        ssh_service_api_key: body.sshServiceApiKey ? body.sshServiceApiKey.trim() : null
       })
       .select('id, name, host, port, username, auth_type, working_home, ssh_service_api_url, ssh_service_api_key, created_at, updated_at')
       .single()
@@ -1514,9 +1514,9 @@ async function handleUpdateNode(path: string, request: Request, env: Env, corsHe
     if (body.port !== undefined) updateData.port = body.port
     if (body.username !== undefined) updateData.username = body.username
     if (body.authType !== undefined) updateData.auth_type = body.authType
-    if (body.workingHome !== undefined) updateData.working_home = body.workingHome
-    if (body.sshServiceApiUrl !== undefined) updateData.ssh_service_api_url = body.sshServiceApiUrl || null
-    if (body.sshServiceApiKey !== undefined) updateData.ssh_service_api_key = body.sshServiceApiKey || null
+    if (body.workingHome !== undefined) updateData.working_home = body.workingHome ? body.workingHome.trim() : null
+    if (body.sshServiceApiUrl !== undefined) updateData.ssh_service_api_url = body.sshServiceApiUrl ? body.sshServiceApiUrl.trim() : null
+    if (body.sshServiceApiKey !== undefined) updateData.ssh_service_api_key = body.sshServiceApiKey ? body.sshServiceApiKey.trim() : null
 
     // Handle authentication credentials
     if (body.authType === 'key') {
@@ -1756,19 +1756,30 @@ async function executeSSHCommand(
 ): Promise<{ success: boolean; output: string; error?: string }> {
   // Check for SSH service API endpoint (if configured in node data)
   if (sshServiceApiUrl) {
+    // Trim whitespace from URL and API key
+    const trimmedUrl = sshServiceApiUrl.trim()
+    const trimmedApiKey = sshServiceApiKey?.trim()
+
+    if (!trimmedUrl) {
+      return { success: false, output: '', error: 'SSH service API URL is empty' }
+    }
+
     try {
+
       const controller = new AbortController()
       const timeoutId = setTimeout(() => controller.abort(), timeoutMs)
 
       // Build headers with optional Authorization header if API key is provided
       const headers: Record<string, string> = {
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/json',
+        'User-Agent': 'Cloudflare-Worker/1.0'
       }
-      if (sshServiceApiKey) {
-        headers['Authorization'] = `Bearer ${sshServiceApiKey}`
+      if (trimmedApiKey) {
+        headers['Authorization'] = `Bearer ${trimmedApiKey}`
       }
 
-      const response = await fetch(`${sshServiceApiUrl}/execute`, {
+      const apiUrl = trimmedUrl.endsWith('/') ? trimmedUrl.slice(0, -1) : trimmedUrl
+      const response = await fetch(`${apiUrl}/execute`, {
         method: 'POST',
         headers,
         body: JSON.stringify({
@@ -1786,8 +1797,32 @@ async function executeSSHCommand(
       clearTimeout(timeoutId)
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ error: 'Failed to execute SSH command' })) as { error?: string }
-        return { success: false, output: '', error: errorData.error || 'Unknown error' }
+        let errorMessage = `HTTP ${response.status}: ${response.statusText}`
+        try {
+          const errorData = await response.json() as { error?: string; message?: string }
+          errorMessage = errorData.error || errorData.message || errorMessage
+        } catch {
+          // If JSON parsing fails, try to get text
+          try {
+            const text = await response.text()
+            if (text) errorMessage = text
+          } catch {
+            // Use default error message
+          }
+        }
+
+        // Provide more helpful error messages for common HTTP status codes
+        if (response.status === 401) {
+          errorMessage = `Authentication failed (401): ${errorMessage}. Please check that your SSH Service API Key is correct and matches the API_KEY configured on the SSH service.`
+        } else if (response.status === 403) {
+          errorMessage = `Access forbidden (403): ${errorMessage}. This may indicate: 1) The API key is incorrect or missing, 2) A reverse proxy or firewall is blocking the request, 3) The SSH service API URL is incorrect. Please verify your SSH Service API URL and API Key configuration.`
+        } else if (response.status === 404) {
+          errorMessage = `Endpoint not found (404): ${errorMessage}. Please verify that the SSH Service API URL is correct and includes the full URL (e.g., https://your-domain.com). The service should have an /execute endpoint.`
+        } else if (response.status >= 500) {
+          errorMessage = `Server error (${response.status}): ${errorMessage}. The SSH service API may be experiencing issues. Please check the service logs.`
+        }
+
+        return { success: false, output: '', error: errorMessage }
       }
 
       const result = await response.json() as { success: boolean; output?: string; error?: string }
@@ -1800,10 +1835,25 @@ async function executeSSHCommand(
       if (error instanceof Error && error.name === 'AbortError') {
         return { success: false, output: '', error: 'SSH command execution timed out' }
       }
+      if (error instanceof Error) {
+        // Provide more specific error messages
+        if (error.message.includes('fetch failed') || error.message.includes('Failed to fetch')) {
+          return {
+            success: false,
+            output: '',
+            error: `Cannot connect to SSH service API at ${trimmedUrl}. Check if the service is running and the URL is correct.`
+          }
+        }
+        return {
+          success: false,
+          output: '',
+          error: `Failed to execute SSH command via service: ${error.message}`
+        }
+      }
       return {
         success: false,
         output: '',
-        error: `Failed to execute SSH command via service: ${error instanceof Error ? error.message : 'Unknown error'}`
+        error: 'Failed to execute SSH command via service: Unknown error'
       }
     }
   }
@@ -2142,7 +2192,8 @@ async function handleTestNodeConfig(request: Request, env: Env, corsHeaders: Rec
     let message = `SSH reachable. Banner: ${banner}. Latency: ${latencyMs}ms`
 
     // Test working home directory if provided and SSH service is available
-    if (body.workingHome && body.sshServiceApiUrl) {
+    const trimmedSshServiceApiUrl = body.sshServiceApiUrl?.trim()
+    if (body.workingHome && trimmedSshServiceApiUrl) {
       try {
         const dirVerification = await verifyWorkingHomeDirectory(
           body.host,
@@ -2152,8 +2203,8 @@ async function handleTestNodeConfig(request: Request, env: Env, corsHeaders: Rec
           body.sshKey,
           body.password,
           body.workingHome,
-          body.sshServiceApiUrl,
-          body.sshServiceApiKey
+          trimmedSshServiceApiUrl,
+          body.sshServiceApiKey?.trim()
         )
 
         if (dirVerification.exists) {

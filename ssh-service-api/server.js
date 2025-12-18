@@ -42,12 +42,19 @@ app.use(express.urlencoded({ extended: true }))
 
 // CORS middleware (adjust origins as needed)
 app.use((req, res, next) => {
-  const allowedOrigins = process.env.ALLOWED_ORIGINS?.split(',') || ['*']
+  const allowedOrigins = process.env.ALLOWED_ORIGINS?.split(',').map(o => o.trim()) || ['*']
   const origin = req.headers.origin
 
-  if (allowedOrigins.includes('*') || (origin && allowedOrigins.includes(origin))) {
-    res.setHeader('Access-Control-Allow-Origin', origin || '*')
+  // Allow requests without origin (server-to-server requests like Cloudflare Workers)
+  // If no origin header, allow if ALLOWED_ORIGINS includes '*' or is empty
+  if (!origin) {
+    if (allowedOrigins.includes('*') || allowedOrigins.length === 0) {
+      res.setHeader('Access-Control-Allow-Origin', '*')
+    }
+  } else if (allowedOrigins.includes('*') || allowedOrigins.includes(origin)) {
+    res.setHeader('Access-Control-Allow-Origin', origin)
   }
+
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization')
 
@@ -64,7 +71,14 @@ const authenticate = (req, res, next) => {
   }
 
   const authHeader = req.headers.authorization
+
+  // Log authentication attempt for debugging (without sensitive data)
+  if (req.path === '/execute') {
+    console.log(`[AUTH] ${req.method} ${req.path} - Origin: ${req.headers.origin || 'none'}, User-Agent: ${req.headers['user-agent'] || 'none'}, Has Auth: ${!!authHeader}`)
+  }
+
   if (!authHeader || authHeader !== `Bearer ${API_KEY}`) {
+    console.log(`[AUTH] Failed - Expected: Bearer ${API_KEY ? '***' : 'none'}, Got: ${authHeader ? authHeader.substring(0, 20) + '...' : 'none'}`)
     return res.status(401).json({
       success: false,
       error: 'Unauthorized. Missing or invalid API key.'

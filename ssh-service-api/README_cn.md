@@ -131,6 +131,41 @@ pm2 startup  # 按照说明启用开机自启
 
 ### 选项 3：Docker
 
+#### 选项 3a：Docker Compose（推荐用于 Docker）
+
+使用提供的 `docker-compose.yml`：
+
+```bash
+# 设置环境变量
+export API_KEY=your-secure-api-key-here
+export ALLOWED_ORIGINS=https://patchx.pages.dev,https://your-worker.workers.dev
+
+# 启动服务
+docker-compose up -d
+
+# 查看日志
+docker-compose logs -f
+
+# 停止服务
+docker-compose down
+```
+
+或创建 `.env` 文件：
+
+```bash
+# .env 文件
+API_KEY=your-secure-api-key-here
+ALLOWED_ORIGINS=https://patchx.pages.dev,https://your-worker.workers.dev
+```
+
+然后运行：
+
+```bash
+docker-compose up -d
+```
+
+#### 选项 3b：Docker（手动）
+
 创建 `Dockerfile`：
 
 ```dockerfile
@@ -157,6 +192,7 @@ docker run -d \
   -p 7000:7000 \
   -e PORT=7000 \
   -e API_KEY=your-secure-api-key-here \
+  -e ALLOWED_ORIGINS=https://patchx.pages.dev \
   --restart unless-stopped \
   ssh-service-api
 ```
@@ -215,13 +251,26 @@ sudo certbot --nginx -d your-domain.com
 
 ## 测试
 
+### 健康检查
+
 测试健康检查端点：
 
 ```bash
 curl http://localhost:7000/health
 ```
 
-测试 SSH 命令执行：
+预期响应：
+```json
+{
+  "status": "ok",
+  "timestamp": "2025-12-18T04:50:20.426Z",
+  "uptime": 70070.345201324
+}
+```
+
+### SSH 命令执行
+
+使用密码认证测试 SSH 命令执行：
 
 ```bash
 curl -X POST http://localhost:7000/execute \
@@ -236,6 +285,28 @@ curl -X POST http://localhost:7000/execute \
     "command": "echo hello"
   }'
 ```
+
+使用密钥认证测试 SSH 命令执行：
+
+```bash
+curl -X POST http://localhost:7000/execute \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer your-api-key" \
+  -d '{
+    "host": "your-server-ip",
+    "port": 22,
+    "username": "your-username",
+    "authType": "key",
+    "sshKey": "-----BEGIN OPENSSH PRIVATE KEY-----\n...\n-----END OPENSSH PRIVATE KEY-----",
+    "command": "echo hello"
+  }'
+```
+
+**SSH 密钥认证重要提示：**
+- SSH 私钥必须是 OpenSSH 格式
+- 对应的公钥必须添加到目标服务器的 `~/.ssh/authorized_keys` 文件中
+- 从私钥提取公钥：`ssh-keygen -y -f /path/to/private_key`
+- 确保正确的权限：在服务器上执行 `chmod 600 ~/.ssh/authorized_keys`
 
 ## API 使用
 
@@ -298,13 +369,6 @@ Worker 将会：
 - **安全性**：API 密钥安全地存储在 Supabase 中，每个节点独立
 - **可扩展性**：易于管理具有不同 SSH 服务配置的多个节点
 
-## 故障排除
-
-1. **连接被拒绝**：检查防火墙并确保端口已开放
-2. **SSH 认证失败**：验证凭据和密钥格式
-3. **权限被拒绝**：检查 server.js 的文件权限
-4. **服务无法启动**：使用 `journalctl -u ssh-service-api` 查看日志
-
 ## 监控
 
 监控服务：
@@ -319,3 +383,47 @@ sudo journalctl -u ssh-service-api -n 50
 # 检查端口是否在监听
 sudo netstat -tlnp | grep 7000
 ```
+
+## 故障排除
+
+### API 问题
+
+1. **连接被拒绝**：
+   - 检查防火墙并确保端口 7000 已开放
+   - 验证服务是否运行：`docker ps` 或 `systemctl status ssh-service-api`
+   - 检查端口是否在监听：`netstat -tlnp | grep 7000`
+
+2. **401 未授权**：
+   - 验证 API 密钥是否与 `API_KEY` 环境变量匹配
+   - 检查是否正确发送了 `Authorization: Bearer <api-key>` 请求头
+
+3. **403 禁止访问**：
+   - 检查 API 密钥是否正确
+   - 验证反向代理或防火墙配置
+   - 确保 SSH Service API URL 正确
+
+### SSH 连接问题
+
+1. **SSH 认证失败 - "所有配置的认证方法都失败"**：
+   - 对于密钥认证：确保公钥在目标服务器的 `~/.ssh/authorized_keys` 中
+   - 提取公钥：`ssh-keygen -y -f /path/to/private_key`
+   - 验证密钥格式：私钥必须是 OpenSSH 格式
+   - 检查权限：在服务器上执行 `chmod 600 ~/.ssh/authorized_keys` 和 `chmod 700 ~/.ssh`
+   - 直接测试 SSH 连接：`ssh -i /path/to/private_key username@host`
+
+2. **SSH 连接超时**：
+   - 验证主机和端口是否正确
+   - 检查从 SSH 服务 API 容器/主机到目标服务器的网络连接
+   - 确保目标服务器上的 SSH 服务正在运行
+
+3. **权限被拒绝**：
+   - 检查 server.js 的文件权限（如果直接运行）
+   - 验证 Docker 容器是否有适当的权限（如果使用 Docker）
+   - 检查 systemd 服务用户权限（如果使用 systemd）
+
+4. **服务无法启动**：
+   - 查看日志：`journalctl -u ssh-service-api -f`（systemd）
+   - 查看日志：`docker-compose logs -f`（Docker Compose）
+   - 查看日志：`docker logs ssh-service-api`（Docker）
+   - 验证 Node.js 是否已安装：`node --version`
+   - 检查依赖项：在服务目录中执行 `npm install`

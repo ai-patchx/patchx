@@ -131,6 +131,41 @@ pm2 startup  # Follow instructions to enable startup on boot
 
 ### Option 3: Docker
 
+#### Option 3a: Docker Compose (Recommended for Docker)
+
+Using the provided `docker-compose.yml`:
+
+```bash
+# Set environment variables
+export API_KEY=your-secure-api-key-here
+export ALLOWED_ORIGINS=https://patchx.pages.dev,https://your-worker.workers.dev
+
+# Start the service
+docker-compose up -d
+
+# View logs
+docker-compose logs -f
+
+# Stop the service
+docker-compose down
+```
+
+Or create a `.env` file:
+
+```bash
+# .env file
+API_KEY=your-secure-api-key-here
+ALLOWED_ORIGINS=https://patchx.pages.dev,https://your-worker.workers.dev
+```
+
+Then run:
+
+```bash
+docker-compose up -d
+```
+
+#### Option 3b: Docker (Manual)
+
 Create a `Dockerfile`:
 
 ```dockerfile
@@ -157,6 +192,7 @@ docker run -d \
   -p 7000:7000 \
   -e PORT=7000 \
   -e API_KEY=your-secure-api-key-here \
+  -e ALLOWED_ORIGINS=https://patchx.pages.dev \
   --restart unless-stopped \
   ssh-service-api
 ```
@@ -215,13 +251,26 @@ sudo certbot --nginx -d your-domain.com
 
 ## Testing
 
+### Health Check
+
 Test the health endpoint:
 
 ```bash
 curl http://localhost:7000/health
 ```
 
-Test SSH command execution:
+Expected response:
+```json
+{
+  "status": "ok",
+  "timestamp": "2025-12-18T04:50:20.426Z",
+  "uptime": 70070.345201324
+}
+```
+
+### SSH Command Execution
+
+Test SSH command execution with password authentication:
 
 ```bash
 curl -X POST http://localhost:7000/execute \
@@ -236,6 +285,28 @@ curl -X POST http://localhost:7000/execute \
     "command": "echo hello"
   }'
 ```
+
+Test SSH command execution with key authentication:
+
+```bash
+curl -X POST http://localhost:7000/execute \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer your-api-key" \
+  -d '{
+    "host": "your-server-ip",
+    "port": 22,
+    "username": "your-username",
+    "authType": "key",
+    "sshKey": "-----BEGIN OPENSSH PRIVATE KEY-----\n...\n-----END OPENSSH PRIVATE KEY-----",
+    "command": "echo hello"
+  }'
+```
+
+**Important Notes for SSH Key Authentication:**
+- The SSH private key must be in OpenSSH format
+- The corresponding public key must be added to `~/.ssh/authorized_keys` on the target server
+- To extract the public key from a private key: `ssh-keygen -y -f /path/to/private_key`
+- Ensure proper permissions: `chmod 600 ~/.ssh/authorized_keys` on the server
 
 ## API Usage
 
@@ -298,13 +369,6 @@ The Worker will:
 - **Security**: API keys are stored securely in Supabase per node
 - **Scalability**: Easy to manage multiple nodes with different SSH service configurations
 
-## Troubleshooting
-
-1. **Connection refused**: Check firewall and ensure port is open
-2. **SSH authentication fails**: Verify credentials and key format
-3. **Permission denied**: Check file permissions on server.js
-4. **Service won't start**: Check logs with `journalctl -u ssh-service-api`
-
 ## Monitoring
 
 Monitor the service:
@@ -319,3 +383,47 @@ sudo journalctl -u ssh-service-api -n 50
 # Check if port is listening
 sudo netstat -tlnp | grep 7000
 ```
+
+## Troubleshooting
+
+### API Issues
+
+1. **Connection refused**:
+   - Check firewall and ensure port 7000 is open
+   - Verify the service is running: `docker ps` or `systemctl status ssh-service-api`
+   - Check if port is listening: `netstat -tlnp | grep 7000`
+
+2. **401 Unauthorized**:
+   - Verify the API key matches the `API_KEY` environment variable
+   - Check that the `Authorization: Bearer <api-key>` header is being sent correctly
+
+3. **403 Forbidden**:
+   - Check if API key is correct
+   - Verify reverse proxy or firewall configuration
+   - Ensure the SSH Service API URL is correct
+
+### SSH Connection Issues
+
+1. **SSH authentication fails - "All configured authentication methods failed"**:
+   - For key authentication: Ensure the public key is in `~/.ssh/authorized_keys` on the target server
+   - Extract public key: `ssh-keygen -y -f /path/to/private_key`
+   - Verify key format: Private key must be in OpenSSH format
+   - Check permissions: `chmod 600 ~/.ssh/authorized_keys` and `chmod 700 ~/.ssh` on the server
+   - Test SSH connection directly: `ssh -i /path/to/private_key username@host`
+
+2. **SSH connection timeout**:
+   - Verify the host and port are correct
+   - Check network connectivity from the SSH service API container/host
+   - Ensure SSH service is running on the target server
+
+3. **Permission denied**:
+   - Check file permissions on server.js (if running directly)
+   - Verify Docker container has proper permissions (if using Docker)
+   - Check systemd service user permissions (if using systemd)
+
+4. **Service won't start**:
+   - Check logs: `journalctl -u ssh-service-api -f` (systemd)
+   - Check logs: `docker-compose logs -f` (Docker Compose)
+   - Check logs: `docker logs ssh-service-api` (Docker)
+   - Verify Node.js is installed: `node --version`
+   - Check dependencies: `npm install` in the service directory
