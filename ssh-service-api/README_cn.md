@@ -220,8 +220,8 @@ server {
     listen 80;
     server_name your-domain.com;
 
-    location / {
-        proxy_pass http://localhost:7000;
+    location /api/ssh/ {
+        proxy_pass http://localhost:7000/;
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection 'upgrade';
@@ -231,6 +231,18 @@ server {
         proxy_set_header X-Forwarded-Proto $scheme;
         proxy_cache_bypass $http_upgrade;
     }
+
+    location = /api/ssh {
+        return 301 /api/ssh/;
+    }
+}
+```
+
+**Docker 部署注意事项：** 如果使用 Docker Compose，请在 `proxy_pass` 中将 `localhost` 替换为服务名称：
+```nginx
+location /api/ssh/ {
+    proxy_pass http://ssh-service-api:7000/;
+    # ... 其余配置
 }
 ```
 
@@ -308,6 +320,22 @@ curl -X POST http://localhost:7000/execute \
 - 从私钥提取公钥：`ssh-keygen -y -f /path/to/private_key`
 - 确保正确的权限：在服务器上执行 `chmod 600 ~/.ssh/authorized_keys`
 
+**通过 Nginx 反向代理测试：**
+如果您已配置 nginx 使用 `/api/ssh/` 路径，请使用以下方式测试：
+```bash
+curl -X POST https://your-domain.com/api/ssh/execute \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer your-api-key" \
+  -d '{
+    "host": "your-server-ip",
+    "port": 22,
+    "username": "your-username",
+    "authType": "key",
+    "sshKey": "-----BEGIN OPENSSH PRIVATE KEY-----\n...\n-----END OPENSSH PRIVATE KEY-----",
+    "command": "echo hello"
+  }'
+```
+
 ## API 使用
 
 ### 端点：`POST /execute`
@@ -343,7 +371,7 @@ SSH 服务 API 配置现在存储在 Supabase 中，每个远程节点可以有�
 1. **访问设置页面**：在 PatchX 中进入设置页面（仅管理员）
 2. **添加或编辑远程节点**：点击"添加远程节点"或编辑现有节点
 3. **配置 SSH 服务 API**：
-   - **SSH Service API URL**：输入您的 SSH 服务 API 的 URL（例如：`https://your-domain.com`）
+   - **SSH Service API URL**：输入您的 SSH 服务 API 的 URL（例如：`https://your-domain.com/api/ssh`）
    - **SSH Service API Key**：输入用于 SSH 服务 API 认证的 API 密钥（可选，但如果您的 SSH 服务需要认证，则推荐配置）
 
 4. **测试连接**：点击"测试连接"以验证：

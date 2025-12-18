@@ -508,7 +508,7 @@ LITELLM_API_KEY = "<your-litellm-api-key>"
    - **端口**: SSH 端口（默认：22）
    - **用户名**: SSH 用户名
    - **工作主目录**: 可选的工作目录路径（例如：`/home/username/my-tmp/patchx`）
-   - **SSH Service API URL**: 可选的 SSH 服务 API URL，用于执行命令（例如：`https://your-ssh-service.com`）
+   - **SSH Service API URL**: 可选的 SSH 服务 API URL，用于执行命令（例如：`https://your-ssh-service.com/api/ssh`）
    - **SSH Service API Key**: 可选的 API 密钥，用于 SSH 服务 API 认证
    - **认证类型**: 选择 SSH 密钥或密码
    - **SSH 密钥/密码**: 提供认证凭据
@@ -522,7 +522,8 @@ LITELLM_API_KEY = "<your-litellm-api-key>"
 为了验证工作主目录和执行 git 操作，您可以按节点配置外部 SSH 服务 API：
 
 1. **在设置页面中配置**: 添加或编辑远程节点时，填写：
-   - **SSH Service API URL**: 您的 SSH 服务 API 端点 URL
+   - **SSH Service API URL**: 您的 SSH 服务 API 端点 URL（例如：`https://your-domain.com/api/ssh`）
+     - **注意**：请提供以 `/api/ssh` 结尾的基础 URL（不包含 `/execute`）。系统在发起请求时会自动追加 `/execute`。
    - **SSH Service API Key**: 用于认证的 API 密钥（可选，但如果您的 SSH 服务需要认证，则推荐配置）
 
 2. **SSH 服务 API 要求**:

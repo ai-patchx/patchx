@@ -490,7 +490,7 @@ Remote nodes allow you to execute git operations on remote servers via SSH. This
    - **Port**: SSH port (default: 22)
    - **Username**: SSH username
    - **Working Home**: Optional working directory path (e.g., `/home/username/my-tmp/patchx`)
-   - **SSH Service API URL**: Optional URL of the SSH service API for executing commands (e.g., `https://your-ssh-service.com`)
+   - **SSH Service API URL**: Optional URL of the SSH service API for executing commands (e.g., `https://your-ssh-service.com/api/ssh`)
    - **SSH Service API Key**: Optional API key for authenticating with the SSH service API
    - **Authentication Type**: Choose either SSH Key or Password
    - **SSH Key/Password**: Provide authentication credentials
@@ -504,7 +504,8 @@ Remote nodes allow you to execute git operations on remote servers via SSH. This
 For working home directory verification and executing git operations, you can configure an external SSH service API per node:
 
 1. **Configure in Settings Page**: When adding or editing a remote node, fill in:
-   - **SSH Service API URL**: The URL of your SSH service API endpoint
+   - **SSH Service API URL**: The URL of your SSH service API endpoint (e.g., `https://your-domain.com/api/ssh`)
+     - **Note**: Provide the base URL ending with `/api/ssh` (without `/execute`). The system will automatically append `/execute` when making requests.
    - **SSH Service API Key**: The API key for authentication (optional, but recommended if your SSH service requires authentication)
 
 2. **SSH Service API Requirements**:

@@ -220,8 +220,8 @@ server {
     listen 80;
     server_name your-domain.com;
 
-    location / {
-        proxy_pass http://localhost:7000;
+    location /api/ssh/ {
+        proxy_pass http://localhost:7000/;
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection 'upgrade';
@@ -231,6 +231,18 @@ server {
         proxy_set_header X-Forwarded-Proto $scheme;
         proxy_cache_bypass $http_upgrade;
     }
+
+    location = /api/ssh {
+        return 301 /api/ssh/;
+    }
+}
+```
+
+**Note for Docker deployments:** If using Docker Compose, replace `localhost` with the service name in `proxy_pass`:
+```nginx
+location /api/ssh/ {
+    proxy_pass http://ssh-service-api:7000/;
+    # ... rest of configuration
 }
 ```
 
@@ -308,6 +320,22 @@ curl -X POST http://localhost:7000/execute \
 - To extract the public key from a private key: `ssh-keygen -y -f /path/to/private_key`
 - Ensure proper permissions: `chmod 600 ~/.ssh/authorized_keys` on the server
 
+**Testing through Nginx Reverse Proxy:**
+If you've configured nginx with the `/api/ssh/` location, test using:
+```bash
+curl -X POST https://your-domain.com/api/ssh/execute \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer your-api-key" \
+  -d '{
+    "host": "your-server-ip",
+    "port": 22,
+    "username": "your-username",
+    "authType": "key",
+    "sshKey": "-----BEGIN OPENSSH PRIVATE KEY-----\n...\n-----END OPENSSH PRIVATE KEY-----",
+    "command": "echo hello"
+  }'
+```
+
 ## API Usage
 
 ### Endpoint: `POST /execute`
@@ -343,7 +371,7 @@ SSH Service API configuration is now stored per-node in Supabase, allowing each 
 1. **Navigate to Settings Page**: Go to the Settings page (admin only) in PatchX
 2. **Add or Edit Remote Node**: Click "Add Remote Node" or edit an existing node
 3. **Configure SSH Service API**:
-   - **SSH Service API URL**: Enter the URL of your SSH service API (e.g., `https://your-domain.com`)
+   - **SSH Service API URL**: Enter the URL of your SSH service API (e.g., `https://your-domain.com/api/ssh`)
    - **SSH Service API Key**: Enter the API key for authenticating with the SSH service API (optional, but recommended if your SSH service requires authentication)
 
 4. **Test Connection**: Click "Test Connection" to verify:
