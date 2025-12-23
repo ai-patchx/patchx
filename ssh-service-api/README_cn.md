@@ -7,6 +7,7 @@
 ## 功能特性
 
 - 通过 HTTP API 执行 SSH 命令
+- 专用的 git clone 端点，支持模板脚本
 - 支持 SSH 密钥和密码两种认证方式
 - 安全的临时密钥文件处理
 - CORS 支持
@@ -166,12 +167,15 @@ docker-compose up -d
 
 #### 选项 3b：Docker（手动）
 
-创建 `Dockerfile`：
+仓库中已提供 `Dockerfile`：
 
 ```dockerfile
 FROM node:20-slim
 
 WORKDIR /app
+
+# 安装 OpenSSH 客户端和 git（SSH 操作和 git clone 所需）
+RUN apt-get update && apt-get install -y openssh-client git && rm -rf /var/lib/apt/lists/*
 
 COPY package*.json ./
 RUN npm install --production
@@ -180,8 +184,12 @@ COPY server.js ./
 
 EXPOSE 7000
 
+USER node
+
 CMD ["node", "server.js"]
 ```
+
+**注意：** Dockerfile 包含 `git` 软件包安装，这是 `/git-clone` 端点正常工作所必需的。
 
 构建并运行：
 
@@ -338,6 +346,54 @@ curl -X POST https://your-domain.com/api/ssh/execute \
 
 ## API 使用
 
+### 端点：`POST /git-clone`
+
+**描述：** 用于在远程节点上克隆 git 仓库的专用端点。使用 git-clone-template.sh 脚本逻辑。
+
+**请求：**
+```json
+{
+  "host": "string",
+  "port": number,
+  "username": "string",
+  "authType": "key" | "password",
+  "sshKey": "string (如果 authType 是 'key')",
+  "password": "string (如果 authType 是 'password')",
+  "repositoryUrl": "string (必需) - Git 仓库 URL",
+  "branch": "string (必需) - 要克隆的目标分支",
+  "workingHome": "string (可选) - 工作目录路径，默认为 ~/git-work",
+  "targetDir": "string (可选) - 目标目录名称，如果不提供则自动生成"
+}
+```
+
+**响应：**
+```json
+{
+  "success": boolean,
+  "output": "string",
+  "error": "string (如果 success 为 false)"
+}
+```
+
+**示例：**
+```bash
+curl -X POST http://localhost:7000/git-clone \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer your-api-key" \
+  -d '{
+    "host": "remote-server.example.com",
+    "port": 22,
+    "username": "gituser",
+    "authType": "key",
+    "sshKey": "-----BEGIN OPENSSH PRIVATE KEY-----\n...",
+    "repositoryUrl": "https://github.com/user/repo.git",
+    "branch": "main",
+    "workingHome": "/home/gituser/git-work"
+  }'
+```
+
+**注意：** 当配置了 SSH Service API 时，GitService 会自动使用此端点。git-clone-template.sh 脚本逻辑已嵌入到服务中，并在远程节点上执行。
+
 ### 端点：`POST /execute`
 
 **请求：**
@@ -384,11 +440,12 @@ Worker 将会：
 
 - 从 Supabase 中的节点配置读取 `SSH Service API URL` 和 `SSH Service API Key`
 - 在执行 SSH 命令时调用 `${SSH_SERVICE_API_URL}/execute`
+- 在克隆 git 仓库时调用 `${SSH_SERVICE_API_URL}/git-clone`（如果端点可用）
 - 当配置了 API 密钥时，自动发送请求头 `Authorization: Bearer ${SSH_SERVICE_API_KEY}`
 - 使用 SSH 服务 API 进行：
   - 在 **"添加远程节点"** 页面上测试连接
   - 验证工作主目录
-  - 在远程节点上执行 git 操作
+  - 在远程节点上执行 git 操作（克隆、检出、应用补丁等）
 
 ### 每节点配置的优势
 

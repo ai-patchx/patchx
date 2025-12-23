@@ -58,6 +58,11 @@ export async function onRequest(context) {
     return proxyToWorker(request, 'https://patchx-service.angersax.workers.dev');
   }
 
+  // Proxy /api/git/clone to Worker
+  if (pathname === '/api/git/clone' && request.method === 'POST') {
+    return proxyToWorker(request, 'https://patchx-service.angersax.workers.dev');
+  }
+
   return context.next();
 }
 

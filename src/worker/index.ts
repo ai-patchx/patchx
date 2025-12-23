@@ -4,6 +4,7 @@ import { UploadService } from './services/uploadService'
 import { SubmissionService } from './services/submissionService'
 import { EnhancedPatchService } from './services/enhancedPatchService'
 import { GerritService } from './services/gerritService'
+import { GitService } from './services/gitService'
 import { getKvNamespace } from './kv'
 import { executeSSHCommandDirect } from './ssh-client'
 import { getSupabaseClient } from './supabase'
@@ -90,7 +91,8 @@ export default {
               projectBranches: '/api/projects/:project/branches',
               nodes: '/api/nodes',
               nodeTest: '/api/nodes/:id/test',
-              emailTest: '/api/email/test'
+              emailTest: '/api/email/test',
+              gitClone: '/api/git/clone'
             },
             documentation: 'https://github.com/your-repo/aosp-patch-service'
           }),
@@ -147,6 +149,8 @@ export default {
         return await handleTestNode(path, env, corsHeaders)
       } else if (path === '/api/email/test' && method === 'POST') {
         return await handleTestEmail(request, env, corsHeaders)
+      } else if (path === '/api/git/clone' && method === 'POST') {
+        return await handleGitClone(request, env, corsHeaders)
       }
 
       else {
@@ -2628,6 +2632,161 @@ If you received this email, your MailChannels configuration is working correctly
       JSON.stringify({
         success: false,
         error: error instanceof Error ? error.message : 'Failed to send test email'
+      }),
+      {
+        status: 500,
+        headers: {
+          'Content-Type': 'application/json',
+          ...corsHeaders
+        }
+      }
+    )
+  }
+}
+
+/**
+ * Handle git clone request
+ * POST /api/git/clone
+ *
+ * Request body:
+ * {
+ *   "nodeId": "string",           // Remote node ID (required)
+ *   "repositoryUrl": "string",    // Target Project - Git repository URL (required)
+ *   "branch": "string",            // Target Branch to clone (required)
+ *   "targetDir": "string"         // Optional target directory name (auto-generated if not provided)
+ * }
+ *
+ * Response:
+ * {
+ *   "success": boolean,
+ *   "data": {
+ *     "targetDir": "string",      // Full path to cloned repository
+ *     "output": "string"           // Command output
+ *   },
+ *   "error": "string"              // Error message if failed
+ * }
+ */
+async function handleGitClone(
+  request: Request,
+  env: Env,
+  corsHeaders: Record<string, string>
+): Promise<Response> {
+  try {
+    const body = await request.json() as {
+      nodeId?: string
+      repositoryUrl?: string
+      branch?: string
+      targetDir?: string
+    }
+
+    // Validate required fields
+    if (!body.nodeId) {
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: 'nodeId (Remote Node ID) is required'
+        }),
+        {
+          status: 400,
+          headers: {
+            'Content-Type': 'application/json',
+            ...corsHeaders
+          }
+        }
+      )
+    }
+
+    if (!body.repositoryUrl) {
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: 'repositoryUrl (Target Project) is required'
+        }),
+        {
+          status: 400,
+          headers: {
+            'Content-Type': 'application/json',
+            ...corsHeaders
+          }
+        }
+      )
+    }
+
+    if (!body.branch) {
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: 'branch (Target Branch) is required'
+        }),
+        {
+          status: 400,
+          headers: {
+            'Content-Type': 'application/json',
+            ...corsHeaders
+          }
+        }
+      )
+    }
+
+    // Initialize GitService
+    const gitService = new GitService(env)
+
+    // Clone the repository
+    // The cloneRepository method uses:
+    // - Remote Node configuration (Host, Port, Username, Working Home, SSH API, SSH API Key, SSH password or SSH Private Key)
+    // - Target Project (repositoryUrl)
+    // - Target Branch (branch)
+    console.log(`[API] Git Clone Request - Node: ${body.nodeId}, Repo: ${body.repositoryUrl}, Branch: ${body.branch}`)
+    const result = await gitService.cloneRepository(
+      body.nodeId,
+      body.repositoryUrl,
+      body.branch,
+      body.targetDir
+    )
+
+    if (result.success) {
+      console.log(`[API] Git Clone Success - Target Dir: ${result.targetDir || 'Unknown'}`)
+      return new Response(
+        JSON.stringify({
+          success: true,
+          data: {
+            targetDir: result.targetDir || 'Unknown',
+            output: result.output
+          }
+        }),
+        {
+          status: 200,
+          headers: {
+            'Content-Type': 'application/json',
+            ...corsHeaders
+          }
+        }
+      )
+    } else {
+      console.error(`[API] Git Clone Failed - Error: ${result.error || 'Unknown error'}`)
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: result.error || 'Failed to clone repository',
+          data: {
+            output: result.output
+          }
+        }),
+        {
+          status: 200, // Return 200 so frontend can display the error message
+          headers: {
+            'Content-Type': 'application/json',
+            ...corsHeaders
+          }
+        }
+      )
+    }
+  } catch (error) {
+    console.error('Error cloning git repository:', error)
+    return new Response(
+      JSON.stringify({
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to clone git repository'
       }),
       {
         status: 500,

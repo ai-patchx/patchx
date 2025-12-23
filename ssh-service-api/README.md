@@ -7,6 +7,7 @@ A simple HTTP API service that executes SSH commands on remote servers. This ser
 ## Features
 
 - Execute SSH commands via HTTP API
+- Dedicated git clone endpoint with template script support
 - Support for both SSH key and password authentication
 - Secure temporary key file handling
 - CORS support
@@ -166,12 +167,15 @@ docker-compose up -d
 
 #### Option 3b: Docker (Manual)
 
-Create a `Dockerfile`:
+The `Dockerfile` is already provided in the repository:
 
 ```dockerfile
 FROM node:20-slim
 
 WORKDIR /app
+
+# Install OpenSSH client and git (needed for SSH operations and git clone)
+RUN apt-get update && apt-get install -y openssh-client git && rm -rf /var/lib/apt/lists/*
 
 COPY package*.json ./
 RUN npm install --production
@@ -180,8 +184,12 @@ COPY server.js ./
 
 EXPOSE 7000
 
+USER node
+
 CMD ["node", "server.js"]
 ```
+
+**Note:** The Dockerfile includes `git` package installation which is required for the `/git-clone` endpoint to work properly.
 
 Build and run:
 
@@ -338,6 +346,54 @@ curl -X POST https://your-domain.com/api/ssh/execute \
 
 ## API Usage
 
+### Endpoint: `POST /git-clone`
+
+**Description:** Dedicated endpoint for cloning git repositories on remote nodes. Uses the git-clone-template.sh script logic.
+
+**Request:**
+```json
+{
+  "host": "string",
+  "port": number,
+  "username": "string",
+  "authType": "key" | "password",
+  "sshKey": "string (if authType is 'key')",
+  "password": "string (if authType is 'password')",
+  "repositoryUrl": "string (required) - Git repository URL",
+  "branch": "string (required) - Target branch to clone",
+  "workingHome": "string (optional) - Working directory path, defaults to ~/git-work",
+  "targetDir": "string (optional) - Target directory name, auto-generated if not provided"
+}
+```
+
+**Response:**
+```json
+{
+  "success": boolean,
+  "output": "string",
+  "error": "string (if success is false)"
+}
+```
+
+**Example:**
+```bash
+curl -X POST http://localhost:7000/git-clone \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer your-api-key" \
+  -d '{
+    "host": "remote-server.example.com",
+    "port": 22,
+    "username": "gituser",
+    "authType": "key",
+    "sshKey": "-----BEGIN OPENSSH PRIVATE KEY-----\n...",
+    "repositoryUrl": "https://github.com/user/repo.git",
+    "branch": "main",
+    "workingHome": "/home/gituser/git-work"
+  }'
+```
+
+**Note:** This endpoint is automatically used by the GitService when SSH Service API is configured. The git-clone-template.sh script logic is embedded in the service and executed on the remote node.
+
 ### Endpoint: `POST /execute`
 
 **Request:**
@@ -384,11 +440,12 @@ The Worker will:
 
 - Read `SSH Service API URL` and `SSH Service API Key` from the node configuration in Supabase
 - Call `${SSH_SERVICE_API_URL}/execute` when executing SSH commands
+- Call `${SSH_SERVICE_API_URL}/git-clone` when cloning git repositories (if endpoint is available)
 - Automatically send the header `Authorization: Bearer ${SSH_SERVICE_API_KEY}` when the API key is configured
 - Use the SSH service API for:
   - Testing connections on the **Add Remote Node** page
   - Verifying working home directories
-  - Executing git operations on remote nodes
+  - Executing git operations on remote nodes (clone, checkout, apply patch, etc.)
 
 ### Benefits of Per-Node Configuration
 

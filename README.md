@@ -21,6 +21,7 @@ A web service that streamlines contributing code to the Android Open Source Proj
 - 🖥️ Remote node management: configure and manage SSH remote nodes for git operations
 - 🔐 SSH authentication: support for both SSH key and password authentication
 - 📁 Working directory: specify working home directory for remote git operations
+- 🔄 Git repository cloning: clone git repositories on remote nodes with target project and branch support
 
 ## 🛠️ Tech Stack
 
@@ -560,10 +561,21 @@ When submitting a patch:
 1. Select a remote node from the dropdown (optional)
 2. If a remote node is selected, provide a Git repository URL
 3. The system will execute git operations on the remote node:
-   - Clone the repository
+   - Clone the repository with specified target project and branch
    - Apply the patch
    - Perform conflict resolution if needed
    - Commit and push changes
+
+#### Git Clone Operations
+
+The system supports cloning git repositories on remote nodes with the following features:
+- **Target Project**: Specify the git repository URL to clone
+- **Target Branch**: Clone a specific branch from the repository
+- **Working Home Directory**: Uses the configured working home directory from remote node settings
+- **Automatic Directory Management**: Auto-generates unique directory names or uses specified target directory
+- **Repository Updates**: If the target directory already exists, the system will update the repository instead of cloning
+
+The git clone functionality uses a bash template script that is embedded in the SSH Service API. When SSH Service API is configured for a remote node, the system automatically uses the dedicated `/git-clone` endpoint for optimal performance.
 
 ### Gerrit Configuration
 
@@ -785,6 +797,37 @@ Response:
   }
 }
 ```
+
+#### Clone git repository on remote node
+```
+POST /api/git/clone
+```
+
+**Description:** Clone a git repository on a remote node with specified target project and branch.
+
+Request (`application/json`):
+```json
+{
+  "nodeId": "string (required) - Remote node ID",
+  "repositoryUrl": "string (required) - Target Project (Git repository URL)",
+  "branch": "string (required) - Target Branch to clone",
+  "targetDir": "string (optional) - Target directory name, auto-generated if not provided"
+}
+```
+
+Response:
+```json
+{
+  "success": true,
+  "data": {
+    "targetDir": "string - Full path to cloned repository",
+    "output": "string - Command output"
+  },
+  "error": "string (if success is false)"
+}
+```
+
+**Note:** This endpoint uses the remote node configuration (Host, Port, Username, Working Home, SSH API, SSH API Key, SSH password or SSH Private Key) to execute the git clone operation via SSH. The operation uses a bash template script embedded in the SSH Service API for reliable repository cloning.
 
 #### Get AI providers list
 ```

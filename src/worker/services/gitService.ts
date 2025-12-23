@@ -118,13 +118,20 @@ export class GitService {
 
   /**
    * Clone a git repository on a remote node
+   * Uses bash template logic to handle repository cloning with proper error handling
+   *
+   * @param nodeId - Remote node ID
+   * @param repositoryUrl - Target Project (Git repository URL)
+   * @param branch - Target Branch to clone
+   * @param targetDir - Optional target directory name (auto-generated if not provided)
+   * @returns GitCommandResult with success status, output, and optional error
    */
   async cloneRepository(
     nodeId: string,
     repositoryUrl: string,
     branch: string,
-    targetDir: string
-  ): Promise<GitCommandResult> {
+    targetDir?: string
+  ): Promise<GitCommandResult & { targetDir?: string }> {
     const node = await this.getRemoteNode(nodeId)
     if (!node) {
       return {
@@ -134,16 +141,225 @@ export class GitService {
       }
     }
 
-    // Create target directory if it doesn't exist
-    const mkdirCommand = `mkdir -p ${targetDir}`
-    const mkdirResult = await this.executeSSHCommand(node, mkdirCommand)
-    if (!mkdirResult.success) {
-      return mkdirResult
+    // Validate required parameters
+    if (!repositoryUrl || !branch) {
+      return {
+        success: false,
+        output: '',
+        error: 'Repository URL and branch are required'
+      }
     }
 
-    // Clone the repository
-    const cloneCommand = `git clone -b ${branch} ${repositoryUrl} ${targetDir}`
-    return await this.executeSSHCommand(node, cloneCommand)
+    // Use working home directory from node configuration, or default to ~/git-work
+    const workingHome = node.workingHome || '~/git-work'
+
+    // Try to use dedicated git-clone endpoint if SSH service API is configured
+    if (node.sshServiceApiUrl) {
+      try {
+        console.log(`[Git Clone] Using SSH Service API endpoint: ${node.sshServiceApiUrl}/git-clone`)
+        console.log(`[Git Clone] Target Project: ${repositoryUrl}`)
+        console.log(`[Git Clone] Target Branch: ${branch}`)
+        console.log(`[Git Clone] Working Home: ${workingHome}`)
+        console.log(`[Git Clone] Target Dir: ${targetDir || 'auto-generated'}`)
+
+        const headers: Record<string, string> = {
+          'Content-Type': 'application/json'
+        }
+        if (node.sshServiceApiKey) {
+          headers['Authorization'] = `Bearer ${node.sshServiceApiKey}`
+        }
+
+        const response = await fetch(`${node.sshServiceApiUrl}/git-clone`, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({
+            host: node.host,
+            port: node.port,
+            username: node.username,
+            authType: node.authType,
+            sshKey: node.sshKey,
+            password: node.password,
+            repositoryUrl,
+            branch,
+            workingHome,
+            targetDir
+          })
+        })
+
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({ error: 'Failed to execute git clone' })) as { error?: string }
+          console.error(`[Git Clone] Failed: ${errorData.error || 'Unknown error'}`)
+          return {
+            success: false,
+            output: '',
+            error: errorData.error || 'Unknown error',
+            targetDir: undefined
+          }
+        }
+
+        const result = await response.json() as { success: boolean; output?: string; error?: string }
+
+        // Extract target directory from output if available
+        const targetDirMatch = result.output?.match(/TARGET_DIR=([^\n]+)/)
+        const extractedTargetDir = targetDirMatch ? targetDirMatch[1] : undefined
+
+        // Log output to console for debugging
+        if (result.output) {
+          console.log(`[Git Clone] Output:\n${result.output}`)
+        }
+        if (result.success) {
+          console.log(`[Git Clone] Success! Repository cloned to: ${extractedTargetDir || 'unknown'}`)
+        } else {
+          console.error(`[Git Clone] Failed: ${result.error || 'Unknown error'}`)
+        }
+
+        return {
+          success: result.success,
+          output: result.output || '',
+          error: result.error,
+          targetDir: extractedTargetDir
+        }
+      } catch (error) {
+        // Fall through to inline execution if endpoint is not available
+        console.warn(`[Git Clone] Failed to use git-clone endpoint, falling back to inline execution: ${error instanceof Error ? error.message : 'Unknown error'}`)
+      }
+    }
+
+    // Fallback to inline execution (original method)
+    // Generate target directory name from repository URL if not provided
+    let finalTargetDir = targetDir
+    if (!finalTargetDir) {
+      // Extract repository name from URL
+      // Handle formats: https://github.com/user/repo.git, git@github.com:user/repo.git, user/repo
+      const repoName = repositoryUrl.split('/').pop()?.replace(/\.git$/, '') || 'repository'
+      const sanitizedBranch = branch.replace(/[^a-zA-Z0-9_-]/g, '_')
+      const timestamp = Date.now()
+      finalTargetDir = `${repoName}_${sanitizedBranch}_${timestamp}`
+    }
+
+    const fullTargetDir = `${workingHome}/${finalTargetDir}`
+
+    // Build bash script based on template logic
+    // This implements the git-clone-template.sh logic inline
+    const bashScript = `
+set -e
+set -u
+
+WORKING_HOME="${workingHome}"
+TARGET_PROJECT="${repositoryUrl.replace(/"/g, '\\"')}"
+TARGET_BRANCH="${branch.replace(/"/g, '\\"')}"
+TARGET_DIR="${finalTargetDir.replace(/"/g, '\\"')}"
+FULL_TARGET_DIR="${fullTargetDir.replace(/"/g, '\\"')}"
+
+# Log functions for console output
+log_info() {
+    echo "[INFO] $1"
+}
+
+log_success() {
+    echo "[SUCCESS] $1"
+}
+
+log_warn() {
+    echo "[WARN] $1" >&2
+}
+
+log_error() {
+    echo "[ERROR] $1" >&2
+}
+
+log_info "Starting git clone operation"
+log_info "Repository URL: $TARGET_PROJECT"
+log_info "Branch: $TARGET_BRANCH"
+log_info "Working Home: $WORKING_HOME"
+
+# Create working home directory if it doesn't exist
+mkdir -p "$WORKING_HOME" || { log_error "Failed to create working home directory: $WORKING_HOME"; exit 1; }
+
+# Check if target directory already exists
+if [ -d "$FULL_TARGET_DIR" ]; then
+  log_warn "Target directory already exists: $FULL_TARGET_DIR"
+  # Try to update existing repository instead
+  log_info "Updating existing repository in: $FULL_TARGET_DIR"
+  cd "$FULL_TARGET_DIR" || { log_error "Failed to change to directory: $FULL_TARGET_DIR"; exit 1; }
+
+  # Check if it's a git repository
+  if [ -d .git ]; then
+    log_info "Fetching latest changes..."
+    git fetch origin || log_warn "Failed to fetch from origin"
+    log_info "Checking out branch: $TARGET_BRANCH"
+    git checkout "$TARGET_BRANCH" || log_warn "Failed to checkout branch: $TARGET_BRANCH"
+    log_info "Pulling latest changes..."
+    git pull origin "$TARGET_BRANCH" || log_warn "Failed to pull latest changes"
+    log_success "Repository updated successfully in: $FULL_TARGET_DIR"
+    echo "TARGET_DIR=$FULL_TARGET_DIR"
+    exit 0
+  else
+    log_error "Directory exists but is not a git repository: $FULL_TARGET_DIR"
+    exit 1
+  fi
+fi
+
+# Clone the repository
+log_info "Cloning repository: $TARGET_PROJECT"
+log_info "Branch: $TARGET_BRANCH"
+log_info "Target directory: $FULL_TARGET_DIR"
+
+cd "$WORKING_HOME" || { log_error "Failed to change to working home directory: $WORKING_HOME"; exit 1; }
+
+# Clone with branch specification
+log_info "Executing git clone command..."
+if git clone -b "$TARGET_BRANCH" "$TARGET_PROJECT" "$TARGET_DIR"; then
+  log_success "Repository cloned successfully to: $FULL_TARGET_DIR"
+
+  # Verify the clone
+  cd "$FULL_TARGET_DIR" || { log_error "Failed to change to cloned directory"; exit 1; }
+
+  # Check current branch
+  CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
+  log_info "Current branch: $CURRENT_BRANCH"
+
+  # Show repository status
+  log_info "Repository status:"
+  git status --short || true
+
+  # Output the target directory path for use by calling script
+  echo "TARGET_DIR=$FULL_TARGET_DIR"
+  exit 0
+else
+  log_error "Failed to clone repository: $TARGET_PROJECT"
+  exit 1
+fi
+`.trim()
+
+    // Log clone operation start
+    console.log(`[Git Clone] Starting inline clone operation`)
+    console.log(`[Git Clone] Target Project: ${repositoryUrl}`)
+    console.log(`[Git Clone] Target Branch: ${branch}`)
+    console.log(`[Git Clone] Working Home: ${workingHome}`)
+    console.log(`[Git Clone] Target Directory: ${fullTargetDir}`)
+
+    // Execute the bash script
+    const result = await this.executeSSHCommand(node, bashScript)
+
+    // Extract target directory from output if available
+    const targetDirMatch = result.output.match(/TARGET_DIR=([^\n]+)/)
+    const extractedTargetDir = targetDirMatch ? targetDirMatch[1] : fullTargetDir
+
+    // Log output to console
+    if (result.output) {
+      console.log(`[Git Clone] Output:\n${result.output}`)
+    }
+    if (result.success) {
+      console.log(`[Git Clone] Success! Repository cloned to: ${extractedTargetDir}`)
+    } else {
+      console.error(`[Git Clone] Failed: ${result.error || 'Unknown error'}`)
+    }
+
+    return {
+      ...result,
+      targetDir: extractedTargetDir
+    }
   }
 
   /**
@@ -276,71 +492,104 @@ export class GitService {
 
   /**
    * Execute a full workflow: clone, checkout branch, apply patch
+   * Uses working home directory from remote node configuration
    */
   async executeGitWorkflow(
     nodeId: string,
     repositoryUrl: string,
     branch: string,
     patchContent: string,
-    workDir: string = '/tmp/git-work'
+    workDir?: string
   ): Promise<{
     success: boolean
     results: {
-      clone?: GitCommandResult
+      clone?: GitCommandResult & { targetDir?: string }
       checkout?: GitCommandResult
       apply?: GitCommandResult
       status?: GitCommandResult
     }
     error?: string
+    targetDir?: string
   }> {
     const results: {
-      clone?: GitCommandResult
+      clone?: GitCommandResult & { targetDir?: string }
       checkout?: GitCommandResult
       apply?: GitCommandResult
       status?: GitCommandResult
     } = {}
 
     try {
-      // Step 1: Clone repository
+      console.log(`[Git Workflow] Starting git workflow for repository: ${repositoryUrl}`)
+      console.log(`[Git Workflow] Branch: ${branch}`)
+      console.log(`[Git Workflow] Node ID: ${nodeId}`)
+
+      // Get node to access working home directory
+      const node = await this.getRemoteNode(nodeId)
+      if (!node) {
+        console.error(`[Git Workflow] Remote node ${nodeId} not found`)
+        return {
+          success: false,
+          results,
+          error: `Remote node ${nodeId} not found`
+        }
+      }
+
+      // Step 1: Clone repository (will use working home from node config)
+      console.log(`[Git Workflow] Step 1: Cloning repository...`)
       const cloneResult = await this.cloneRepository(nodeId, repositoryUrl, branch, workDir)
       results.clone = cloneResult
       if (!cloneResult.success) {
+        console.error(`[Git Workflow] Clone failed: ${cloneResult.error}`)
         return {
           success: false,
           results,
           error: `Failed to clone repository: ${cloneResult.error}`
         }
       }
+      console.log(`[Git Workflow] Step 1: Clone completed successfully`)
 
-      // Step 2: Checkout branch (if needed)
-      const checkoutResult = await this.checkoutBranch(nodeId, workDir, branch)
+      // Use the target directory from clone result
+      const actualWorkDir = cloneResult.targetDir || workDir || '/tmp/git-work'
+      console.log(`[Git Workflow] Working directory: ${actualWorkDir}`)
+
+      // Step 2: Checkout branch (if needed) - clone already checks out the branch, but verify
+      console.log(`[Git Workflow] Step 2: Checking out branch: ${branch}...`)
+      const checkoutResult = await this.checkoutBranch(nodeId, actualWorkDir, branch)
       results.checkout = checkoutResult
       if (!checkoutResult.success) {
-        return {
-          success: false,
-          results,
-          error: `Failed to checkout branch: ${checkoutResult.error}`
-        }
+        // Non-fatal: branch might already be checked out
+        console.warn(`[Git Workflow] Checkout warning: ${checkoutResult.error}`)
+      } else {
+        console.log(`[Git Workflow] Step 2: Branch checkout completed`)
       }
 
       // Step 3: Apply patch
-      const applyResult = await this.applyPatch(nodeId, patchContent, workDir, { check: false })
+      console.log(`[Git Workflow] Step 3: Applying patch...`)
+      const applyResult = await this.applyPatch(nodeId, patchContent, actualWorkDir, { check: false })
       results.apply = applyResult
       if (!applyResult.success) {
+        console.error(`[Git Workflow] Patch apply failed: ${applyResult.error}`)
         return {
           success: false,
           results,
           error: `Failed to apply patch: ${applyResult.error}`
         }
       }
+      console.log(`[Git Workflow] Step 3: Patch applied successfully`)
 
       // Step 4: Get status
-      const statusResult = await this.getStatus(nodeId, workDir)
+      console.log(`[Git Workflow] Step 4: Getting repository status...`)
+      const statusResult = await this.getStatus(nodeId, actualWorkDir)
       results.status = statusResult
+      if (statusResult.output) {
+        console.log(`[Git Workflow] Repository status:\n${statusResult.output}`)
+      }
 
+      console.log(`[Git Workflow] All steps completed successfully!`)
       return {
         success: true,
-        results
+        results,
+        targetDir: actualWorkDir
       }
     } catch (error) {
       return {
