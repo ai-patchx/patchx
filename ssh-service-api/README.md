@@ -225,8 +225,26 @@ Add:
 
 ```nginx
 server {
-    listen 80;
+    listen 8080;
     server_name your-domain.com;
+
+    return 301 https://$host$request_uri;
+}
+
+server {
+    listen 8443 ssl;
+    server_name your-domain.com;
+
+    ssl_certificate /etc/nginx/certs/public.crt;
+    ssl_certificate_key /etc/nginx/certs/private.key;
+
+    # To allow special characters in headers
+    ignore_invalid_headers off;
+    # Allow any size file to be uploaded
+    client_max_body_size 0;
+    # To disable buffering
+    proxy_buffering off;
+    proxy_request_buffering off;
 
     location /api/ssh/ {
         proxy_pass http://localhost:7000/;
