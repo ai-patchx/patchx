@@ -1,12 +1,14 @@
 #!/usr/bin/env node
 
 /**
- * Sync Supabase, LiteLLM, Resend, MailChannels, and Gerrit environment variables from .env.local to wrangler.toml
+ * Sync Supabase, Resend, MailChannels, and Gerrit environment variables from .env.local to wrangler.toml
  * This allows the Worker to expose Supabase config via /api/config/public
  * so the frontend can use it even if Cloudflare Pages env vars aren't set.
  *
  * Note: SSH Service API configuration (SSH_SERVICE_API_URL and SSH_SERVICE_API_KEY) is now stored
  * per-node in Supabase instead of as environment variables.
+ * Note: LiteLLM configuration (LITELLM_BASE_URL, LITELLM_API_KEY, and LITELLM_MODEL) is now stored
+ * in the app_settings table in Supabase instead of as environment variables.
  */
 
 import { readFileSync, writeFileSync } from 'fs'
@@ -22,8 +24,6 @@ let supabaseUrl = ''
 let supabaseAnonKey = ''
 let supabaseServiceRoleKey = ''
 let publicSiteUrl = ''
-let litellmBaseUrl = ''
-let litellmApiKey = ''
 let resendApiKey = ''
 let resendFromEmail = ''
 let resendFromName = ''
@@ -53,10 +53,6 @@ try {
       supabaseServiceRoleKey = trimmed.split('=')[1].trim().replace(/^["']|["']$/g, '')
     } else if (trimmed.startsWith('VITE_PUBLIC_SITE_URL=')) {
       publicSiteUrl = trimmed.split('=')[1]?.trim().replace(/^["']|["']$/g, '') || ''
-    } else if (trimmed.startsWith('LITELLM_BASE_URL=')) {
-      litellmBaseUrl = trimmed.split('=')[1]?.trim().replace(/^["']|["']$/g, '') || ''
-    } else if (trimmed.startsWith('LITELLM_API_KEY=')) {
-      litellmApiKey = trimmed.split('=')[1]?.trim().replace(/^["']|["']$/g, '') || ''
     } else if (trimmed.startsWith('RESEND_API_KEY=')) {
       resendApiKey = trimmed.split('=')[1]?.trim().replace(/^["']|["']$/g, '') || ''
     } else if (trimmed.startsWith('RESEND_FROM_EMAIL=')) {
@@ -96,10 +92,6 @@ try {
 if (!supabaseUrl || !supabaseAnonKey) {
   console.error('Error: SUPABASE_URL and SUPABASE_ANON_KEY not found in .env.local')
   process.exit(1)
-}
-
-if (!litellmBaseUrl || !litellmApiKey) {
-  console.warn('⚠️  Warning: LITELLM_BASE_URL and/or LITELLM_API_KEY not found in .env.local. Model selection feature will not be available.')
 }
 
 if (!publicSiteUrl) {
@@ -260,10 +252,6 @@ if (publicSiteUrl) {
   )
 }
 
-// Update LiteLLM variables (if they exist) - sync to all environments
-// First, remove all existing LITELLM entries (including placeholders) to avoid duplicates
-wranglerContent = wranglerContent.replace(/^LITELLM_BASE_URL\s*=.*$/gm, '')
-wranglerContent = wranglerContent.replace(/^LITELLM_API_KEY\s*=.*$/gm, '')
 // Remove all existing Resend entries to avoid duplicates
 wranglerContent = wranglerContent.replace(/^RESEND_API_KEY\s*=.*$/gm, '')
 wranglerContent = wranglerContent.replace(/^RESEND_FROM_EMAIL\s*=.*$/gm, '')
@@ -271,74 +259,6 @@ wranglerContent = wranglerContent.replace(/^RESEND_FROM_NAME\s*=.*$/gm, '')
 wranglerContent = wranglerContent.replace(/^RESEND_REPLY_TO_EMAIL\s*=.*$/gm, '')
 // Clean up multiple consecutive empty lines
 wranglerContent = wranglerContent.replace(/\n\n\n+/g, '\n\n')
-
-if (litellmBaseUrl) {
-  // Add to default [vars] section after VITE_PUBLIC_SITE_URL
-  const lines = wranglerContent.split('\n')
-  let inVarsSection = false
-  let varsViteLineIndex = -1
-
-  for (let i = 0; i < lines.length; i++) {
-    if (lines[i].trim() === '[vars]') {
-      inVarsSection = true
-    } else if (lines[i].trim().startsWith('[') && lines[i].trim() !== '[vars]') {
-      if (inVarsSection) {
-        break
-      }
-    }
-    if (inVarsSection && lines[i].includes('VITE_PUBLIC_SITE_URL =')) {
-      varsViteLineIndex = i
-    }
-  }
-
-  if (varsViteLineIndex >= 0) {
-    lines.splice(varsViteLineIndex + 1, 0, `LITELLM_BASE_URL = "${litellmBaseUrl}"`)
-    wranglerContent = lines.join('\n')
-  }
-
-  // Add to [env.production.vars] after VITE_PUBLIC_SITE_URL
-  const lines2 = wranglerContent.split('\n')
-  let inProductionSection = false
-  let productionViteLineIndex = -1
-
-  for (let i = 0; i < lines2.length; i++) {
-    if (lines2[i].trim() === '[env.production.vars]') {
-      inProductionSection = true
-    } else if (lines2[i].trim().startsWith('[') && lines2[i].trim() !== '[env.production.vars]') {
-      if (inProductionSection && lines2[i].trim() === '[env.staging.vars]') {
-        break
-      }
-    }
-    if (inProductionSection && lines2[i].includes('VITE_PUBLIC_SITE_URL =')) {
-      productionViteLineIndex = i
-    }
-  }
-
-  if (productionViteLineIndex >= 0) {
-    lines2.splice(productionViteLineIndex + 1, 0, `LITELLM_BASE_URL = "${litellmBaseUrl}"`)
-    wranglerContent = lines2.join('\n')
-  }
-
-  // Add to [env.staging.vars] after VITE_PUBLIC_SITE_URL
-  const lines3 = wranglerContent.split('\n')
-  let inStagingSection = false
-  let stagingViteLineIndex = -1
-
-  for (let i = 0; i < lines3.length; i++) {
-    if (lines3[i].trim() === '[env.staging.vars]') {
-      inStagingSection = true
-    }
-    if (inStagingSection && lines3[i].includes('VITE_PUBLIC_SITE_URL =')) {
-      stagingViteLineIndex = i
-      break
-    }
-  }
-
-  if (stagingViteLineIndex >= 0) {
-    lines3.splice(stagingViteLineIndex + 1, 0, `LITELLM_BASE_URL = "${litellmBaseUrl}"`)
-    wranglerContent = lines3.join('\n')
-  }
-}
 
 const updateMailVar = (key, value) => {
   if (!value) {
@@ -519,91 +439,9 @@ if (gerritPassword) {
   }
 }
 
-if (litellmApiKey) {
-  // Add to default [vars] section after LITELLM_BASE_URL or VITE_PUBLIC_SITE_URL
-  const lines = wranglerContent.split('\n')
-  let inVarsSection = false
-  let insertIndex = -1
-
-  for (let i = 0; i < lines.length; i++) {
-    if (lines[i].trim() === '[vars]') {
-      inVarsSection = true
-    } else if (lines[i].trim().startsWith('[') && lines[i].trim() !== '[vars]') {
-      if (inVarsSection) {
-        break
-      }
-    }
-    if (inVarsSection) {
-      if (lines[i].includes('LITELLM_BASE_URL =')) {
-        insertIndex = i
-        break
-      } else if (lines[i].includes('VITE_PUBLIC_SITE_URL =') && insertIndex === -1) {
-        insertIndex = i
-      }
-    }
-  }
-
-  if (insertIndex >= 0) {
-    lines.splice(insertIndex + 1, 0, `LITELLM_API_KEY = "${litellmApiKey}"`)
-    wranglerContent = lines.join('\n')
-  }
-
-  // Add to [env.production.vars] after LITELLM_BASE_URL or VITE_PUBLIC_SITE_URL
-  const lines2 = wranglerContent.split('\n')
-  let inProductionSection = false
-  let insertIndex2 = -1
-
-  for (let i = 0; i < lines2.length; i++) {
-    if (lines2[i].trim() === '[env.production.vars]') {
-      inProductionSection = true
-    } else if (lines2[i].trim().startsWith('[') && lines2[i].trim() !== '[env.production.vars]') {
-      if (inProductionSection && lines2[i].trim() === '[env.staging.vars]') {
-        break
-      }
-    }
-    if (inProductionSection) {
-      if (lines2[i].includes('LITELLM_BASE_URL =')) {
-        insertIndex2 = i
-        break
-      } else if (lines2[i].includes('VITE_PUBLIC_SITE_URL =') && insertIndex2 === -1) {
-        insertIndex2 = i
-      }
-    }
-  }
-
-  if (insertIndex2 >= 0) {
-    lines2.splice(insertIndex2 + 1, 0, `LITELLM_API_KEY = "${litellmApiKey}"`)
-    wranglerContent = lines2.join('\n')
-  }
-
-  // Add to [env.staging.vars] after LITELLM_BASE_URL or VITE_PUBLIC_SITE_URL
-  const lines3 = wranglerContent.split('\n')
-  let inStagingSection = false
-  let insertIndex3 = -1
-
-  for (let i = 0; i < lines3.length; i++) {
-    if (lines3[i].trim() === '[env.staging.vars]') {
-      inStagingSection = true
-    }
-    if (inStagingSection) {
-      if (lines3[i].includes('LITELLM_BASE_URL =')) {
-        insertIndex3 = i
-        break
-      } else if (lines3[i].includes('VITE_PUBLIC_SITE_URL =') && insertIndex3 === -1) {
-        insertIndex3 = i
-      }
-    }
-  }
-
-  if (insertIndex3 >= 0) {
-    lines3.splice(insertIndex3 + 1, 0, `LITELLM_API_KEY = "${litellmApiKey}"`)
-    wranglerContent = lines3.join('\n')
-  }
-}
-
 // Add Resend variables if configured
 if (resendApiKey && resendFromEmail) {
-  // Add to default [vars] section after LITELLM_API_KEY or VITE_PUBLIC_SITE_URL
+  // Add to default [vars] section after VITE_PUBLIC_SITE_URL
   const lines = wranglerContent.split('\n')
   let inVarsSection = false
   let insertIndex = -1
@@ -617,11 +455,9 @@ if (resendApiKey && resendFromEmail) {
       }
     }
     if (inVarsSection) {
-      if (lines[i].includes('LITELLM_API_KEY =')) {
+      if (lines[i].includes('VITE_PUBLIC_SITE_URL =')) {
         insertIndex = i
         break
-      } else if (lines[i].includes('VITE_PUBLIC_SITE_URL =') && insertIndex === -1) {
-        insertIndex = i
       }
     }
   }
@@ -636,7 +472,7 @@ if (resendApiKey && resendFromEmail) {
     wranglerContent = lines.join('\n')
   }
 
-  // Add to [env.production.vars] after LITELLM_API_KEY or VITE_PUBLIC_SITE_URL
+  // Add to [env.production.vars] after VITE_PUBLIC_SITE_URL
   const lines2 = wranglerContent.split('\n')
   let inProductionSection = false
   let insertIndex2 = -1
@@ -650,11 +486,9 @@ if (resendApiKey && resendFromEmail) {
       }
     }
     if (inProductionSection) {
-      if (lines2[i].includes('LITELLM_API_KEY =')) {
+      if (lines2[i].includes('VITE_PUBLIC_SITE_URL =')) {
         insertIndex2 = i
         break
-      } else if (lines2[i].includes('VITE_PUBLIC_SITE_URL =') && insertIndex2 === -1) {
-        insertIndex2 = i
       }
     }
   }
@@ -669,7 +503,7 @@ if (resendApiKey && resendFromEmail) {
     wranglerContent = lines2.join('\n')
   }
 
-  // Add to [env.staging.vars] after LITELLM_API_KEY or VITE_PUBLIC_SITE_URL
+  // Add to [env.staging.vars] after VITE_PUBLIC_SITE_URL
   const lines3 = wranglerContent.split('\n')
   let inStagingSection = false
   let insertIndex3 = -1
@@ -679,11 +513,9 @@ if (resendApiKey && resendFromEmail) {
       inStagingSection = true
     }
     if (inStagingSection) {
-      if (lines3[i].includes('LITELLM_API_KEY =')) {
+      if (lines3[i].includes('VITE_PUBLIC_SITE_URL =')) {
         insertIndex3 = i
         break
-      } else if (lines3[i].includes('VITE_PUBLIC_SITE_URL =') && insertIndex3 === -1) {
-        insertIndex3 = i
       }
     }
   }

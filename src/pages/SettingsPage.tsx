@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Settings, Plus, Edit, Trash2, TestTube, Moon, Sun, ArrowLeft, Server, Key, Lock, Globe, Mail, Send, ShieldAlert } from 'lucide-react'
+import { Settings, Plus, Edit, Trash2, TestTube, Moon, Sun, ArrowLeft, Server, Key, Lock, Globe, Mail, Send, ShieldAlert, Brain, Save } from 'lucide-react'
 import useRemoteNodeStore from '@/stores/remoteNodeStore'
 import { useTheme } from '@/hooks/useTheme'
 import { useAuthStore } from '@/stores/authStore'
@@ -32,6 +32,15 @@ export default function SettingsPage() {
   const [testEmail, setTestEmail] = useState('')
   const [testingEmail, setTestingEmail] = useState(false)
   const [emailTestResult, setEmailTestResult] = useState<{ success: boolean; message: string } | null>(null)
+  const [litellmBaseUrl, setLitellmBaseUrl] = useState('')
+  const [litellmApiKey, setLitellmApiKey] = useState('')
+  const [litellmModel, setLitellmModel] = useState('')
+  const [loadingSettings, setLoadingSettings] = useState(false)
+  const [savingSettings, setSavingSettings] = useState(false)
+  const [settingsError, setSettingsError] = useState<string | null>(null)
+  const [settingsSuccess, setSettingsSuccess] = useState(false)
+  const [testingLiteLLM, setTestingLiteLLM] = useState(false)
+  const [liteLLMTestResult, setLiteLLMTestResult] = useState<{ success: boolean; message: string } | null>(null)
 
   // Redirect non-admin users
   useEffect(() => {
@@ -43,8 +52,127 @@ export default function SettingsPage() {
   useEffect(() => {
     if (isAdmin()) {
       fetchNodes()
+      fetchSettings()
     }
   }, [fetchNodes, isAdmin])
+
+  const fetchSettings = async () => {
+    setLoadingSettings(true)
+    setSettingsError(null)
+    try {
+      const response = await fetch('/api/settings', {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      })
+
+      const data = await response.json() as { success: boolean; data?: Record<string, string>; error?: string }
+
+      if (data.success && data.data) {
+        setLitellmBaseUrl(data.data['litellm_base_url'] || '')
+        setLitellmApiKey(data.data['litellm_api_key'] || '')
+        setLitellmModel(data.data['litellm_model'] || '')
+      } else {
+        setSettingsError(data.error || 'Failed to load settings')
+      }
+    } catch (err) {
+      setSettingsError(err instanceof Error ? err.message : 'Failed to load settings')
+    } finally {
+      setLoadingSettings(false)
+    }
+  }
+
+  const handleTestLiteLLM = async () => {
+    if (!litellmBaseUrl.trim() || !litellmApiKey.trim()) {
+      setLiteLLMTestResult({
+        success: false,
+        message: 'Please enter Base URL and API Key before testing'
+      })
+      return
+    }
+
+    setTestingLiteLLM(true)
+    setLiteLLMTestResult(null)
+    setSettingsError(null)
+
+    try {
+      const response = await fetch('/api/settings/test-litellm', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          litellm_base_url: litellmBaseUrl.trim(),
+          litellm_api_key: litellmApiKey.trim()
+        })
+      })
+
+      const data = await response.json() as { success: boolean; message?: string; error?: string }
+
+      if (data.success) {
+        setLiteLLMTestResult({
+          success: true,
+          message: data.message || 'LiteLLM connection test successful!'
+        })
+      } else {
+        setLiteLLMTestResult({
+          success: false,
+          message: data.error || 'LiteLLM connection test failed'
+        })
+      }
+    } catch (err) {
+      setLiteLLMTestResult({
+        success: false,
+        message: err instanceof Error ? err.message : 'Failed to test LiteLLM connection'
+      })
+    } finally {
+      setTestingLiteLLM(false)
+    }
+  }
+
+  const handleSaveSettings = async () => {
+    setSavingSettings(true)
+    setSettingsError(null)
+    setSettingsSuccess(false)
+    setLiteLLMTestResult(null)
+
+    try {
+      const response = await fetch('/api/settings', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          litellm_base_url: litellmBaseUrl.trim(),
+          litellm_api_key: litellmApiKey.trim(),
+          litellm_model: litellmModel.trim()
+        })
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: 'Failed to save settings' })) as { error?: string }
+        throw new Error(errorData.error || `Failed to save settings: ${response.status} ${response.statusText}`)
+      }
+
+      const data = await response.json() as { success: boolean; message?: string; error?: string }
+
+      if (data.success) {
+        setSettingsSuccess(true)
+        setTimeout(() => setSettingsSuccess(false), 3000)
+        // Refresh settings from database to ensure we have the latest values
+        await fetchSettings()
+      } else {
+        throw new Error(data.error || 'Failed to save settings')
+      }
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to save settings'
+      setSettingsError(errorMessage)
+      console.error('Failed to save LiteLLM settings:', err)
+    } finally {
+      setSavingSettings(false)
+    }
+  }
 
   const handleAddNode = () => {
     setEditingNode(null)
@@ -347,6 +475,181 @@ export default function SettingsPage() {
               ))}
             </div>
           )}
+
+          {/* LiteLLM Configuration Section */}
+          <div className={`mt-8 pt-8 border-t ${theme === 'dark' ? 'border-gray-700' : 'border-gray-200'}`}>
+            <div className="flex items-center space-x-3 mb-4">
+              <Brain className={`w-6 h-6 ${theme === 'dark' ? 'text-gradient-primary' : 'text-gray-700'}`} />
+              <h2 className={`text-xl font-semibold ${theme === 'dark' ? 'text-gradient-primary' : 'text-gray-900'}`}>
+                LiteLLM Configuration
+              </h2>
+            </div>
+
+            {loadingSettings ? (
+              <div className={`text-center py-4 ${theme === 'dark' ? 'text-gradient-secondary' : 'text-gray-600'}`}>
+                Loading settings...
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <div>
+                  <label htmlFor="litellmBaseUrl" className={`block text-sm font-medium mb-2 ${theme === 'dark' ? 'text-gradient-primary' : 'text-gray-700'}`}>
+                    Base URL *
+                  </label>
+                  <input
+                    type="url"
+                    id="litellmBaseUrl"
+                    value={litellmBaseUrl}
+                    onChange={(e) => {
+                      setLitellmBaseUrl(e.target.value)
+                      setSettingsError(null)
+                      setSettingsSuccess(false)
+                    }}
+                    placeholder="https://your-litellm-server.com"
+                    className={`${inputBase} ${theme === 'dark' ? inputDark : inputLight}`}
+                  />
+                  <p className={`mt-1 text-xs ${theme === 'dark' ? 'text-gradient-secondary' : 'text-gray-500'}`}>
+                    The base URL of your LiteLLM server
+                  </p>
+                </div>
+
+                <div>
+                  <label htmlFor="litellmApiKey" className={`block text-sm font-medium mb-2 ${theme === 'dark' ? 'text-gradient-primary' : 'text-gray-700'}`}>
+                    API Key *
+                  </label>
+                  <input
+                    type="password"
+                    id="litellmApiKey"
+                    value={litellmApiKey}
+                    onChange={(e) => {
+                      setLitellmApiKey(e.target.value)
+                      setSettingsError(null)
+                      setSettingsSuccess(false)
+                    }}
+                    placeholder="Enter your LiteLLM API key"
+                    className={`${inputBase} ${theme === 'dark' ? inputDark : inputLight}`}
+                  />
+                  <p className={`mt-1 text-xs ${theme === 'dark' ? 'text-gradient-secondary' : 'text-gray-500'}`}>
+                    Your LiteLLM API key for authentication
+                  </p>
+                </div>
+
+                <div>
+                  <label htmlFor="litellmModel" className={`block text-sm font-medium mb-2 ${theme === 'dark' ? 'text-gradient-primary' : 'text-gray-700'}`}>
+                    Default Model Name
+                  </label>
+                  <input
+                    type="text"
+                    id="litellmModel"
+                    value={litellmModel}
+                    onChange={(e) => {
+                      setLitellmModel(e.target.value)
+                      setSettingsError(null)
+                      setSettingsSuccess(false)
+                    }}
+                    placeholder="gpt-4, claude-3-sonnet, etc."
+                    className={`${inputBase} ${theme === 'dark' ? inputDark : inputLight}`}
+                  />
+                  <p className={`mt-1 text-xs ${theme === 'dark' ? 'text-gradient-secondary' : 'text-gray-500'}`}>
+                    Optional: Default model name to use when no model is specified
+                  </p>
+                </div>
+
+                {liteLLMTestResult && (
+                  <div
+                    className={`p-3 rounded-lg ${
+                      liteLLMTestResult.success
+                        ? theme === 'dark'
+                          ? 'bg-green-900/30 border border-green-700/50'
+                          : 'bg-green-50 border border-green-200'
+                        : theme === 'dark'
+                          ? 'bg-red-900/30 border border-red-700/50'
+                          : 'bg-red-50 border border-red-200'
+                    }`}
+                  >
+                    <p
+                      className={`text-sm ${
+                        liteLLMTestResult.success
+                          ? theme === 'dark'
+                            ? 'text-green-400'
+                            : 'text-green-800'
+                          : theme === 'dark'
+                            ? 'text-red-400'
+                            : 'text-red-800'
+                      }`}
+                    >
+                      {liteLLMTestResult.success ? '✓ ' : '✗ '}
+                      {liteLLMTestResult.message}
+                    </p>
+                  </div>
+                )}
+
+                {settingsError && (
+                  <div
+                    className={`p-3 rounded-lg ${
+                      theme === 'dark'
+                        ? 'bg-red-900/30 border border-red-700/50'
+                        : 'bg-red-50 border border-red-200'
+                    }`}
+                  >
+                    <p className={`text-sm ${theme === 'dark' ? 'text-red-400' : 'text-red-800'}`}>
+                      ✗ {settingsError}
+                    </p>
+                  </div>
+                )}
+
+                {settingsSuccess && (
+                  <div
+                    className={`p-3 rounded-lg ${
+                      theme === 'dark'
+                        ? 'bg-green-900/30 border border-green-700/50'
+                        : 'bg-green-50 border border-green-200'
+                    }`}
+                  >
+                    <p className={`text-sm ${theme === 'dark' ? 'text-green-400' : 'text-green-800'}`}>
+                      ✓ Settings saved successfully!
+                    </p>
+                  </div>
+                )}
+
+                <div className="flex space-x-3">
+                  <button
+                    onClick={handleTestLiteLLM}
+                    disabled={testingLiteLLM || !litellmBaseUrl.trim() || !litellmApiKey.trim()}
+                    className={`${theme === 'dark' ? 'bg-blue-600 hover:bg-blue-700' : 'bg-blue-600 hover:bg-blue-700'} text-white px-4 py-2 rounded-lg transition-colors duration-200 flex items-center disabled:opacity-50 disabled:cursor-not-allowed`}
+                  >
+                    {testingLiteLLM ? (
+                      <>
+                        <TestTube className="w-4 h-4 mr-2 animate-pulse" />
+                        Testing...
+                      </>
+                    ) : (
+                      <>
+                        <TestTube className="w-4 h-4 mr-2" />
+                        Test Connection
+                      </>
+                    )}
+                  </button>
+                  <button
+                    onClick={handleSaveSettings}
+                    disabled={savingSettings || !litellmBaseUrl.trim() || !litellmApiKey.trim()}
+                    className={`${theme === 'dark' ? 'btn-gradient' : 'bg-blue-600 hover:bg-blue-700'} text-white px-4 py-2 rounded-lg transition-colors duration-200 flex items-center disabled:opacity-50 disabled:cursor-not-allowed`}
+                  >
+                    {savingSettings ? (
+                      <>
+                        <Save className="w-4 h-4 mr-2 animate-pulse" />
+                        Saving...
+                      </>
+                    ) : (
+                      <>
+                        <Save className="w-4 h-4 mr-2" />
+                        Save LiteLLM Settings
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
 
           {/* Email Test Section */}
           <div className={`mt-8 pt-8 border-t ${theme === 'dark' ? 'border-gray-700' : 'border-gray-200'}`}>

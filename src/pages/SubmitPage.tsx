@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { FileText, Settings, Send, Moon, Sun, Eye, Terminal, Github, Code, RefreshCw, Folder, GitBranch, Brain, MessageSquare, AlignLeft, User, Mail, Bell, Server, Link } from 'lucide-react'
+import { FileText, Settings, Send, Moon, Sun, Eye, Terminal, Github, Code, RefreshCw, Folder, GitBranch, MessageSquare, AlignLeft, User, Mail, Bell, Server, Link } from 'lucide-react'
 import FileUpload from '../components/FileUpload'
 import SearchableSelect from '../components/SearchableSelect'
 import useFileUploadStore from '../stores/fileUploadStore'
@@ -41,11 +41,8 @@ const SubmitPage: React.FC = () => {
 
   const [selectedProject, setSelectedProject] = useState('')
   const [selectedBranch, setSelectedBranch] = useState('main')
-  const [selectedModel, setSelectedModel] = useState('')
   const [selectedRemoteNode, setSelectedRemoteNode] = useState('')
   const [gitRepository, setGitRepository] = useState('')
-  const [models, setModels] = useState<Array<{ id: string; name: string; provider: string }>>([])
-  const [isLoadingModels, setIsLoadingModels] = useState(false)
   const [projects, setProjects] = useState<Array<{ id: string; name: string; description?: string }>>([])
   const [isLoadingProjects, setIsLoadingProjects] = useState(false)
   const [branches, setBranches] = useState<Array<{ ref: string; revision: string; name: string }>>([])
@@ -69,7 +66,6 @@ const SubmitPage: React.FC = () => {
       setProjects(cachedProjects)
     }
 
-    fetchModels()
     fetchProjects()
     fetchNodes()
   }, [loadFromStorage, loadCacheFromStorage, getCachedProjects, fetchNodes])
@@ -247,59 +243,6 @@ const SubmitPage: React.FC = () => {
     }
   }
 
-  const fetchModels = async () => {
-    setIsLoadingModels(true)
-    try {
-      const response = await fetch('/api/models')
-
-      // Check if response is JSON before parsing
-      const contentType = response.headers.get('content-type') || ''
-      const isJson = contentType.includes('application/json')
-
-      type ModelsResponse = {
-        success: boolean
-        data?: Array<{ id: string; name: string; provider: string }>
-        error?: string
-      }
-
-      let result: ModelsResponse
-
-      if (isJson) {
-        result = await response.json()
-      } else {
-        const text = await response.text()
-        throw new Error(`Server returned non-JSON response. Content-Type: ${contentType}. Response: ${text.substring(0, 200)}`)
-      }
-
-      if (!response.ok) {
-        // If response is not OK, use the error from JSON if available
-        throw new Error(result.error || `Failed to fetch models: ${response.status} ${response.statusText}`)
-      }
-
-      if (result.success && result.data) {
-        setModels(result.data)
-      } else if (result.error) {
-        throw new Error(result.error)
-      }
-    } catch (error) {
-      console.error('Error fetching models:', error)
-      let errorMessage = 'Failed to load models from LiteLLM'
-      if (error instanceof Error) {
-        errorMessage = error.message
-        // Extract error from response if available
-        if (error.message.includes('Failed to fetch models')) {
-          const match = error.message.match(/Failed to fetch models from LiteLLM: (\d+) (.+)/)
-          if (match) {
-            errorMessage = `LiteLLM Error (${match[1]}): ${match[2]}`
-          }
-        }
-      }
-      addConsoleOutput(`Failed to load models: ${errorMessage}`, 'warning')
-    } finally {
-      setIsLoadingModels(false)
-    }
-  }
-
   const handleFileSelect = async (selectedFile: File) => {
     // File preview logic can be added here
     console.log('Selected file:', selectedFile)
@@ -453,7 +396,6 @@ const SubmitPage: React.FC = () => {
           subject,
           description,
           branch: selectedBranch,
-          model: selectedModel || undefined,
           notificationEmails: notificationReceivers,
           remoteNodeId: selectedRemoteNode || undefined,
           gitRepository: gitRepository || undefined
@@ -745,42 +687,6 @@ const SubmitPage: React.FC = () => {
                 </p>
               </div>
             )}
-
-            {/* Separator */}
-            <div className={`border-t ${theme === 'dark' ? 'border-gray-700' : 'border-gray-200'}`}></div>
-
-            {/* Model Selection for Commit Generation & Conflict Resolution */}
-            <div>
-              <label className={`block text-sm font-medium mb-2 ${
-                theme === 'dark' ? 'text-gradient-primary' : 'text-gray-700'
-              }`}>
-                <div className="flex items-center space-x-2">
-                  <Brain className="w-5 h-5" />
-                  <span>AI Model for Commit Generation & Conflict Resolution</span>
-                </div>
-              </label>
-              <SearchableSelect
-                options={models.map((model) => ({
-                  value: model.id,
-                  label: `${model.name}${model.provider !== 'unknown' ? ` (${model.provider})` : ''}`
-                }))}
-                value={selectedModel}
-                onChange={setSelectedModel}
-                placeholder="Select a model (optional)"
-                disabled={isLoadingModels || models.length === 0}
-                isLoading={isLoadingModels}
-                emptyMessage="No models available (check LiteLLM configuration)"
-                loadingMessage="Loading models from LiteLLM..."
-                theme={theme}
-              />
-              {models.length === 0 && !isLoadingModels && (
-                <p className={`text-xs mt-1 ${
-                  theme === 'dark' ? 'text-gradient-secondary opacity-70' : 'text-gray-500'
-                }`}>
-                  Models will be fetched from LiteLLM. Make sure LITELLM_BASE_URL and LITELLM_API_KEY are configured.
-                </p>
-              )}
-            </div>
 
             {/* Separator */}
             <div className={`border-t ${theme === 'dark' ? 'border-gray-700' : 'border-gray-200'}`}></div>

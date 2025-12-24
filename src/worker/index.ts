@@ -151,6 +151,12 @@ export default {
         return await handleTestEmail(request, env, corsHeaders)
       } else if (path === '/api/git/clone' && method === 'POST') {
         return await handleGitClone(request, env, corsHeaders)
+      } else if (path === '/api/settings' && method === 'GET') {
+        return await handleGetSettings(env, corsHeaders)
+      } else if (path === '/api/settings' && method === 'PUT') {
+        return await handleUpdateSettings(request, env, corsHeaders)
+      } else if (path === '/api/settings/test-litellm' && method === 'POST') {
+        return await handleTestLiteLLM(request, env, corsHeaders)
       }
 
       else {
@@ -695,12 +701,47 @@ async function handlePublicConfig(env: Env, corsHeaders: Record<string, string>)
 
 async function handleModels(env: Env, corsHeaders: Record<string, string>): Promise<Response> {
   try {
-    // Check if litellm is configured
-    if (!env.LITELLM_BASE_URL || !env.LITELLM_API_KEY) {
+    // Get LiteLLM configuration from database
+    const supabase = getSupabaseClient(env)
+    const { data: settings, error: settingsError } = await supabase
+      .from('app_settings')
+      .select('key, value')
+      .in('key', ['litellm_base_url', 'litellm_api_key'])
+
+    if (settingsError) {
+      console.error('Error fetching LiteLLM settings:', settingsError)
       return new Response(
         JSON.stringify({
           success: false,
-          error: 'LiteLLM is not configured. Please set LITELLM_BASE_URL and LITELLM_API_KEY in environment variables.'
+          error: 'Failed to fetch LiteLLM configuration from database.'
+        }),
+        {
+          status: 500,
+          headers: {
+            'Content-Type': 'application/json',
+            ...corsHeaders
+          }
+        }
+      )
+    }
+
+    // Convert settings array to object
+    const settingsMap: Record<string, string> = {}
+    if (settings) {
+      for (const setting of settings) {
+        settingsMap[setting.key] = setting.value || ''
+      }
+    }
+
+    const litellmBaseUrl = settingsMap['litellm_base_url'] || ''
+    const litellmApiKey = settingsMap['litellm_api_key'] || ''
+
+    // Check if litellm is configured
+    if (!litellmBaseUrl || !litellmApiKey) {
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: 'LiteLLM is not configured. Please configure LiteLLM in the Settings page.'
         }),
         {
           status: 400,
@@ -713,20 +754,20 @@ async function handleModels(env: Env, corsHeaders: Record<string, string>): Prom
     }
 
     // Fetch models from litellm
-    const baseUrl = env.LITELLM_BASE_URL.replace(/\/$/, '') // Remove trailing slash
+    const baseUrl = litellmBaseUrl.replace(/\/$/, '') // Remove trailing slash
     // Try /models first, fallback to /v1/models for OpenAI compatibility
     let modelsUrl = `${baseUrl}/models`
 
     // Log the request (without sensitive data)
     console.log(`Fetching models from LiteLLM: ${modelsUrl}`)
-    console.log(`API Key present: ${!!env.LITELLM_API_KEY}, length: ${env.LITELLM_API_KEY?.length || 0}`)
+    console.log(`API Key present: ${!!litellmApiKey}, length: ${litellmApiKey?.length || 0}`)
 
     // Make request exactly like curl - minimal headers, just Authorization
     // This matches: curl -H "Authorization: Bearer sk-1234" http://litellm.example.com/models
     let response = await fetch(modelsUrl, {
       method: 'GET',
       headers: {
-        'Authorization': `Bearer ${env.LITELLM_API_KEY}`
+        'Authorization': `Bearer ${litellmApiKey}`
       }
     })
 
@@ -738,7 +779,7 @@ async function handleModels(env: Env, corsHeaders: Record<string, string>): Prom
       response = await fetch(modelsUrl, {
         method: 'GET',
         headers: {
-          'Authorization': env.LITELLM_API_KEY,
+          'Authorization': litellmApiKey,
           'Content-Type': 'application/json',
           'Accept': 'application/json',
           'User-Agent': 'Mozilla/5.0 (compatible; Cloudflare-Worker/1.0)',
@@ -752,7 +793,7 @@ async function handleModels(env: Env, corsHeaders: Record<string, string>): Prom
         response = await fetch(modelsUrl, {
           method: 'GET',
           headers: {
-            'x-api-key': env.LITELLM_API_KEY,
+            'x-api-key': litellmApiKey,
             'Content-Type': 'application/json',
             'Accept': 'application/json',
             'User-Agent': 'Mozilla/5.0 (compatible; Cloudflare-Worker/1.0)',
@@ -767,7 +808,7 @@ async function handleModels(env: Env, corsHeaders: Record<string, string>): Prom
         response = await fetch(modelsUrl, {
           method: 'GET',
           headers: {
-            'api-key': env.LITELLM_API_KEY,
+            'api-key': litellmApiKey,
             'Content-Type': 'application/json',
             'Accept': 'application/json',
             'User-Agent': 'Mozilla/5.0 (compatible; Cloudflare-Worker/1.0)',
@@ -782,8 +823,8 @@ async function handleModels(env: Env, corsHeaders: Record<string, string>): Prom
         response = await fetch(modelsUrl, {
           method: 'GET',
           headers: {
-            'Authorization': `Bearer ${env.LITELLM_API_KEY}`,
-            'x-api-key': env.LITELLM_API_KEY,
+            'Authorization': `Bearer ${litellmApiKey}`,
+            'x-api-key': litellmApiKey,
             'Content-Type': 'application/json',
             'Accept': 'application/json',
             'User-Agent': 'Mozilla/5.0 (compatible; Cloudflare-Worker/1.0)',
@@ -801,7 +842,7 @@ async function handleModels(env: Env, corsHeaders: Record<string, string>): Prom
       response = await fetch(modelsUrl, {
         method: 'GET',
         headers: {
-          'Authorization': `Bearer ${env.LITELLM_API_KEY}`
+          'Authorization': `Bearer ${litellmApiKey}`
         }
       })
     }
@@ -829,7 +870,7 @@ async function handleModels(env: Env, corsHeaders: Record<string, string>): Prom
 
             // Provide helpful suggestions for common 403 issues
             if (errorCode === '1003' || errorText.includes('1003')) {
-              errorDetails += ' This may indicate: invalid API key, insufficient permissions, or IP restrictions. Please verify LITELLM_API_KEY is correct and has proper permissions.'
+              errorDetails += ' This may indicate: invalid API key, insufficient permissions, or IP restrictions. Please verify LiteLLM API key is correct and has proper permissions in Settings.'
             }
           }
 
@@ -838,7 +879,7 @@ async function handleModels(env: Env, corsHeaders: Record<string, string>): Prom
           // Not JSON, use as-is
           errorDetails = errorText
           if (response.status === 403) {
-            errorDetails = `403 Forbidden: ${errorText}. Please verify LITELLM_API_KEY is correct and has proper permissions.`
+            errorDetails = `403 Forbidden: ${errorText}. Please verify LiteLLM API key is correct and has proper permissions in Settings.`
           }
         }
       } catch (e) {
@@ -2787,6 +2828,296 @@ async function handleGitClone(
       JSON.stringify({
         success: false,
         error: error instanceof Error ? error.message : 'Failed to clone git repository'
+      }),
+      {
+        status: 500,
+        headers: {
+          'Content-Type': 'application/json',
+          ...corsHeaders
+        }
+      }
+    )
+  }
+}
+
+async function handleGetSettings(env: Env, corsHeaders: Record<string, string>): Promise<Response> {
+  try {
+    const supabase = getSupabaseClient(env)
+
+    // Get all settings from database
+    const { data: settings, error } = await supabase
+      .from('app_settings')
+      .select('key, value')
+
+    if (error) {
+      console.error('Error fetching settings:', error)
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: 'Failed to fetch settings from database.'
+        }),
+        {
+          status: 500,
+          headers: {
+            'Content-Type': 'application/json',
+            ...corsHeaders
+          }
+        }
+      )
+    }
+
+    // Convert settings array to object
+    const settingsMap: Record<string, string> = {}
+    if (settings) {
+      for (const setting of settings) {
+        settingsMap[setting.key] = setting.value || ''
+      }
+    }
+
+    return new Response(
+      JSON.stringify({
+        success: true,
+        data: settingsMap
+      }),
+      {
+        headers: {
+          'Content-Type': 'application/json',
+          ...corsHeaders
+        }
+      }
+    )
+  } catch (error) {
+    console.error('Error in handleGetSettings:', error)
+    return new Response(
+      JSON.stringify({
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to get settings'
+      }),
+      {
+        status: 500,
+        headers: {
+          'Content-Type': 'application/json',
+          ...corsHeaders
+        }
+      }
+    )
+  }
+}
+
+async function handleUpdateSettings(request: Request, env: Env, corsHeaders: Record<string, string>): Promise<Response> {
+  try {
+    const supabase = getSupabaseClient(env)
+    const body = await request.json() as Record<string, string>
+
+    // Validate that we have settings to update
+    if (!body || Object.keys(body).length === 0) {
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: 'No settings provided to update'
+        }),
+        {
+          status: 400,
+          headers: {
+            'Content-Type': 'application/json',
+            ...corsHeaders
+          }
+        }
+      )
+    }
+
+    // Update or insert each setting
+    for (const [key, value] of Object.entries(body)) {
+      // Skip empty values (except for model which can be empty)
+      if (!value && key !== 'litellm_model') {
+        continue
+      }
+
+      // Use upsert to insert or update
+      const { error } = await supabase
+        .from('app_settings')
+        .upsert({ key, value: value || '' }, { onConflict: 'key' })
+
+      if (error) {
+        console.error(`Error updating setting ${key}:`, error)
+        throw new Error(`Failed to update setting ${key}: ${error.message}`)
+      }
+    }
+
+    console.log('Settings updated successfully:', Object.keys(body).join(', '))
+
+    return new Response(
+      JSON.stringify({
+        success: true,
+        message: 'Settings updated successfully'
+      }),
+      {
+        headers: {
+          'Content-Type': 'application/json',
+          ...corsHeaders
+        }
+      }
+    )
+  } catch (error) {
+    console.error('Error in handleUpdateSettings:', error)
+    return new Response(
+      JSON.stringify({
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to update settings'
+      }),
+      {
+        status: 500,
+        headers: {
+          'Content-Type': 'application/json',
+          ...corsHeaders
+        }
+      }
+    )
+  }
+}
+
+async function handleTestLiteLLM(request: Request, env: Env, corsHeaders: Record<string, string>): Promise<Response> {
+  try {
+    const body = await request.json() as { litellm_base_url?: string; litellm_api_key?: string }
+
+    const litellmBaseUrl = body.litellm_base_url?.trim() || ''
+    const litellmApiKey = body.litellm_api_key?.trim() || ''
+
+    if (!litellmBaseUrl || !litellmApiKey) {
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: 'Base URL and API Key are required for testing'
+        }),
+        {
+          status: 400,
+          headers: {
+            'Content-Type': 'application/json',
+            ...corsHeaders
+          }
+        }
+      )
+    }
+
+    // Test connection by fetching models from LiteLLM
+    const baseUrl = litellmBaseUrl.replace(/\/$/, '') // Remove trailing slash
+    let modelsUrl = `${baseUrl}/models`
+
+    // Try to fetch models with the provided credentials
+    let response = await fetch(modelsUrl, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${litellmApiKey}`
+      }
+    })
+
+    // If 403, try alternative authentication methods
+    if (response.status === 403) {
+      response = await fetch(modelsUrl, {
+        method: 'GET',
+        headers: {
+          'x-api-key': litellmApiKey
+        }
+      })
+    }
+
+    // If still 403, try with api-key header
+    if (response.status === 403) {
+      response = await fetch(modelsUrl, {
+        method: 'GET',
+        headers: {
+          'api-key': litellmApiKey
+        }
+      })
+    }
+
+    // If /models returns 400/404, try /v1/models (OpenAI-compatible endpoint)
+    if (!response.ok && (response.status === 400 || response.status === 404)) {
+      modelsUrl = `${baseUrl}/v1/models`
+      response = await fetch(modelsUrl, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${litellmApiKey}`
+        }
+      })
+    }
+
+    if (!response.ok) {
+      let errorText = ''
+      try {
+        errorText = await response.text()
+        const errorJson = JSON.parse(errorText)
+        errorText = errorJson.error?.message || errorJson.message || errorText
+      } catch (e) {
+        // Not JSON, use as-is
+      }
+
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: `LiteLLM connection test failed (${response.status}): ${errorText || response.statusText}`
+        }),
+        {
+          status: response.status,
+          headers: {
+            'Content-Type': 'application/json',
+            ...corsHeaders
+          }
+        }
+      )
+    }
+
+    // Check if response is JSON
+    const contentType = response.headers.get('content-type') || ''
+    if (!contentType.includes('application/json')) {
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: `LiteLLM returned non-JSON response (${contentType})`
+        }),
+        {
+          status: 400,
+          headers: {
+            'Content-Type': 'application/json',
+            ...corsHeaders
+          }
+        }
+      )
+    }
+
+    const data = await response.json() as unknown
+
+    // Parse models to verify we got valid data
+    let modelsCount = 0
+    if (Array.isArray(data)) {
+      modelsCount = data.length
+    } else if (typeof data === 'object' && data !== null) {
+      const dataObj = data as Record<string, any>
+      if (Array.isArray(dataObj.data)) {
+        modelsCount = dataObj.data.length
+      } else if (Array.isArray(dataObj.models)) {
+        modelsCount = dataObj.models.length
+      }
+    }
+
+    return new Response(
+      JSON.stringify({
+        success: true,
+        message: `LiteLLM connection successful! Found ${modelsCount} model(s) available.`
+      }),
+      {
+        headers: {
+          'Content-Type': 'application/json',
+          ...corsHeaders
+        }
+      }
+    )
+  } catch (error) {
+    console.error('Error testing LiteLLM connection:', error)
+    return new Response(
+      JSON.stringify({
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to test LiteLLM connection'
       }),
       {
         status: 500,
