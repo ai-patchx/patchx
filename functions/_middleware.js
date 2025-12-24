@@ -63,6 +63,16 @@ export async function onRequest(context) {
     return proxyToWorker(request, 'https://patchx-service.angersax.workers.dev');
   }
 
+  // Proxy /api/settings routes to Worker
+  if (pathname === '/api/settings' && (request.method === 'GET' || request.method === 'PUT')) {
+    return proxyToWorker(request, 'https://patchx-service.angersax.workers.dev');
+  }
+
+  // Proxy /api/settings/test-litellm to Worker
+  if (pathname === '/api/settings/test-litellm' && request.method === 'POST') {
+    return proxyToWorker(request, 'https://patchx-service.angersax.workers.dev');
+  }
+
   return context.next();
 }
 

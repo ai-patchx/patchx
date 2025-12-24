@@ -3,6 +3,9 @@
 # Database Reset Script for Supabase
 # This script resets the Supabase database using the Supabase CLI or API
 # Usage: ./scripts/reset-db.sh [--confirm] [--project-ref PROJECT_REF] [--db-url DB_URL]
+#
+# NOTE: Provide SUPABASE_URL and SUPABASE_ANON_KEY in .env.local for best results.
+# Get these from Supabase Dashboard → Settings → API
 
 set -e
 
@@ -66,19 +69,19 @@ while [[ $# -gt 0 ]]; do
       echo "  --db-url URL          Direct database connection URL"
       echo "  --supabase-url URL     Supabase project URL"
       echo "  --service-role-key KEY Supabase anon key (required for API reset)"
-      echo "  --litellm-base-url URL LiteLLM base URL (optional)"
-      echo "  --litellm-api-key KEY  LiteLLM API key (optional)"
-      echo "  --litellm-model NAME   LiteLLM default model name (optional)"
+      echo "  --litellm-base-url URL LiteLLM base URL (required for initialization)"
+      echo "  --litellm-api-key KEY  LiteLLM API key (required for initialization)"
+      echo "  --litellm-model NAME   LiteLLM model name (required for initialization)"
       echo "  -h, --help            Show this help message"
       echo ""
       echo "Environment variables:"
       echo "  SUPABASE_PROJECT_REF   Supabase project reference ID"
-      echo "  SUPABASE_URL          Supabase project URL"
-      echo "  SUPABASE_ANON_KEY      Supabase anon key"
-      echo "  DATABASE_URL          Direct database connection URL"
-      echo "  LITELLM_BASE_URL      LiteLLM base URL (optional)"
-      echo "  LITELLM_API_KEY       LiteLLM API key (optional)"
-      echo "  LITELLM_MODEL         LiteLLM default model name (optional)"
+      echo "  SUPABASE_URL          Supabase project URL (recommended)"
+      echo "  SUPABASE_ANON_KEY      Supabase anon key (recommended)"
+      echo "  DATABASE_URL          Direct database connection URL (optional fallback)"
+      echo "  LITELLM_BASE_URL      LiteLLM base URL (required for initialization)"
+      echo "  LITELLM_API_KEY       LiteLLM API key (required for initialization)"
+      echo "  LITELLM_MODEL         LiteLLM model name (required for initialization)"
       exit 0
       ;;
     *)
@@ -132,30 +135,8 @@ reset_with_cli() {
     echo "Resetting remote database for project: $PROJECT_REF"
 
     # For remote databases, we can use SUPABASE_URL and SUPABASE_ANON_KEY
-    # Option 1: Use DATABASE_URL with psql (if available)
-    if [ -n "$DB_URL" ] && command -v psql &> /dev/null; then
-      echo "Using direct database connection via DATABASE_URL..."
-      echo "Truncating all tables in the public schema..."
-
-      # Generate SQL to truncate all tables
-      TRUNCATE_SQL=$(psql "$DB_URL" -t -c "
-        SELECT 'TRUNCATE TABLE ' || string_agg(quote_ident(schemaname)||'.'||quote_ident(tablename), ', ') || ' RESTART IDENTITY CASCADE;'
-        FROM pg_tables
-        WHERE schemaname = 'public';
-      " 2>/dev/null)
-
-      if [ -n "$TRUNCATE_SQL" ] && [ "$TRUNCATE_SQL" != "TRUNCATE TABLE  RESTART IDENTITY CASCADE;" ]; then
-        echo "Executing: $TRUNCATE_SQL"
-        psql "$DB_URL" -c "$TRUNCATE_SQL" || {
-          echo -e "${YELLOW}Warning: Failed to truncate tables.${NC}"
-          echo "You may need to create the remote_nodes table manually."
-        }
-        echo -e "${GREEN}Database tables truncated successfully.${NC}"
-      else
-        echo -e "${YELLOW}No tables found to truncate, or error occurred.${NC}"
-      fi
-    # Option 2: Use SUPABASE_URL and SUPABASE_ANON_KEY with Supabase CLI
-    elif [ -n "$SUPABASE_URL" ] && [ -n "$SERVICE_ROLE_KEY" ]; then
+    # Option 1: Use SUPABASE_URL with Supabase CLI (preferred)
+    if [ -n "$SUPABASE_URL" ] && [ -n "$SERVICE_ROLE_KEY" ]; then
       echo "Using Supabase API with SUPABASE_URL and SUPABASE_ANON_KEY..."
 
       # Ensure project is linked
@@ -164,7 +145,7 @@ reset_with_cli() {
         $SUPABASE_CMD link --project-ref "$PROJECT_REF" --yes || {
           echo -e "${RED}Error: Failed to link project.${NC}"
           echo "You may need to authenticate first: $SUPABASE_CMD login"
-          exit 1
+          return 1
         }
       fi
 
@@ -196,19 +177,31 @@ BEGIN
 END $$;
 EOF
 
+      # Try to sync migration history automatically
+      echo "Syncing migration history with remote database..."
+      PULL_OUTPUT=$($SUPABASE_CMD db pull --yes 2>&1 || true)
+      if echo "$PULL_OUTPUT" | grep -q "Finished\|successfully\|pulled"; then
+        echo "Migration history synced successfully."
+      else
+        echo "Note: Could not fully sync migration history, but continuing..."
       # Try to repair migration history if there are previous migrations
-      # Extract migration timestamps from existing migration files
       if [ -d "supabase/migrations" ]; then
         PREVIOUS_MIGRATIONS=$(ls -1 supabase/migrations/*.sql 2>/dev/null | sed 's/.*\/\([0-9]*\)_.*/\1/' | head -1)
         if [ -n "$PREVIOUS_MIGRATIONS" ]; then
           echo "Attempting to repair migration history..."
           $SUPABASE_CMD migration repair --status reverted "$PREVIOUS_MIGRATIONS" 2>/dev/null || true
+          fi
         fi
       fi
 
       # Push the migration to the linked project
+      echo "Pushing truncate migration..."
       PUSH_OUTPUT=$($SUPABASE_CMD db push --yes 2>&1)
-      if echo "$PUSH_OUTPUT" | grep -q "Finished\|successfully\|Applied migration"; then
+      PUSH_EXIT_CODE=$?
+      echo "Migration push exit code: $PUSH_EXIT_CODE"
+      echo "Migration push output: $PUSH_OUTPUT"
+
+      if [ $PUSH_EXIT_CODE -eq 0 ] && echo "$PUSH_OUTPUT" | grep -q "Finished\|successfully\|Applied migration"; then
         echo -e "${GREEN}Database tables truncated successfully.${NC}"
         # Remove the temporary migration file
         rm -f "$TEMP_MIGRATION"
@@ -218,8 +211,9 @@ EOF
           echo -e "${YELLOW}Warning: Migration history mismatch during truncate, but continuing...${NC}"
           echo "This is usually safe if the database is empty or you're resetting."
         else
-          echo -e "${YELLOW}Warning: Failed to truncate tables via CLI.${NC}"
-          echo "Error: $PUSH_OUTPUT"
+          echo -e "${YELLOW}Warning: Failed to truncate tables via CLI (exit code: $PUSH_EXIT_CODE).${NC}"
+          echo "Error output: $PUSH_OUTPUT"
+          echo "Continuing with table creation anyway..."
         fi
         # Clean up the temporary migration file
         rm -f "$TEMP_MIGRATION"
@@ -235,12 +229,9 @@ EOF
       echo "  SUPABASE_URL=https://[PROJECT_REF].supabase.co"
       echo "  SUPABASE_ANON_KEY=your_anon_key"
       echo ""
-      echo "Option 2: DATABASE_URL in .env.local (requires psql):"
-      echo "  DATABASE_URL=postgresql://postgres:[PASSWORD]@db.[PROJECT_REF].supabase.co:5432/postgres"
-      echo ""
-      echo "You can find these values in the Supabase Dashboard under Settings."
+      echo "You can find these values in the Supabase Dashboard under Settings → API."
       echo "Alternatively, you can reset the database manually in the Supabase Dashboard."
-      exit 1
+      return 1
     fi
   elif [ -f supabase/config.toml ]; then
     echo "Resetting local database..."
@@ -248,7 +239,7 @@ EOF
   else
     echo -e "${RED}Error: No Supabase project found.${NC}"
     echo "Either provide --project-ref, set SUPABASE_URL, or initialize Supabase locally with 'supabase init'"
-    exit 1
+    return 1
   fi
 }
 
@@ -259,7 +250,7 @@ reset_with_api() {
     echo "Provide them via:"
     echo "  - Environment variables: SUPABASE_URL and SUPABASE_ANON_KEY"
     echo "  - Command line: --supabase-url and --service-role-key"
-    exit 1
+    return 1
   fi
 
   echo -e "${GREEN}Using Supabase API to reset database...${NC}"
@@ -272,7 +263,7 @@ reset_with_api() {
 
   if [ -z "$PROJECT_REF" ]; then
     echo -e "${RED}Error: Could not extract project reference from URL.${NC}"
-    exit 1
+    return 1
   fi
 
   echo "Project Reference: $PROJECT_REF"
@@ -285,7 +276,7 @@ reset_with_api() {
       $SUPABASE_CMD link --project-ref "$PROJECT_REF" --yes || {
         echo -e "${RED}Error: Failed to link project.${NC}"
         echo "You may need to authenticate first: $SUPABASE_CMD login"
-        exit 1
+        return 1
       }
     fi
 
@@ -317,11 +308,24 @@ BEGIN
 END $$;
 EOF
 
-    # Repair migration history first if there were previous migrations
-    echo "Checking migration history before truncate..."
-    REPAIR_OUTPUT=$($SUPABASE_CMD migration repair --status reverted 20251218181329 2>&1 || true)
-    if echo "$REPAIR_OUTPUT" | grep -q "Finished\|repaired"; then
-      echo "Migration history repaired."
+    # Try to sync migration history automatically
+    echo "Syncing migration history with remote database..."
+    PULL_OUTPUT=$($SUPABASE_CMD db pull --yes 2>&1 || true)
+    if echo "$PULL_OUTPUT" | grep -q "Finished\|successfully\|pulled"; then
+      echo "Migration history synced successfully."
+    else
+      echo "Note: Could not fully sync migration history, trying repair..."
+      # Try to repair migration history if there are previous migrations
+      if [ -d "supabase/migrations" ]; then
+        PREVIOUS_MIGRATIONS=$(ls -1 supabase/migrations/*.sql 2>/dev/null | sed 's/.*\/\([0-9]*\)_.*/\1/' | sort -r | head -1)
+        if [ -n "$PREVIOUS_MIGRATIONS" ]; then
+          echo "Repairing migration history..."
+          REPAIR_OUTPUT=$($SUPABASE_CMD migration repair --status reverted "$PREVIOUS_MIGRATIONS" 2>&1 || true)
+          if echo "$REPAIR_OUTPUT" | grep -q "Finished\|repaired"; then
+            echo "Migration history repaired."
+          fi
+        fi
+      fi
     fi
 
     # Push the migration to the linked project
@@ -377,11 +381,10 @@ EOF
   echo "   - Or use: npx supabase"
   echo "   - Then authenticate: $SUPABASE_CMD login"
   echo ""
-  echo "2. Provide DATABASE_URL environment variable for direct database access"
-  echo "   (requires psql: sudo apt-get install postgresql-client)"
+  echo "2. Ensure SUPABASE_URL and SUPABASE_ANON_KEY are set in .env.local"
   echo ""
   echo "3. Use Supabase Dashboard to reset your database manually"
-  exit 1
+  return 1
 }
 
 # Confirmation prompt
@@ -456,7 +459,10 @@ CREATE POLICY \"Service role can manage remote_nodes\" ON remote_nodes
 "
 
   # Try to execute SQL using available methods
-  # Prefer psql (direct database connection) as it bypasses migration history issues
+  # Note: Supabase CLI doesn't have a direct SQL execution command that bypasses migrations
+  # We'll use migration-based approach with proper sync
+
+  # Method 2: Use psql (direct database connection) as fallback
   if [ -n "$DB_URL" ] && command -v psql &> /dev/null; then
     echo "Executing SQL via psql (direct database connection)..."
     if echo "$CREATE_TABLE_SQL" | psql "$DB_URL" 2>&1; then
@@ -475,6 +481,14 @@ CREATE POLICY \"Service role can manage remote_nodes\" ON remote_nodes
       fi
     fi
   elif [ "$USE_CLI" = true ] && [ -n "$PROJECT_REF" ]; then
+    # Check if SUPABASE_URL is available (required)
+    if [ -z "$SUPABASE_URL" ] || [ -z "$SERVICE_ROLE_KEY" ]; then
+      echo -e "${YELLOW}Note: SUPABASE_URL and SUPABASE_ANON_KEY should be set in .env.local:${NC}"
+      echo -e "${YELLOW}  SUPABASE_URL=https://[PROJECT_REF].supabase.co${NC}"
+      echo -e "${YELLOW}  SUPABASE_ANON_KEY=your_anon_key${NC}"
+      echo ""
+    fi
+
     # Try using Supabase CLI with db push to create table
     echo "Attempting to create table via Supabase CLI..."
 
@@ -521,15 +535,22 @@ CREATE POLICY \"Service role can manage remote_nodes\" ON remote_nodes
         }
       fi
 
+      # Try to sync migration history automatically before creating table
+      echo "Syncing migration history with remote database..."
+      PULL_OUTPUT=$($SUPABASE_CMD db pull --yes 2>&1 || true)
+      if echo "$PULL_OUTPUT" | grep -q "Finished\|successfully\|pulled"; then
+        echo "Migration history synced successfully."
+      else
+        echo "Note: Could not fully sync migration history, trying repair..."
       # Try to repair migration history if there are previous migrations
-      # Extract migration timestamps from existing migration files (including the reset migration we just created)
       if [ -d "supabase/migrations" ]; then
         PREVIOUS_MIGRATIONS=$(ls -1 supabase/migrations/*.sql 2>/dev/null | sed 's/.*\/\([0-9]*\)_.*/\1/' | sort -r | head -1)
         if [ -n "$PREVIOUS_MIGRATIONS" ]; then
-          echo "Checking migration history before creating table..."
+            echo "Repairing migration history..."
           REPAIR_OUTPUT=$($SUPABASE_CMD migration repair --status reverted "$PREVIOUS_MIGRATIONS" 2>&1 || true)
           if echo "$REPAIR_OUTPUT" | grep -q "Finished\|repaired"; then
             echo "Migration history repaired."
+            fi
           fi
         fi
       fi
@@ -546,10 +567,17 @@ CREATE POLICY \"Service role can manage remote_nodes\" ON remote_nodes
         echo "Migration history may be out of sync. Error output:"
         echo "$PUSH_OUTPUT"
         echo ""
-        echo "You can try:"
+        echo -e "${YELLOW}The Supabase CLI method failed due to migration history sync issues.${NC}"
+        echo ""
+        echo "Please ensure SUPABASE_URL and SUPABASE_ANON_KEY are set in .env.local:"
+        echo "  SUPABASE_URL=https://[PROJECT_REF].supabase.co"
+        echo "  SUPABASE_ANON_KEY=your_anon_key"
+        echo ""
+        echo "You can find these values in Supabase Dashboard → Settings → API."
+        echo ""
+        echo "Or you can try:"
         echo "  1. Run the SQL manually in Supabase SQL Editor (recommended)"
         echo "  2. Or repair migration history: supabase migration repair --status reverted 20251218180930"
-        echo "  3. Or use DATABASE_URL with psql for direct connection"
       fi
       rm -f "$TEMP_MIGRATION"
     else
@@ -567,10 +595,26 @@ CREATE POLICY \"Service role can manage remote_nodes\" ON remote_nodes
 }
 
 # Perform reset
+echo ""
+echo -e "${GREEN}=== Resetting database ===${NC}"
 if [ "$USE_CLI" = true ]; then
+  # Temporarily disable exit on error for reset (we'll continue even if it has issues)
+  set +e
   reset_with_cli
+  RESET_EXIT_CODE=$?
+  set -e
+  if [ $RESET_EXIT_CODE -ne 0 ]; then
+    echo -e "${YELLOW}Warning: Database reset had issues (exit code: $RESET_EXIT_CODE), but continuing with table creation...${NC}"
+  fi
 else
+  # Temporarily disable exit on error for reset (we'll continue even if it has issues)
+  set +e
   reset_with_api
+  RESET_EXIT_CODE=$?
+  set -e
+  if [ $RESET_EXIT_CODE -ne 0 ]; then
+    echo -e "${YELLOW}Warning: Database reset had issues (exit code: $RESET_EXIT_CODE), but continuing with table creation...${NC}"
+  fi
 fi
 
 # Function to create app_settings table
@@ -578,10 +622,20 @@ create_app_settings_table() {
   echo -e "${GREEN}Creating app_settings table...${NC}"
 
   # SQL for creating app_settings table
+  # Note: update_updated_at_column() function should already exist from remote_nodes table creation
+  # But we create it here too in case remote_nodes wasn't created first
   CREATE_TABLE_SQL="
+-- Create update_updated_at_column function if it doesn't exist (needed for trigger)
+CREATE OR REPLACE FUNCTION update_updated_at_column()
+RETURNS TRIGGER AS \$\$
+BEGIN
+  NEW.updated_at = NOW();
+  RETURN NEW;
+END;
+\$\$ language 'plpgsql';
+
 -- Create app_settings table in Supabase
 -- This table stores application-wide settings (e.g., LiteLLM configuration)
-
 CREATE TABLE IF NOT EXISTS app_settings (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   key TEXT NOT NULL UNIQUE,
@@ -594,6 +648,7 @@ CREATE TABLE IF NOT EXISTS app_settings (
 CREATE INDEX IF NOT EXISTS idx_app_settings_key ON app_settings(key);
 
 -- Create updated_at trigger to automatically update the timestamp
+DROP TRIGGER IF EXISTS update_app_settings_updated_at ON app_settings;
 CREATE TRIGGER update_app_settings_updated_at
   BEFORE UPDATE ON app_settings
   FOR EACH ROW
@@ -613,44 +668,62 @@ CREATE POLICY \"Service role can manage app_settings\" ON app_settings
 "
 
   # Try to execute SQL using available methods
+  # Note: Supabase CLI doesn't have a direct SQL execution command that bypasses migrations
+  # We'll use migration-based approach with proper sync
+
+  # Method 2: Use psql (direct database connection) as fallback
   if [ -n "$DB_URL" ] && command -v psql &> /dev/null; then
     echo "Executing SQL via psql (direct database connection)..."
-    if echo "$CREATE_TABLE_SQL" | psql "$DB_URL" 2>&1; then
-      echo -e "${GREEN}app_settings table created successfully.${NC}"
-      return 0
-    else
-      OUTPUT=$(echo "$CREATE_TABLE_SQL" | psql "$DB_URL" 2>&1)
-      if echo "$OUTPUT" | grep -q "already exists\|duplicate"; then
-        echo -e "${GREEN}app_settings table already exists.${NC}"
+    OUTPUT=$(echo "$CREATE_TABLE_SQL" | psql "$DB_URL" 2>&1)
+    EXIT_CODE=$?
+    if [ $EXIT_CODE -eq 0 ]; then
+      # Verify the table was actually created
+      VERIFY_OUTPUT=$(echo "SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'app_settings');" | psql "$DB_URL" -t 2>&1)
+      if echo "$VERIFY_OUTPUT" | grep -q "t\|true\|1"; then
+        echo -e "${GREEN}app_settings table created and verified successfully.${NC}"
         return 0
+      else
+        echo -e "${RED}Error: Table creation reported success but table does not exist.${NC}"
+        echo "Verification output: $VERIFY_OUTPUT"
+        return 1
+      fi
+    else
+      if echo "$OUTPUT" | grep -q "already exists\|duplicate"; then
+        # Verify the table actually exists
+        VERIFY_OUTPUT=$(echo "SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'app_settings');" | psql "$DB_URL" -t 2>&1)
+        if echo "$VERIFY_OUTPUT" | grep -q "t\|true\|1"; then
+          echo -e "${GREEN}app_settings table already exists and verified.${NC}"
+          return 0
+        else
+          echo -e "${YELLOW}Warning: Table reported as existing but verification failed.${NC}"
+          echo "Verification output: $VERIFY_OUTPUT"
+          echo "Will try alternative method..."
+        fi
       else
         echo -e "${YELLOW}Warning: Failed to create app_settings table via psql.${NC}"
         echo "Error output: $OUTPUT"
+        echo "Exit code: $EXIT_CODE"
+        echo "Will try alternative method..."
       fi
     fi
   fi
 
   # Try using Supabase CLI with db push to create table
   if [ "$USE_CLI" = true ]; then
+    # Check if SUPABASE_URL is available (required)
+    if [ -z "$SUPABASE_URL" ] || [ -z "$SERVICE_ROLE_KEY" ]; then
+      echo -e "${YELLOW}Note: SUPABASE_URL and SUPABASE_ANON_KEY should be set in .env.local:${NC}"
+      echo -e "${YELLOW}  SUPABASE_URL=https://[PROJECT_REF].supabase.co${NC}"
+      echo -e "${YELLOW}  SUPABASE_ANON_KEY=your_anon_key${NC}"
+      echo ""
+    fi
+
     echo "Attempting to create table via Supabase CLI..."
-    TEMP_MIGRATION=$(mktemp)
     MIGRATION_TIMESTAMP=$(date +%Y%m%d%H%M%S)
     MIGRATION_NAME="${MIGRATION_TIMESTAMP}_create_app_settings"
     TEMP_MIGRATION="supabase/migrations/${MIGRATION_NAME}.sql"
     mkdir -p supabase/migrations
     echo "$CREATE_TABLE_SQL" > "$TEMP_MIGRATION"
-
-    if [ -n "$DB_URL" ] && command -v psql &> /dev/null; then
-      OUTPUT=$(echo "$CREATE_TABLE_SQL" | psql "$DB_URL" 2>&1)
-      if echo "$OUTPUT" | grep -q "already exists\|duplicate"; then
-        echo -e "${GREEN}app_settings table already exists.${NC}"
-        rm -f "$TEMP_MIGRATION"
-        return 0
-      else
-        echo -e "${YELLOW}Warning: Failed to create app_settings table via psql.${NC}"
-        echo "Error output: $OUTPUT"
-      fi
-    fi
 
     if [ -n "$PROJECT_REF" ]; then
       if [ ! -f supabase/.temp/project-ref ] || [ "$(cat supabase/.temp/project-ref 2>/dev/null)" != "$PROJECT_REF" ]; then
@@ -662,37 +735,89 @@ CREATE POLICY \"Service role can manage app_settings\" ON app_settings
         }
       fi
 
+      # Try to sync migration history using remote commit (marks all remote migrations as applied locally)
+      echo "Syncing migration history with remote database..."
+      REMOTE_COMMIT_OUTPUT=$($SUPABASE_CMD db remote commit 2>&1 || true)
+      if echo "$REMOTE_COMMIT_OUTPUT" | grep -q "Finished\|successfully\|committed\|up to date"; then
+        echo "Migration history synced successfully via remote commit."
+      else
+        # Fallback: Try db pull
+        PULL_OUTPUT=$($SUPABASE_CMD db pull --yes 2>&1 || true)
+        if echo "$PULL_OUTPUT" | grep -q "Finished\|successfully\|pulled"; then
+          echo "Migration history synced successfully via db pull."
+        else
+          echo "Note: Could not fully sync migration history, trying repair..."
+          # Try to repair migration history if there are previous migrations
+          if [ -d "supabase/migrations" ]; then
+            PREVIOUS_MIGRATIONS=$(ls -1 supabase/migrations/*.sql 2>/dev/null | sed 's/.*\/\([0-9]*\)_.*/\1/' | sort -r | head -1)
+            if [ -n "$PREVIOUS_MIGRATIONS" ]; then
+              echo "Repairing migration history..."
+              REPAIR_OUTPUT=$($SUPABASE_CMD migration repair --status reverted "$PREVIOUS_MIGRATIONS" 2>&1 || true)
+              if echo "$REPAIR_OUTPUT" | grep -q "Finished\|repaired"; then
+                echo "Migration history repaired."
+              fi
+            fi
+          fi
+        fi
+      fi
+
       # Push the migration to create the table
       echo "Pushing migration to create app_settings table..."
       PUSH_OUTPUT=$($SUPABASE_CMD db push --yes 2>&1)
-      if echo "$PUSH_OUTPUT" | grep -q "Finished\|successfully\|Applied migration"; then
-        echo -e "${GREEN}app_settings table created successfully.${NC}"
+      PUSH_EXIT_CODE=$?
+      if [ $PUSH_EXIT_CODE -eq 0 ] && echo "$PUSH_OUTPUT" | grep -q "Finished\|successfully\|Applied migration"; then
+        echo -e "${GREEN}app_settings table created successfully via CLI.${NC}"
         rm -f "$TEMP_MIGRATION"
         return 0
       else
-        echo -e "${YELLOW}Warning: Failed to create app_settings table via CLI.${NC}"
-        echo "Error: $PUSH_OUTPUT"
+        echo -e "${RED}Error: Failed to create app_settings table via CLI.${NC}"
+        echo "Exit code: $PUSH_EXIT_CODE"
+        echo "Error output: $PUSH_OUTPUT"
+        echo ""
+        echo -e "${YELLOW}The Supabase CLI method failed due to migration history sync issues.${NC}"
+        echo ""
+        echo "Please ensure SUPABASE_URL and SUPABASE_ANON_KEY are set in .env.local:"
+        echo "  SUPABASE_URL=https://[PROJECT_REF].supabase.co"
+        echo "  SUPABASE_ANON_KEY=your_anon_key"
+        echo ""
+        echo "You can find these values in Supabase Dashboard → Settings → API."
+        echo ""
+        echo "Or create the table manually in Supabase SQL Editor using the SQL shown above."
         rm -f "$TEMP_MIGRATION"
+        return 1
       fi
     else
-      echo -e "${YELLOW}Note: Cannot automatically create app_settings table via CLI.${NC}"
-      echo "You may need to create the app_settings table manually."
+      echo -e "${RED}Error: Cannot automatically create app_settings table via CLI.${NC}"
+      echo "PROJECT_REF is required but not provided."
+      echo "Please provide --project-ref or set SUPABASE_PROJECT_REF environment variable."
       rm -f "$TEMP_MIGRATION"
+      return 1
     fi
   else
-    echo -e "${YELLOW}Note: Cannot automatically create app_settings table.${NC}"
-    echo "You may need to create the app_settings table manually."
+    echo -e "${RED}Error: Cannot automatically create app_settings table.${NC}"
+    echo "No database connection method available."
     echo ""
-    echo "SQL to create the table:"
+    echo "Please provide SUPABASE_URL and SUPABASE_ANON_KEY in .env.local:"
+    echo "  SUPABASE_URL=https://[PROJECT_REF].supabase.co"
+    echo "  SUPABASE_ANON_KEY=your_anon_key"
+    echo ""
+    echo "You can find these values in Supabase Dashboard → Settings → API."
+    echo ""
+    echo "Alternatively, you can use DATABASE_URL (optional fallback):"
+    echo "  DATABASE_URL=postgresql://postgres:[PASSWORD]@db.[PROJECT_REF].supabase.co:5432/postgres"
+    echo ""
+    echo "SQL to create the table manually in Supabase SQL Editor:"
     echo "$CREATE_TABLE_SQL"
+    return 1
   fi
 }
 
 # Function to initialize LiteLLM settings
 initialize_litellm_settings() {
-  # Only initialize if at least base URL and API key are provided
-  if [ -z "$LITELLM_BASE_URL" ] || [ -z "$LITELLM_API_KEY" ]; then
-    echo -e "${YELLOW}Note: LiteLLM settings not provided. Skipping initialization.${NC}"
+  # Require all three settings: base URL, API key, and model name
+  if [ -z "$LITELLM_BASE_URL" ] || [ -z "$LITELLM_API_KEY" ] || [ -z "$LITELLM_MODEL" ]; then
+    echo -e "${YELLOW}Note: LiteLLM settings not fully provided. Skipping initialization.${NC}"
+    echo "All three settings are required: base URL, API key, and model name."
     echo "You can configure LiteLLM later via the Settings page or by running:"
     echo "  psql \$DATABASE_URL -c \"INSERT INTO app_settings (key, value) VALUES ('litellm_base_url', 'your-url'), ('litellm_api_key', 'your-key'), ('litellm_model', 'your-model') ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value;\""
     return 0
@@ -705,23 +830,15 @@ initialize_litellm_settings() {
   ESCAPED_API_KEY=$(echo "$LITELLM_API_KEY" | sed "s/'/''/g")
   ESCAPED_MODEL=$(echo "$LITELLM_MODEL" | sed "s/'/''/g")
 
-  # SQL to insert/update LiteLLM settings
+  # SQL to insert/update LiteLLM settings (all three are required)
   INIT_SETTINGS_SQL="
 -- Initialize LiteLLM settings in app_settings table
 INSERT INTO app_settings (key, value) VALUES
   ('litellm_base_url', '$ESCAPED_BASE_URL'),
-  ('litellm_api_key', '$ESCAPED_API_KEY')
-ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW();
-"
-
-  # Add model if provided
-  if [ -n "$LITELLM_MODEL" ]; then
-    INIT_SETTINGS_SQL="$INIT_SETTINGS_SQL
-INSERT INTO app_settings (key, value) VALUES
+  ('litellm_api_key', '$ESCAPED_API_KEY'),
   ('litellm_model', '$ESCAPED_MODEL')
 ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW();
 "
-  fi
 
   # Try to execute SQL using available methods
   if [ -n "$DB_URL" ] && command -v psql &> /dev/null; then
@@ -798,13 +915,47 @@ ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW();
 }
 
 # Create remote_nodes table after reset
-create_remote_nodes_table
+echo ""
+echo -e "${GREEN}=== Creating remote_nodes table ===${NC}"
+if ! create_remote_nodes_table; then
+  echo -e "${YELLOW}Warning: Failed to create remote_nodes table. Continuing...${NC}"
+fi
 
 # Create app_settings table after reset
-create_app_settings_table
+echo ""
+echo -e "${GREEN}=== Creating app_settings table ===${NC}"
+if ! create_app_settings_table; then
+  echo ""
+  echo -e "${RED}Error: Failed to create app_settings table.${NC}"
+  echo -e "${RED}This table is required for LiteLLM configuration.${NC}"
+  echo ""
+  echo -e "${YELLOW}Important: Ensure you are running this script against the same Supabase project${NC}"
+  echo -e "${YELLOW}that your Cloudflare Worker is configured to use.${NC}"
+  echo ""
+  echo -e "${YELLOW}Check your configuration:${NC}"
+  if [ -n "$SUPABASE_URL" ]; then
+    echo -e "  SUPABASE_URL: $SUPABASE_URL"
+  fi
+  if [ -n "$PROJECT_REF" ]; then
+    echo -e "  PROJECT_REF: $PROJECT_REF"
+  fi
+  if [ -n "$DB_URL" ]; then
+    DB_HOST=$(echo "$DB_URL" | sed -n 's/.*@\([^:]*\):.*/\1/p')
+    echo -e "  DATABASE_URL host: $DB_HOST"
+  fi
+  echo ""
+  echo -e "${YELLOW}Please check the error messages above and try again.${NC}"
+  echo -e "${YELLOW}You may need to create the table manually in Supabase SQL Editor.${NC}"
+  exit 1
+fi
 
 # Initialize LiteLLM settings if provided
+echo ""
+echo -e "${GREEN}=== Initializing LiteLLM settings (if provided) ===${NC}"
 initialize_litellm_settings
 
+echo ""
+echo -e "${GREEN}========================================${NC}"
 echo -e "${GREEN}Database reset completed successfully!${NC}"
+echo -e "${GREEN}========================================${NC}"
 

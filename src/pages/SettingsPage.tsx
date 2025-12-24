@@ -52,7 +52,8 @@ export default function SettingsPage() {
   useEffect(() => {
     if (isAdmin()) {
       fetchNodes()
-      fetchSettings()
+      // Note: LiteLLM settings are not fetched automatically
+      // Users can enter values manually or use Test Connection to verify
     }
   }, [fetchNodes, isAdmin])
 
@@ -67,17 +68,50 @@ export default function SettingsPage() {
         }
       })
 
+      const contentType = response.headers.get('content-type') || ''
+      const isJson = contentType.includes('application/json')
+
+      if (!response.ok) {
+        if (isJson) {
+          try {
+            const errorData = await response.json() as { error?: string }
+            throw new Error(errorData.error || `Failed to load settings: ${response.status} ${response.statusText}`)
+          } catch (parseErr) {
+            throw new Error(`Failed to load settings: ${response.status} ${response.statusText}`)
+          }
+        } else {
+          // Non-JSON error response (likely HTML error page)
+          const text = await response.text()
+          console.error('Non-JSON error response:', text.substring(0, 200))
+          throw new Error(`Failed to load settings: ${response.status} ${response.statusText}. The API endpoint may not be configured correctly.`)
+        }
+      }
+
+      if (!isJson) {
+        // Non-JSON success response (shouldn't happen, but handle gracefully)
+        const text = await response.text()
+        console.error('Non-JSON success response:', text.substring(0, 200))
+        throw new Error('Invalid response format from server. Please ensure the API endpoint is configured correctly.')
+      }
+
       const data = await response.json() as { success: boolean; data?: Record<string, string>; error?: string }
 
-      if (data.success && data.data) {
-        setLitellmBaseUrl(data.data['litellm_base_url'] || '')
-        setLitellmApiKey(data.data['litellm_api_key'] || '')
-        setLitellmModel(data.data['litellm_model'] || '')
+      if (data.success) {
+        // Handle empty settings gracefully - it's OK if no settings exist yet
+        setLitellmBaseUrl(data.data?.['litellm_base_url'] || '')
+        setLitellmApiKey(data.data?.['litellm_api_key'] || '')
+        setLitellmModel(data.data?.['litellm_model'] || '')
       } else {
-        setSettingsError(data.error || 'Failed to load settings')
+        // Only show error if there's an actual error message
+        if (data.error) {
+          setSettingsError(data.error)
+        }
+        // If no error message, just leave fields empty (settings don't exist yet)
       }
     } catch (err) {
-      setSettingsError(err instanceof Error ? err.message : 'Failed to load settings')
+      const errorMessage = err instanceof Error ? err.message : 'Failed to load settings'
+      setSettingsError(errorMessage)
+      console.error('Failed to fetch LiteLLM settings:', err)
     } finally {
       setLoadingSettings(false)
     }
@@ -104,9 +138,25 @@ export default function SettingsPage() {
         },
         body: JSON.stringify({
           litellm_base_url: litellmBaseUrl.trim(),
-          litellm_api_key: litellmApiKey.trim()
+          litellm_api_key: litellmApiKey.trim(),
+          litellm_model: litellmModel.trim()
         })
       })
+
+      if (!response.ok) {
+        const contentType = response.headers.get('content-type')
+        if (contentType && contentType.includes('application/json')) {
+          const errorData = await response.json().catch(() => ({ error: 'LiteLLM connection test failed' })) as { error?: string }
+          throw new Error(errorData.error || `LiteLLM connection test failed: ${response.status} ${response.statusText}`)
+        } else {
+          throw new Error(`LiteLLM connection test failed: ${response.status} ${response.statusText}`)
+        }
+      }
+
+      const contentType = response.headers.get('content-type')
+      if (!contentType || !contentType.includes('application/json')) {
+        throw new Error('Invalid response format from server')
+      }
 
       const data = await response.json() as { success: boolean; message?: string; error?: string }
 
@@ -122,10 +172,12 @@ export default function SettingsPage() {
         })
       }
     } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to test LiteLLM connection'
       setLiteLLMTestResult({
         success: false,
-        message: err instanceof Error ? err.message : 'Failed to test LiteLLM connection'
+        message: errorMessage
       })
+      console.error('Failed to test LiteLLM connection:', err)
     } finally {
       setTestingLiteLLM(false)
     }
@@ -136,6 +188,13 @@ export default function SettingsPage() {
     setSettingsError(null)
     setSettingsSuccess(false)
     setLiteLLMTestResult(null)
+
+    // Validate required fields
+    if (!litellmBaseUrl.trim() || !litellmApiKey.trim() || !litellmModel.trim()) {
+      setSettingsError('Base URL, API Key, and Model Name are required')
+      setSavingSettings(false)
+      return
+    }
 
     try {
       const response = await fetch('/api/settings', {
@@ -151,8 +210,18 @@ export default function SettingsPage() {
       })
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ error: 'Failed to save settings' })) as { error?: string }
-        throw new Error(errorData.error || `Failed to save settings: ${response.status} ${response.statusText}`)
+        const contentType = response.headers.get('content-type')
+        if (contentType && contentType.includes('application/json')) {
+          const errorData = await response.json().catch(() => ({ error: 'Failed to save settings' })) as { error?: string }
+          throw new Error(errorData.error || `Failed to save settings: ${response.status} ${response.statusText}`)
+        } else {
+          throw new Error(`Failed to save settings: ${response.status} ${response.statusText}`)
+        }
+      }
+
+      const contentType = response.headers.get('content-type')
+      if (!contentType || !contentType.includes('application/json')) {
+        throw new Error('Invalid response format from server')
       }
 
       const data = await response.json() as { success: boolean; message?: string; error?: string }
@@ -160,8 +229,7 @@ export default function SettingsPage() {
       if (data.success) {
         setSettingsSuccess(true)
         setTimeout(() => setSettingsSuccess(false), 3000)
-        // Refresh settings from database to ensure we have the latest values
-        await fetchSettings()
+        // Settings saved successfully - no need to fetch, values are already in state
       } else {
         throw new Error(data.error || 'Failed to save settings')
       }
@@ -507,9 +575,6 @@ export default function SettingsPage() {
                     placeholder="https://your-litellm-server.com"
                     className={`${inputBase} ${theme === 'dark' ? inputDark : inputLight}`}
                   />
-                  <p className={`mt-1 text-xs ${theme === 'dark' ? 'text-gradient-secondary' : 'text-gray-500'}`}>
-                    The base URL of your LiteLLM server
-                  </p>
                 </div>
 
                 <div>
@@ -528,14 +593,11 @@ export default function SettingsPage() {
                     placeholder="Enter your LiteLLM API key"
                     className={`${inputBase} ${theme === 'dark' ? inputDark : inputLight}`}
                   />
-                  <p className={`mt-1 text-xs ${theme === 'dark' ? 'text-gradient-secondary' : 'text-gray-500'}`}>
-                    Your LiteLLM API key for authentication
-                  </p>
                 </div>
 
                 <div>
                   <label htmlFor="litellmModel" className={`block text-sm font-medium mb-2 ${theme === 'dark' ? 'text-gradient-primary' : 'text-gray-700'}`}>
-                    Default Model Name
+                    Model Name *
                   </label>
                   <input
                     type="text"
@@ -546,12 +608,9 @@ export default function SettingsPage() {
                       setSettingsError(null)
                       setSettingsSuccess(false)
                     }}
-                    placeholder="gpt-4, claude-3-sonnet, etc."
+                    placeholder="Enter your LiteLLM model name"
                     className={`${inputBase} ${theme === 'dark' ? inputDark : inputLight}`}
                   />
-                  <p className={`mt-1 text-xs ${theme === 'dark' ? 'text-gradient-secondary' : 'text-gray-500'}`}>
-                    Optional: Default model name to use when no model is specified
-                  </p>
                 </div>
 
                 {liteLLMTestResult && (
@@ -591,9 +650,9 @@ export default function SettingsPage() {
                         : 'bg-red-50 border border-red-200'
                     }`}
                   >
-                    <p className={`text-sm ${theme === 'dark' ? 'text-red-400' : 'text-red-800'}`}>
+                    <div className={`text-sm ${theme === 'dark' ? 'text-red-400' : 'text-red-800'} whitespace-pre-wrap`}>
                       ✗ {settingsError}
-                    </p>
+                    </div>
                   </div>
                 )}
 
@@ -631,7 +690,7 @@ export default function SettingsPage() {
                   </button>
                   <button
                     onClick={handleSaveSettings}
-                    disabled={savingSettings || !litellmBaseUrl.trim() || !litellmApiKey.trim()}
+                    disabled={savingSettings || !litellmBaseUrl.trim() || !litellmApiKey.trim() || !litellmModel.trim()}
                     className={`${theme === 'dark' ? 'btn-gradient' : 'bg-blue-600 hover:bg-blue-700'} text-white px-4 py-2 rounded-lg transition-colors duration-200 flex items-center disabled:opacity-50 disabled:cursor-not-allowed`}
                   >
                     {savingSettings ? (

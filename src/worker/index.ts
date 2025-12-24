@@ -151,18 +151,28 @@ export default {
         return await handleTestEmail(request, env, corsHeaders)
       } else if (path === '/api/git/clone' && method === 'POST') {
         return await handleGitClone(request, env, corsHeaders)
+      } else if (path === '/api/settings/test-litellm' && method === 'POST') {
+        return await handleTestLiteLLM(request, env, corsHeaders)
       } else if (path === '/api/settings' && method === 'GET') {
         return await handleGetSettings(env, corsHeaders)
       } else if (path === '/api/settings' && method === 'PUT') {
+        console.log('Matched PUT /api/settings route')
         return await handleUpdateSettings(request, env, corsHeaders)
-      } else if (path === '/api/settings/test-litellm' && method === 'POST') {
-        return await handleTestLiteLLM(request, env, corsHeaders)
       }
 
       else {
-        return new Response('Not Found', {
+        // Log unmatched routes for debugging
+        console.log('Unmatched route:', { path, method, url: request.url })
+        return new Response(JSON.stringify({
+          error: 'Not Found',
+          path,
+          method
+        }), {
           status: 404,
-          headers: corsHeaders
+          headers: {
+            'Content-Type': 'application/json',
+            ...corsHeaders
+          }
         })
       }
     } catch (error) {
@@ -2849,7 +2859,25 @@ async function handleGetSettings(env: Env, corsHeaders: Record<string, string>):
       .from('app_settings')
       .select('key, value')
 
+    // Handle case where table doesn't exist yet (code 42P01 or similar)
     if (error) {
+      // Check if it's a "relation does not exist" error (table not created yet)
+      if (error.code === '42P01' || error.message?.includes('does not exist') || error.message?.includes('relation')) {
+        console.log('app_settings table does not exist yet, returning empty settings')
+        return new Response(
+          JSON.stringify({
+            success: true,
+            data: {}
+          }),
+          {
+            headers: {
+              'Content-Type': 'application/json',
+              ...corsHeaders
+            }
+          }
+        )
+      }
+
       console.error('Error fetching settings:', error)
       return new Response(
         JSON.stringify({
@@ -2867,13 +2895,15 @@ async function handleGetSettings(env: Env, corsHeaders: Record<string, string>):
     }
 
     // Convert settings array to object
+    // Always return an object, even if empty (no settings configured yet)
     const settingsMap: Record<string, string> = {}
-    if (settings) {
+    if (settings && Array.isArray(settings)) {
       for (const setting of settings) {
         settingsMap[setting.key] = setting.value || ''
       }
     }
 
+    // Always return success with data, even if empty
     return new Response(
       JSON.stringify({
         success: true,
@@ -2906,8 +2936,10 @@ async function handleGetSettings(env: Env, corsHeaders: Record<string, string>):
 
 async function handleUpdateSettings(request: Request, env: Env, corsHeaders: Record<string, string>): Promise<Response> {
   try {
+    console.log('handleUpdateSettings called')
     const supabase = getSupabaseClient(env)
     const body = await request.json() as Record<string, string>
+    console.log('Settings update body keys:', Object.keys(body))
 
     // Validate that we have settings to update
     if (!body || Object.keys(body).length === 0) {
@@ -2926,20 +2958,82 @@ async function handleUpdateSettings(request: Request, env: Env, corsHeaders: Rec
       )
     }
 
+    // Validate required settings
+    if (body.litellm_base_url !== undefined && !body.litellm_base_url.trim()) {
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: 'LiteLLM base URL is required'
+        }),
+        {
+          status: 400,
+          headers: {
+            'Content-Type': 'application/json',
+            ...corsHeaders
+          }
+        }
+      )
+    }
+
+    if (body.litellm_api_key !== undefined && !body.litellm_api_key.trim()) {
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: 'LiteLLM API key is required'
+        }),
+        {
+          status: 400,
+          headers: {
+            'Content-Type': 'application/json',
+            ...corsHeaders
+          }
+        }
+      )
+    }
+
+    if (body.litellm_model !== undefined && !body.litellm_model.trim()) {
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: 'LiteLLM model name is required'
+        }),
+        {
+          status: 400,
+          headers: {
+            'Content-Type': 'application/json',
+            ...corsHeaders
+          }
+        }
+      )
+    }
+
     // Update or insert each setting
     for (const [key, value] of Object.entries(body)) {
-      // Skip empty values (except for model which can be empty)
-      if (!value && key !== 'litellm_model') {
+      // Skip empty values
+      if (!value) {
         continue
       }
 
       // Use upsert to insert or update
       const { error } = await supabase
         .from('app_settings')
-        .upsert({ key, value: value || '' }, { onConflict: 'key' })
+        .upsert({ key, value: value.trim() }, { onConflict: 'key' })
 
       if (error) {
         console.error(`Error updating setting ${key}:`, error)
+
+        // Check if table doesn't exist
+        if (error.message?.includes('Could not find the table') ||
+            error.message?.includes('relation') ||
+            error.message?.includes('does not exist') ||
+            error.code === '42P01') {
+          throw new Error(
+            `The app_settings table does not exist. Please run the database reset script to create it:\n\n` +
+            `  ./scripts/reset-db.sh --confirm\n\n` +
+            `This will create the app_settings table along with other required database tables.`
+          )
+        }
+
         throw new Error(`Failed to update setting ${key}: ${error.message}`)
       }
     }
@@ -2978,10 +3072,11 @@ async function handleUpdateSettings(request: Request, env: Env, corsHeaders: Rec
 
 async function handleTestLiteLLM(request: Request, env: Env, corsHeaders: Record<string, string>): Promise<Response> {
   try {
-    const body = await request.json() as { litellm_base_url?: string; litellm_api_key?: string }
+    const body = await request.json() as { litellm_base_url?: string; litellm_api_key?: string; litellm_model?: string }
 
     const litellmBaseUrl = body.litellm_base_url?.trim() || ''
     const litellmApiKey = body.litellm_api_key?.trim() || ''
+    const litellmModel = body.litellm_model?.trim() || ''
 
     if (!litellmBaseUrl || !litellmApiKey) {
       return new Response(
@@ -2999,46 +3094,114 @@ async function handleTestLiteLLM(request: Request, env: Env, corsHeaders: Record
       )
     }
 
-    // Test connection by fetching models from LiteLLM
-    const baseUrl = litellmBaseUrl.replace(/\/$/, '') // Remove trailing slash
-    let modelsUrl = `${baseUrl}/models`
+    // Test connection by making a chat completion request (more reliable than /models)
+    let baseUrl = litellmBaseUrl.replace(/\/$/, '') // Remove trailing slash
 
-    // Try to fetch models with the provided credentials
-    let response = await fetch(modelsUrl, {
-      method: 'GET',
+    // Determine the chat completions endpoint
+    // Check if base URL already includes /chat/completions
+    let chatUrl = baseUrl
+    const urlObj = new URL(baseUrl)
+    const hasPath = urlObj.pathname && urlObj.pathname !== '/'
+    const hasChatCompletions = baseUrl.toLowerCase().includes('/chat/completions')
+
+    if (hasChatCompletions) {
+      // Base URL already includes /chat/completions, use as-is
+      chatUrl = baseUrl
+      console.log('Using base URL as-is (contains /chat/completions):', chatUrl)
+    } else if (hasPath) {
+      // Base URL has a path (like /openai), append /chat/completions
+      chatUrl = `${baseUrl}/chat/completions`
+      console.log('Appending /chat/completions to base URL with path:', chatUrl)
+    } else {
+      // No path, try common chat completions endpoints
+      // First try /openai/chat/completions (common LiteLLM pattern)
+      chatUrl = `${baseUrl}/openai/chat/completions`
+      console.log('Using /openai/chat/completions pattern:', chatUrl)
+    }
+
+    // Use a simple test message
+    const testModel = litellmModel || 'gpt-3.5-turbo' // Fallback model for testing
+    const testPayload = {
+      model: testModel,
+      messages: [
+        {
+          role: 'user',
+          content: 'Hello'
+        }
+      ],
+      max_tokens: 10 // Minimal response for testing
+    }
+
+    // Try chat completions with Bearer token (most common)
+    let response = await fetch(chatUrl, {
+      method: 'POST',
       headers: {
+        'Content-Type': 'application/json',
         'Authorization': `Bearer ${litellmApiKey}`
-      }
+      },
+      body: JSON.stringify(testPayload)
     })
 
-    // If 403, try alternative authentication methods
-    if (response.status === 403) {
-      response = await fetch(modelsUrl, {
-        method: 'GET',
-        headers: {
-          'x-api-key': litellmApiKey
-        }
-      })
+    // If 404, try alternative endpoints
+    if (response.status === 404) {
+      if (hasPath && !hasChatCompletions) {
+        // Base URL has a path but not /chat/completions, try /v1/chat/completions
+        chatUrl = `${baseUrl}/v1/chat/completions`
+        response = await fetch(chatUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${litellmApiKey}`
+          },
+          body: JSON.stringify(testPayload)
+        })
+      } else if (!hasPath) {
+        // No path, try /v1/chat/completions (OpenAI-compatible)
+        chatUrl = `${baseUrl}/v1/chat/completions`
+        response = await fetch(chatUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${litellmApiKey}`
+          },
+          body: JSON.stringify(testPayload)
+        })
+      }
     }
 
-    // If still 403, try with api-key header
-    if (response.status === 403) {
-      response = await fetch(modelsUrl, {
-        method: 'GET',
+    // If still 404, try /chat/completions (for base URLs without path)
+    if (response.status === 404 && !hasPath) {
+      chatUrl = `${baseUrl}/chat/completions`
+      response = await fetch(chatUrl, {
+        method: 'POST',
         headers: {
-          'api-key': litellmApiKey
-        }
-      })
-    }
-
-    // If /models returns 400/404, try /v1/models (OpenAI-compatible endpoint)
-    if (!response.ok && (response.status === 400 || response.status === 404)) {
-      modelsUrl = `${baseUrl}/v1/models`
-      response = await fetch(modelsUrl, {
-        method: 'GET',
-        headers: {
+          'Content-Type': 'application/json',
           'Authorization': `Bearer ${litellmApiKey}`
-        }
+        },
+        body: JSON.stringify(testPayload)
+      })
+    }
+
+    // If 403/401, try alternative authentication methods
+    if (response.status === 403 || response.status === 401) {
+      response = await fetch(chatUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': litellmApiKey
+        },
+        body: JSON.stringify(testPayload)
+      })
+    }
+
+    if (response.status === 403 || response.status === 401) {
+      response = await fetch(chatUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'api-key': litellmApiKey
+        },
+        body: JSON.stringify(testPayload)
       })
     }
 
@@ -3087,23 +3250,24 @@ async function handleTestLiteLLM(request: Request, env: Env, corsHeaders: Record
 
     const data = await response.json() as unknown
 
-    // Parse models to verify we got valid data
-    let modelsCount = 0
-    if (Array.isArray(data)) {
-      modelsCount = data.length
-    } else if (typeof data === 'object' && data !== null) {
+    // Parse chat completions response to verify we got valid data
+    let successMessage = 'LiteLLM connection test successful!'
+    if (typeof data === 'object' && data !== null) {
       const dataObj = data as Record<string, any>
-      if (Array.isArray(dataObj.data)) {
-        modelsCount = dataObj.data.length
-      } else if (Array.isArray(dataObj.models)) {
-        modelsCount = dataObj.models.length
+      // Check for chat completions response format
+      if (dataObj.choices && Array.isArray(dataObj.choices) && dataObj.choices.length > 0) {
+        const model = dataObj.model || testModel
+        successMessage = `LiteLLM connection successful! Model "${model}" is working correctly.`
+      } else if (dataObj.id) {
+        // Some APIs return just an id for successful requests
+        successMessage = 'LiteLLM connection test successful!'
       }
     }
 
     return new Response(
       JSON.stringify({
         success: true,
-        message: `LiteLLM connection successful! Found ${modelsCount} model(s) available.`
+        message: successMessage
       }),
       {
         headers: {
