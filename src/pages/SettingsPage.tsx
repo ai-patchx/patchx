@@ -52,8 +52,7 @@ export default function SettingsPage() {
   useEffect(() => {
     if (isAdmin()) {
       fetchNodes()
-      // Note: LiteLLM settings are not fetched automatically
-      // Users can enter values manually or use Test Connection to verify
+      fetchSettings() // Load LiteLLM settings on page load
     }
   }, [fetchNodes, isAdmin])
 

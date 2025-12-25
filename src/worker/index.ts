@@ -2938,8 +2938,47 @@ async function handleUpdateSettings(request: Request, env: Env, corsHeaders: Rec
   try {
     console.log('handleUpdateSettings called')
     const supabase = getSupabaseClient(env)
-    const body = await request.json() as Record<string, string>
+
+    // Parse request body with better error handling
+    let body: Record<string, string>
+    try {
+      const bodyText = await request.text()
+      console.log('Settings update body text:', bodyText.substring(0, 200))
+      if (!bodyText || bodyText.trim().length === 0) {
+        return new Response(
+          JSON.stringify({
+            success: false,
+            error: 'Request body is empty'
+          }),
+          {
+            status: 400,
+            headers: {
+              'Content-Type': 'application/json',
+              ...corsHeaders
+            }
+          }
+        )
+      }
+      body = JSON.parse(bodyText) as Record<string, string>
+    } catch (parseError) {
+      console.error('Error parsing request body:', parseError)
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: `Invalid JSON in request body: ${parseError instanceof Error ? parseError.message : 'Unknown error'}`
+        }),
+        {
+          status: 400,
+          headers: {
+            'Content-Type': 'application/json',
+            ...corsHeaders
+          }
+        }
+      )
+    }
+
     console.log('Settings update body keys:', Object.keys(body))
+    console.log('Settings update body values:', Object.values(body).map(v => typeof v === 'string' ? v.substring(0, 20) + '...' : String(v)))
 
     // Validate that we have settings to update
     if (!body || Object.keys(body).length === 0) {
@@ -2959,7 +2998,7 @@ async function handleUpdateSettings(request: Request, env: Env, corsHeaders: Rec
     }
 
     // Validate required settings
-    if (body.litellm_base_url !== undefined && !body.litellm_base_url.trim()) {
+    if (body.litellm_base_url !== undefined && (!body.litellm_base_url || typeof body.litellm_base_url !== 'string' || !body.litellm_base_url.trim())) {
       return new Response(
         JSON.stringify({
           success: false,
@@ -2975,7 +3014,7 @@ async function handleUpdateSettings(request: Request, env: Env, corsHeaders: Rec
       )
     }
 
-    if (body.litellm_api_key !== undefined && !body.litellm_api_key.trim()) {
+    if (body.litellm_api_key !== undefined && (!body.litellm_api_key || typeof body.litellm_api_key !== 'string' || !body.litellm_api_key.trim())) {
       return new Response(
         JSON.stringify({
           success: false,
@@ -2991,7 +3030,7 @@ async function handleUpdateSettings(request: Request, env: Env, corsHeaders: Rec
       )
     }
 
-    if (body.litellm_model !== undefined && !body.litellm_model.trim()) {
+    if (body.litellm_model !== undefined && (!body.litellm_model || typeof body.litellm_model !== 'string' || !body.litellm_model.trim())) {
       return new Response(
         JSON.stringify({
           success: false,
@@ -3009,32 +3048,84 @@ async function handleUpdateSettings(request: Request, env: Env, corsHeaders: Rec
 
     // Update or insert each setting
     for (const [key, value] of Object.entries(body)) {
-      // Skip empty values
-      if (!value) {
+      // Skip empty or non-string values
+      if (!value || typeof value !== 'string') {
+        console.log(`Skipping setting ${key}: value is empty or not a string`)
         continue
       }
 
-      // Use upsert to insert or update
-      const { error } = await supabase
+      const trimmedValue = value.trim()
+      if (!trimmedValue) {
+        console.log(`Skipping setting ${key}: value is empty after trimming`)
+        continue
+      }
+
+      console.log(`Upserting setting: key=${key}, value=${trimmedValue.substring(0, 20)}...`)
+
+      // Check if setting already exists
+      const { data: existingSetting, error: fetchError } = await supabase
         .from('app_settings')
-        .upsert({ key, value: value.trim() }, { onConflict: 'key' })
+        .select('key, value')
+        .eq('key', key)
+        .single()
 
-      if (error) {
-        console.error(`Error updating setting ${key}:`, error)
-
-        // Check if table doesn't exist
-        if (error.message?.includes('Could not find the table') ||
-            error.message?.includes('relation') ||
-            error.message?.includes('does not exist') ||
-            error.code === '42P01') {
+      let error
+      if (fetchError && fetchError.code !== 'PGRST116') { // PGRST116 = no rows returned
+        console.error(`Error checking existing setting ${key}:`, fetchError)
+        // If it's not a "not found" error, throw it
+        if (fetchError.message?.includes('Could not find the table') ||
+            fetchError.message?.includes('relation') ||
+            fetchError.message?.includes('does not exist') ||
+            fetchError.code === '42P01') {
           throw new Error(
             `The app_settings table does not exist. Please run the database reset script to create it:\n\n` +
             `  ./scripts/reset-db.sh --confirm\n\n` +
             `This will create the app_settings table along with other required database tables.`
           )
         }
+        throw new Error(`Failed to check setting ${key}: ${fetchError.message}`)
+      }
 
-        throw new Error(`Failed to update setting ${key}: ${error.message}`)
+      if (existingSetting) {
+        // Update existing setting
+        console.log(`Updating existing setting: ${key}`)
+        const { error: updateError } = await supabase
+          .from('app_settings')
+          .update({ value: trimmedValue })
+          .eq('key', key)
+
+        if (updateError) {
+          console.error(`Error updating setting ${key}:`, updateError)
+          throw new Error(`Failed to update setting ${key}: ${updateError.message}`)
+        } else {
+          console.log(`Successfully updated setting: ${key}`)
+        }
+      } else {
+        // Insert new setting
+        console.log(`Inserting new setting: ${key}`)
+        const { error: insertError } = await supabase
+          .from('app_settings')
+          .insert({ key, value: trimmedValue })
+
+        if (insertError) {
+          console.error(`Error inserting setting ${key}:`, insertError)
+
+          // Check if table doesn't exist
+          if (insertError.message?.includes('Could not find the table') ||
+              insertError.message?.includes('relation') ||
+              insertError.message?.includes('does not exist') ||
+              insertError.code === '42P01') {
+            throw new Error(
+              `The app_settings table does not exist. Please run the database reset script to create it:\n\n` +
+              `  ./scripts/reset-db.sh --confirm\n\n` +
+              `This will create the app_settings table along with other required database tables.`
+            )
+          }
+
+          throw new Error(`Failed to insert setting ${key}: ${insertError.message}`)
+        } else {
+          console.log(`Successfully inserted setting: ${key}`)
+        }
       }
     }
 

@@ -81,13 +81,27 @@ async function proxyToWorker(request, workerUrl) {
     const url = new URL(request.url);
     const workerRequestUrl = `${workerUrl}${url.pathname}${url.search}`;
 
+    // Prepare headers
+    const headers = new Headers(request.headers);
+    headers.set('Host', new URL(workerUrl).hostname);
+
+    // Prepare body for non-GET/HEAD requests
+    let body = null;
+    if (request.method !== 'GET' && request.method !== 'HEAD') {
+      // Clone the request to read the body without consuming the original
+      const clonedRequest = request.clone();
+      body = await clonedRequest.arrayBuffer();
+
+      // Ensure Content-Type is set if it's not already set
+      if (!headers.has('Content-Type') && body.byteLength > 0) {
+        headers.set('Content-Type', 'application/json');
+      }
+    }
+
     const workerResponse = await fetch(workerRequestUrl, {
       method: request.method,
-      headers: {
-        ...Object.fromEntries(request.headers.entries()),
-        'Host': new URL(workerUrl).hostname
-      },
-      body: request.method !== 'GET' && request.method !== 'HEAD' ? await request.clone().arrayBuffer() : null
+      headers: headers,
+      body: body
     });
 
     // Return the Worker's response with CORS headers
