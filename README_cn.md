@@ -546,18 +546,24 @@ SUPABASE_ANON_KEY = "<your_anon_key>"
 
 #### 数据库设置
 
-运行数据库重置脚本时会自动创建 `remote_nodes` 表：
+运行数据库重置脚本时会自动创建 `remote_nodes` 和 `app_settings` 表：
 
 ```bash
 ./scripts/reset-db.sh --confirm
 ```
 
-该表包括：
+**remote_nodes 表**包括：
 - 节点元数据（名称、主机、端口、用户名）
 - 认证凭据（SSH 密钥或密码）
 - 工作主目录路径
 - SSH 服务 API 配置（SSH Service API URL 和 Key）
 - 时间戳（created_at, updated_at）
+
+**app_settings 表**包括：
+- 应用程序设置的键值对
+- LiteLLM 配置（基础 URL、API 密钥、模型名称）
+- 时间戳（created_at, updated_at）
+- 启用了行级安全（RLS）以确保安全访问
 
 #### 使用远程节点
 

@@ -530,18 +530,24 @@ For working home directory verification and executing git operations, you can co
 
 #### Database Setup
 
-The `remote_nodes` table is automatically created when you run the database reset script:
+The `remote_nodes` and `app_settings` tables are automatically created when you run the database reset script:
 
 ```bash
 ./scripts/reset-db.sh --confirm
 ```
 
-The table includes:
+**remote_nodes table** includes:
 - Node metadata (name, host, port, username)
 - Authentication credentials (SSH key or password)
 - Working home directory path
 - SSH Service API configuration (SSH Service API URL and Key)
 - Timestamps (created_at, updated_at)
+
+**app_settings table** includes:
+- Key-value pairs for application settings
+- LiteLLM configuration (base URL, API key, model name)
+- Timestamps (created_at, updated_at)
+- Row Level Security (RLS) enabled for secure access
 
 #### Using Remote Nodes
 
