@@ -153,11 +153,23 @@ export class GitService {
     // Use working home directory from node configuration, or default to ~/git-work
     const workingHome = node.workingHome || '~/git-work'
 
+    // Extract project name from repository URL
+    // Format: https://android-review.googlesource.com/platform/frameworks/base
+    // Extract the project part after the base URL
+    let projectName = repositoryUrl
+    if (this.env.GERRIT_BASE_URL) {
+      const baseUrl = this.env.GERRIT_BASE_URL.replace(/\/$/, '')
+      if (repositoryUrl.startsWith(baseUrl + '/')) {
+        projectName = repositoryUrl.substring(baseUrl.length + 1)
+      }
+    }
+
     // Try to use dedicated git-clone endpoint if SSH service API is configured
     if (node.sshServiceApiUrl) {
       try {
         console.log(`[Git Clone] Using SSH Service API endpoint: ${node.sshServiceApiUrl}/git-clone`)
-        console.log(`[Git Clone] Target Project: ${repositoryUrl}`)
+        console.log(`[Git Clone] Target Project: ${projectName}`)
+        console.log(`[Git Clone] Repository URL: ${repositoryUrl}`)
         console.log(`[Git Clone] Target Branch: ${branch}`)
         console.log(`[Git Clone] Working Home: ${workingHome}`)
         console.log(`[Git Clone] Target Dir: ${targetDir || 'auto-generated'}`)
@@ -179,7 +191,8 @@ export class GitService {
             authType: node.authType,
             sshKey: node.sshKey,
             password: node.password,
-            repositoryUrl,
+            project: projectName,
+            gerritBaseUrl: this.env.GERRIT_BASE_URL,
             branch,
             workingHome,
             targetDir
@@ -226,18 +239,19 @@ export class GitService {
     }
 
     // Fallback to inline execution (original method)
-    // Generate target directory name from repository URL if not provided
+    // Generate target directory name from project name if not provided
     let finalTargetDir = targetDir
     if (!finalTargetDir) {
-      // Extract repository name from URL
-      // Handle formats: https://github.com/user/repo.git, git@github.com:user/repo.git, user/repo
-      const repoName = repositoryUrl.split('/').pop()?.replace(/\.git$/, '') || 'repository'
+      // Extract repository name from project path
+      // Handle formats: platform/frameworks/base -> base
+      const repoName = projectName.split('/').pop() || 'repository'
       const sanitizedBranch = branch.replace(/[^a-zA-Z0-9_-]/g, '_')
       const timestamp = Date.now()
       finalTargetDir = `${repoName}_${sanitizedBranch}_${timestamp}`
     }
 
     const fullTargetDir = `${workingHome}/${finalTargetDir}`
+    const gerritBaseUrl = this.env.GERRIT_BASE_URL || ''
 
     // Build bash script based on template logic
     // This implements the git-clone-template.sh logic inline
@@ -246,10 +260,31 @@ set -e
 set -u
 
 WORKING_HOME="${workingHome}"
-TARGET_PROJECT="${repositoryUrl.replace(/"/g, '\\"')}"
+TARGET_PROJECT="${projectName.replace(/"/g, '\\"')}"
 TARGET_BRANCH="${branch.replace(/"/g, '\\"')}"
+GERRIT_BASE_URL="${gerritBaseUrl.replace(/"/g, '\\"')}"
 TARGET_DIR="${finalTargetDir.replace(/"/g, '\\"')}"
 FULL_TARGET_DIR="${fullTargetDir.replace(/"/g, '\\"')}"
+
+# Validate required parameters
+if [ -z "$TARGET_PROJECT" ]; then
+    echo "[ERROR] TARGET_PROJECT (project name) is required" >&2
+    exit 1
+fi
+
+if [ -z "$TARGET_BRANCH" ]; then
+    echo "[ERROR] TARGET_BRANCH is required" >&2
+    exit 1
+fi
+
+if [ -z "$GERRIT_BASE_URL" ]; then
+    echo "[ERROR] GERRIT_BASE_URL is required" >&2
+    exit 1
+fi
+
+# Construct repository URL from GERRIT_BASE_URL and project name
+GERRIT_BASE_URL="\${GERRIT_BASE_URL%/}"
+REPOSITORY_URL="$GERRIT_BASE_URL/$TARGET_PROJECT"
 
 # Log functions for console output
 log_info() {
@@ -269,7 +304,8 @@ log_error() {
 }
 
 log_info "Starting git clone operation"
-log_info "Repository URL: $TARGET_PROJECT"
+log_info "Repository URL: $REPOSITORY_URL"
+log_info "Project: $TARGET_PROJECT"
 log_info "Branch: $TARGET_BRANCH"
 log_info "Working Home: $WORKING_HOME"
 
@@ -301,7 +337,8 @@ if [ -d "$FULL_TARGET_DIR" ]; then
 fi
 
 # Clone the repository
-log_info "Cloning repository: $TARGET_PROJECT"
+log_info "Cloning repository: $REPOSITORY_URL"
+log_info "Project: $TARGET_PROJECT"
 log_info "Branch: $TARGET_BRANCH"
 log_info "Target directory: $FULL_TARGET_DIR"
 
@@ -309,7 +346,7 @@ cd "$WORKING_HOME" || { log_error "Failed to change to working home directory: $
 
 # Clone with branch specification
 log_info "Executing git clone command..."
-if git clone -b "$TARGET_BRANCH" "$TARGET_PROJECT" "$TARGET_DIR"; then
+if git clone -b "$TARGET_BRANCH" --depth 1 "$REPOSITORY_URL" "$TARGET_DIR"; then
   log_success "Repository cloned successfully to: $FULL_TARGET_DIR"
 
   # Verify the clone
@@ -327,14 +364,15 @@ if git clone -b "$TARGET_BRANCH" "$TARGET_PROJECT" "$TARGET_DIR"; then
   echo "TARGET_DIR=$FULL_TARGET_DIR"
   exit 0
 else
-  log_error "Failed to clone repository: $TARGET_PROJECT"
+  log_error "Failed to clone repository: $REPOSITORY_URL"
   exit 1
 fi
 `.trim()
 
     // Log clone operation start
     console.log(`[Git Clone] Starting inline clone operation`)
-    console.log(`[Git Clone] Target Project: ${repositoryUrl}`)
+    console.log(`[Git Clone] Target Project: ${projectName}`)
+    console.log(`[Git Clone] Repository URL: ${repositoryUrl}`)
     console.log(`[Git Clone] Target Branch: ${branch}`)
     console.log(`[Git Clone] Working Home: ${workingHome}`)
     console.log(`[Git Clone] Target Directory: ${fullTargetDir}`)

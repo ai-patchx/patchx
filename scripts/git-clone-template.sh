@@ -3,8 +3,9 @@
 # This script clones a git repository on a remote node
 #
 # Parameters:
-#   TARGET_PROJECT: Git repository URL (required)
+#   TARGET_PROJECT: Project name (e.g., platform/frameworks/base) (required)
 #   TARGET_BRANCH: Branch name to clone (required)
+#   GERRIT_BASE_URL: Base URL for Gerrit (e.g., https://android-review.googlesource.com) (required)
 #   WORKING_HOME: Working directory path on remote node (optional, defaults to ~/git-work)
 #   TARGET_DIR: Target directory name within working home (optional, auto-generated if not provided)
 
@@ -35,12 +36,21 @@ warn() {
 
 # Validate required parameters
 if [ -z "${TARGET_PROJECT:-}" ]; then
-    error "TARGET_PROJECT (repository URL) is required"
+    error "TARGET_PROJECT (project name) is required"
 fi
 
 if [ -z "${TARGET_BRANCH:-}" ]; then
     error "TARGET_BRANCH is required"
 fi
+
+if [ -z "${GERRIT_BASE_URL:-}" ]; then
+    error "GERRIT_BASE_URL is required"
+fi
+
+# Construct repository URL from GERRIT_BASE_URL and project name
+# Format: https://android-review.googlesource.com/platform/frameworks/base
+GERRIT_BASE_URL="${GERRIT_BASE_URL%/}"  # Remove trailing slash if present
+REPOSITORY_URL="${GERRIT_BASE_URL}/${TARGET_PROJECT}"
 
 # Set default working home if not provided
 WORKING_HOME="${WORKING_HOME:-$HOME/git-work}"
@@ -51,16 +61,16 @@ if [ ! -d "$WORKING_HOME" ]; then
     mkdir -p "$WORKING_HOME" || error "Failed to create working home directory: $WORKING_HOME"
 fi
 
-# Generate target directory name from repository URL if not provided
+# Generate target directory name from project name if not provided
 if [ -z "${TARGET_DIR:-}" ]; then
-    # Extract repository name from URL
-    # Handle formats: https://github.com/user/repo.git, git@github.com:user/repo.git, user/repo
-    REPO_NAME=$(basename "$TARGET_PROJECT" .git)
-    # Remove any path prefixes
-    REPO_NAME=$(basename "$REPO_NAME")
+    # Extract repository name from project path
+    # Handle formats: platform/frameworks/base -> base
+    REPO_NAME=$(basename "$TARGET_PROJECT")
+    # Sanitize branch name for use in directory name
+    SANITIZED_BRANCH=$(echo "$TARGET_BRANCH" | sed 's/[^a-zA-Z0-9_-]/_/g')
     # Generate unique directory name with timestamp
     TIMESTAMP=$(date +%Y%m%d_%H%M%S)
-    TARGET_DIR="${REPO_NAME}_${TARGET_BRANCH}_${TIMESTAMP}"
+    TARGET_DIR="${REPO_NAME}_${SANITIZED_BRANCH}_${TIMESTAMP}"
 fi
 
 # Full path to target directory
@@ -100,14 +110,15 @@ if [ -d "$FULL_TARGET_DIR" ]; then
 fi
 
 # Clone the repository
-info "Cloning repository: $TARGET_PROJECT"
+info "Cloning repository: $REPOSITORY_URL"
+info "Project: $TARGET_PROJECT"
 info "Branch: $TARGET_BRANCH"
 info "Target directory: $FULL_TARGET_DIR"
 
 cd "$WORKING_HOME" || error "Failed to change to working home directory: $WORKING_HOME"
 
 # Clone with branch specification
-if git clone -b "$TARGET_BRANCH" --depth 1 "$TARGET_PROJECT" "$TARGET_DIR"; then
+if git clone -b "$TARGET_BRANCH" --depth 1 "$REPOSITORY_URL" "$TARGET_DIR"; then
     info "Repository cloned successfully to: $FULL_TARGET_DIR"
 
     # Verify the clone
@@ -124,7 +135,7 @@ if git clone -b "$TARGET_BRANCH" --depth 1 "$TARGET_PROJECT" "$TARGET_DIR"; then
     # Output the target directory path for use by calling script
     echo "TARGET_DIR=$FULL_TARGET_DIR"
     exit 0
-else
-    error "Failed to clone repository: $TARGET_PROJECT"
-fi
+    else
+        error "Failed to clone repository: $REPOSITORY_URL"
+    fi
 

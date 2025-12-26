@@ -103,8 +103,9 @@ set -u
 
 TARGET_PROJECT="\$1"
 TARGET_BRANCH="\$2"
-WORKING_HOME="\$3"
-TARGET_DIR="\$4"
+GERRIT_BASE_URL="\$3"
+WORKING_HOME="\$4"
+TARGET_DIR="\$5"
 
 # Log function for console output
 log_info() {
@@ -125,7 +126,7 @@ log_error() {
 
 # Validate required parameters
 if [ -z "$TARGET_PROJECT" ]; then
-    log_error "TARGET_PROJECT (repository URL) is required"
+    log_error "TARGET_PROJECT (project name) is required"
     exit 1
 fi
 
@@ -134,13 +135,24 @@ if [ -z "$TARGET_BRANCH" ]; then
     exit 1
 fi
 
+if [ -z "$GERRIT_BASE_URL" ]; then
+    log_error "GERRIT_BASE_URL is required"
+    exit 1
+fi
+
+# Construct repository URL from GERRIT_BASE_URL and project name
+# Format: https://android-review.googlesource.com/platform/frameworks/base
+GERRIT_BASE_URL="\${GERRIT_BASE_URL%/}"  # Remove trailing slash if present
+REPOSITORY_URL="$GERRIT_BASE_URL/$TARGET_PROJECT"
+
 # Set default working home if not provided
 if [ -z "\$WORKING_HOME" ]; then
     WORKING_HOME="\$HOME/git-work"
 fi
 
 log_info "Starting git clone operation"
-log_info "Repository URL: \$TARGET_PROJECT"
+log_info "Repository URL: \$REPOSITORY_URL"
+log_info "Project: \$TARGET_PROJECT"
 log_info "Branch: \$TARGET_BRANCH"
 log_info "Working Home: \$WORKING_HOME"
 
@@ -150,12 +162,15 @@ if [ ! -d "\$WORKING_HOME" ]; then
     mkdir -p "\$WORKING_HOME" || { log_error "Failed to create working home directory: \$WORKING_HOME"; exit 1; }
 fi
 
-# Generate target directory name from repository URL if not provided
+# Generate target directory name from project name if not provided
 if [ -z "\$TARGET_DIR" ]; then
-    REPO_NAME=\$(basename "\$TARGET_PROJECT" .git)
-    REPO_NAME=\$(basename "\$REPO_NAME")
+    # Extract repository name from project path
+    # Handle formats: platform/frameworks/base -> base
+    REPO_NAME=\$(basename "\$TARGET_PROJECT")
+    # Sanitize branch name for use in directory name
+    SANITIZED_BRANCH=\$(echo "\$TARGET_BRANCH" | sed 's/[^a-zA-Z0-9_-]/_/g')
     TIMESTAMP=\$(date +%Y%m%d_%H%M%S)
-    TARGET_DIR="\${REPO_NAME}_\${TARGET_BRANCH}_\${TIMESTAMP}"
+    TARGET_DIR="\${REPO_NAME}_\${SANITIZED_BRANCH}_\${TIMESTAMP}"
 fi
 
 # Full path to target directory
@@ -189,7 +204,8 @@ if [ -d "\$FULL_TARGET_DIR" ]; then
 fi
 
 # Clone the repository
-log_info "Cloning repository: \$TARGET_PROJECT"
+log_info "Cloning repository: \$REPOSITORY_URL"
+log_info "Project: \$TARGET_PROJECT"
 log_info "Branch: \$TARGET_BRANCH"
 log_info "Target directory: \$FULL_TARGET_DIR"
 
@@ -197,7 +213,7 @@ cd "\$WORKING_HOME" || { log_error "Failed to change to working home directory: 
 
 # Clone with branch specification
 log_info "Executing git clone command..."
-if git clone -b "\$TARGET_BRANCH" "\$TARGET_PROJECT" "\$TARGET_DIR"; then
+if git clone -b "\$TARGET_BRANCH" --depth 1 "\$REPOSITORY_URL" "\$TARGET_DIR"; then
     log_success "Repository cloned successfully to: \$FULL_TARGET_DIR"
 
     # Verify the clone
@@ -215,20 +231,47 @@ if git clone -b "\$TARGET_BRANCH" "\$TARGET_PROJECT" "\$TARGET_DIR"; then
     echo "TARGET_DIR=\$FULL_TARGET_DIR"
     exit 0
 else
-    log_error "Failed to clone repository: \$TARGET_PROJECT"
+    log_error "Failed to clone repository: \$REPOSITORY_URL"
     exit 1
 fi
 `
 
 // Git clone endpoint
 app.post('/git-clone', authenticate, async (req, res) => {
-  const { host, port, username, authType, sshKey, password, repositoryUrl, branch, workingHome, targetDir } = req.body
+  const { host, port, username, authType, sshKey, password, repositoryUrl, project, gerritBaseUrl, branch, workingHome, targetDir } = req.body
+
+  // Support both old format (repositoryUrl) and new format (project + gerritBaseUrl)
+  let targetProject = project
+  let gerritUrl = gerritBaseUrl
+
+  if (!targetProject && repositoryUrl) {
+    // Extract project name from repository URL for backward compatibility
+    if (gerritBaseUrl) {
+      const baseUrl = gerritBaseUrl.replace(/\/$/, '')
+      if (repositoryUrl.startsWith(baseUrl + '/')) {
+        targetProject = repositoryUrl.substring(baseUrl.length + 1)
+        gerritUrl = gerritBaseUrl
+      }
+    }
+    // If we still don't have project, use repositoryUrl as-is (backward compatibility)
+    if (!targetProject) {
+      targetProject = repositoryUrl
+      gerritUrl = gerritBaseUrl || ''
+    }
+  }
 
   // Validate required fields
-  if (!host || !username || !authType || !repositoryUrl || !branch) {
+  if (!host || !username || !authType || !targetProject || !branch) {
     return res.status(400).json({
       success: false,
-      error: 'Missing required fields: host, username, authType, repositoryUrl, branch'
+      error: 'Missing required fields: host, username, authType, project (or repositoryUrl), branch'
+    })
+  }
+
+  if (!gerritUrl) {
+    return res.status(400).json({
+      success: false,
+      error: 'Missing required field: gerritBaseUrl (or GERRIT_BASE_URL must be provided)'
     })
   }
 
@@ -286,8 +329,9 @@ app.post('/git-clone', authenticate, async (req, res) => {
       return str.replace(/'/g, "'\\''").replace(/(["$`\\])/g, '\\$1')
     }
 
-    const escapedRepoUrl = escapeShell(repositoryUrl)
+    const escapedProject = escapeShell(targetProject)
     const escapedBranch = escapeShell(branch)
+    const escapedGerritBaseUrl = escapeShell(gerritUrl)
     const escapedWorkingHome = workingHome ? escapeShell(workingHome) : ''
     const escapedTargetDir = targetDir ? escapeShell(targetDir) : ''
 
@@ -296,7 +340,7 @@ app.post('/git-clone', authenticate, async (req, res) => {
     const scriptCommand = `cat > /tmp/git-clone-${crypto.randomBytes(4).toString('hex')}.sh << 'SCRIPT_EOF'
 ${scriptContent}
 SCRIPT_EOF
-bash /tmp/git-clone-*.sh '${escapedRepoUrl}' '${escapedBranch}' '${escapedWorkingHome}' '${escapedTargetDir}'; EXIT_CODE=$?; rm -f /tmp/git-clone-*.sh; exit $EXIT_CODE`
+bash /tmp/git-clone-*.sh '${escapedProject}' '${escapedBranch}' '${escapedGerritBaseUrl}' '${escapedWorkingHome}' '${escapedTargetDir}'; EXIT_CODE=$?; rm -f /tmp/git-clone-*.sh; exit $EXIT_CODE`
 
     // Execute command
     const result = await new Promise((resolve, reject) => {

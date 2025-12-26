@@ -559,9 +559,9 @@ async function handleSubmit(request: Request, env: Env, corsHeaders: Record<stri
     notificationEmails?: string[]
     notificationCc?: string[]
     remoteNodeId?: string
-    gitRepository?: string
+    project?: string
   }
-  const { uploadId, subject, description, branch, model, remoteNodeId, gitRepository } = body
+  const { uploadId, subject, description, branch, model, remoteNodeId, project } = body
 
   if (!uploadId || !subject || !branch) {
     return new Response(
@@ -576,10 +576,10 @@ async function handleSubmit(request: Request, env: Env, corsHeaders: Record<stri
     )
   }
 
-  // Validate: if remoteNodeId is provided, gitRepository should also be provided
-  if (remoteNodeId && !gitRepository) {
+  // Validate: if remoteNodeId is provided, project is required to construct repository URL
+  if (remoteNodeId && !project) {
     return new Response(
-      JSON.stringify({ success: false, error: 'Git repository URL is required when remote node is selected' }),
+      JSON.stringify({ success: false, error: 'Target Project is required when remote node is selected' }),
       {
         status: 400,
         headers: {
@@ -588,6 +588,15 @@ async function handleSubmit(request: Request, env: Env, corsHeaders: Record<stri
         }
       }
     )
+  }
+
+  // Construct repository URL from GERRIT_BASE_URL and project name
+  // Format: https://android-review.googlesource.com/platform/frameworks/base
+  let gitRepository: string | undefined
+  if (remoteNodeId && project && env.GERRIT_BASE_URL) {
+    // Remove trailing slash from GERRIT_BASE_URL if present
+    const baseUrl = env.GERRIT_BASE_URL.replace(/\/$/, '')
+    gitRepository = `${baseUrl}/${project}`
   }
 
   const submissionService = new SubmissionService(env)
