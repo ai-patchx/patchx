@@ -107,7 +107,7 @@ info "Target directory: $FULL_TARGET_DIR"
 cd "$WORKING_HOME" || error "Failed to change to working home directory: $WORKING_HOME"
 
 # Clone with branch specification
-if git clone -b "$TARGET_BRANCH" "$TARGET_PROJECT" "$TARGET_DIR"; then
+if git clone -b "$TARGET_BRANCH" --depth 1 "$TARGET_PROJECT" "$TARGET_DIR"; then
     info "Repository cloned successfully to: $FULL_TARGET_DIR"
 
     # Verify the clone
