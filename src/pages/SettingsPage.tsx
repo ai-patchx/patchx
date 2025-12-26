@@ -27,6 +27,7 @@ export default function SettingsPage() {
     sshServiceApiKey: ''
   })
   const [testingNodeId, setTestingNodeId] = useState<string | null>(null)
+  const [nodeTestResults, setNodeTestResults] = useState<Record<string, { success: boolean; message: string }>>({})
   const [testingConfig, setTestingConfig] = useState(false)
   const [testConfigResult, setTestConfigResult] = useState<{ success: boolean; message: string } | null>(null)
   const [testEmail, setTestEmail] = useState('')
@@ -291,15 +292,23 @@ export default function SettingsPage() {
 
   const handleTestConnection = async (id: string) => {
     setTestingNodeId(id)
+    // Clear previous result for this node
+    setNodeTestResults(prev => {
+      const newResults = { ...prev }
+      delete newResults[id]
+      return newResults
+    })
     try {
-      const success = await testConnection(id)
-      if (success) {
-        alert('Connection test successful!')
-      } else {
-        alert('Connection test failed. Please check the error message.')
-      }
+      const result = await testConnection(id)
+      setNodeTestResults(prev => ({ ...prev, [id]: result }))
     } catch (err) {
-      alert('Connection test failed. Please check the error message.')
+      setNodeTestResults(prev => ({
+        ...prev,
+        [id]: {
+          success: false,
+          message: err instanceof Error ? err.message : 'Connection test failed. Please check the error message.'
+        }
+      }))
     } finally {
       setTestingNodeId(null)
     }
@@ -538,6 +547,34 @@ export default function SettingsPage() {
                       </button>
                     </div>
                   </div>
+                  {nodeTestResults[node.id] && (
+                    <div
+                      className={`mt-3 p-3 rounded-lg ${
+                        nodeTestResults[node.id].success
+                          ? theme === 'dark'
+                            ? 'bg-green-900/30 border border-green-700/50'
+                            : 'bg-green-50 border border-green-200'
+                          : theme === 'dark'
+                            ? 'bg-red-900/30 border border-red-700/50'
+                            : 'bg-red-50 border border-red-200'
+                      }`}
+                    >
+                      <p
+                        className={`text-sm ${
+                          nodeTestResults[node.id].success
+                            ? theme === 'dark'
+                              ? 'text-green-400'
+                              : 'text-green-800'
+                            : theme === 'dark'
+                              ? 'text-red-400'
+                              : 'text-red-800'
+                        }`}
+                      >
+                        {nodeTestResults[node.id].success ? '✓ ' : '✗ '}
+                        {nodeTestResults[node.id].message}
+                      </p>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>

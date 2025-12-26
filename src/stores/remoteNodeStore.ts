@@ -16,7 +16,7 @@ interface RemoteNodeActions {
   addNode: (node: RemoteNodeFormData) => Promise<void>
   updateNode: (id: string, node: RemoteNodeFormData) => Promise<void>
   deleteNode: (id: string) => Promise<void>
-  testConnection: (id: string) => Promise<boolean>
+  testConnection: (id: string) => Promise<{ success: boolean; message: string }>
   testConnectionConfig: (node: RemoteNodeFormData) => Promise<{ success: boolean; message: string }>
   setError: (error: string | null) => void
 }
@@ -177,19 +177,27 @@ const useRemoteNodeStore = create<RemoteNodeState & RemoteNodeActions>((set, get
       })
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ error: 'Connection test failed' })) as { error?: string }
-        throw new Error(errorData.error || 'Connection test failed')
+        const errorData = await response.json().catch(() => ({ error: 'Connection test failed' })) as { error?: string; message?: string }
+        const errorMessage = errorData.error || errorData.message || 'Connection test failed'
+        set({ isLoading: false })
+        return { success: false, message: errorMessage }
       }
 
-      const result = await response.json() as { success?: boolean }
+      const result = await response.json() as { success?: boolean; message?: string; error?: string }
       set({ isLoading: false })
-      return result.success === true
+
+      if (result.success) {
+        return { success: true, message: result.message || 'Connection test successful!' }
+      } else {
+        return { success: false, message: result.error || result.message || 'Connection test failed' }
+      }
     } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Connection test failed'
       set({
-        error: error instanceof Error ? error.message : 'Connection test failed',
+        error: errorMessage,
         isLoading: false
       })
-      return false
+      return { success: false, message: errorMessage }
     }
   },
 
