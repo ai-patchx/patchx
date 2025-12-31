@@ -21,6 +21,7 @@ interface GitCommandResult {
   success: boolean
   output: string
   error?: string
+  commandId?: string
 }
 
 export class GitService {
@@ -73,45 +74,70 @@ export class GitService {
           headers['Authorization'] = `Bearer ${node.sshServiceApiKey}`
         }
 
-        const response = await fetch(`${node.sshServiceApiUrl}/execute`, {
-          method: 'POST',
-          headers,
-          body: JSON.stringify({
-            host: node.host,
-            port: node.port,
-            username: node.username,
-            authType: node.authType,
-            sshKey: node.sshKey,
-            password: node.password,
-            command: fullCommand
+        // Set timeout (default 5 minutes, configurable via environment or node config)
+        const timeout = 300000 // 5 minutes in milliseconds
+        const controller = new AbortController()
+        const timeoutId = setTimeout(() => controller.abort(), timeout)
+
+        try {
+          const response = await fetch(`${node.sshServiceApiUrl}/execute`, {
+            method: 'POST',
+            headers,
+            body: JSON.stringify({
+              host: node.host,
+              port: node.port,
+              username: node.username,
+              authType: node.authType,
+              sshKey: node.sshKey,
+              password: node.password,
+              command: fullCommand,
+              timeout // Pass timeout to ssh-service-api
+            }),
+            signal: controller.signal
           })
-        })
 
-        if (!response.ok) {
-          const errorData = await response.json().catch(() => ({ error: 'Failed to execute SSH command' })) as { error?: string }
-          return {
-            success: false,
-            output: '',
-            error: errorData.error || 'Unknown error'
+          clearTimeout(timeoutId)
+
+          if (!response.ok) {
+            const errorData = await response.json().catch(() => ({ error: 'Failed to execute SSH command' })) as { error?: string; commandId?: string }
+            const isTimeout = response.status === 408 || (errorData.error && errorData.error.includes('timed out'))
+            return {
+              success: false,
+              output: '',
+              error: errorData.error || 'Unknown error',
+              commandId: errorData.commandId
+            }
           }
-        }
 
-        const result = await response.json() as {
-          success: boolean
-          output?: string
-          stdout?: string
-          stderr?: string
-          combined?: string
-          error?: string
-          exitCode?: number
-        }
-        // Use combined output if available (includes both stdout and stderr), otherwise fall back to output
-        const fullOutput = result.combined || result.stdout || result.output || ''
-        const errorOutput = result.stderr || result.error || ''
-        return {
-          success: result.success,
-          output: fullOutput,
-          error: result.success ? undefined : (errorOutput || result.error)
+          const result = await response.json() as {
+            success: boolean
+            output?: string
+            stdout?: string
+            stderr?: string
+            combined?: string
+            error?: string
+            exitCode?: number
+            commandId?: string
+          }
+          // Use combined output if available (includes both stdout and stderr), otherwise fall back to output
+          const fullOutput = result.combined || result.stdout || result.output || ''
+          const errorOutput = result.stderr || result.error || ''
+          return {
+            success: result.success,
+            output: fullOutput,
+            error: result.success ? undefined : (errorOutput || result.error),
+            commandId: result.commandId
+          }
+        } catch (fetchError) {
+          clearTimeout(timeoutId)
+          if (fetchError instanceof Error && fetchError.name === 'AbortError') {
+            return {
+              success: false,
+              output: '',
+              error: `SSH command execution timed out after ${timeout}ms`
+            }
+          }
+          throw fetchError
         }
       } catch (error) {
         return {

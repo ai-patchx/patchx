@@ -155,7 +155,12 @@ export class SubmissionService {
                 }
               }
             } else {
-              await this.addLog(submissionId, `[Error] Git clone failed: ${gitResult.results.clone.error || 'Unknown error'}`)
+              const errorMsg = gitResult.results.clone.error || 'Unknown error'
+              const isTimeout = errorMsg.includes('timed out') || errorMsg.includes('timeout')
+              await this.addLog(submissionId, `[Error] Git clone failed: ${errorMsg}`)
+              if (isTimeout) {
+                await this.addLog(submissionId, '[Warning] Command timed out - this may indicate network issues or the command is taking too long')
+              }
               // Also log any output even if it failed
               if (gitResult.results.clone.output) {
                 const lines = gitResult.results.clone.output.split('\n').filter(l => l.trim())
@@ -192,7 +197,12 @@ export class SubmissionService {
                 }
               }
             } else {
-              await this.addLog(submissionId, `[Error] Patch apply failed: ${gitResult.results.apply.error || 'Unknown error'}`)
+              const errorMsg = gitResult.results.apply.error || 'Unknown error'
+              const isTimeout = errorMsg.includes('timed out') || errorMsg.includes('timeout')
+              await this.addLog(submissionId, `[Error] Patch apply failed: ${errorMsg}`)
+              if (isTimeout) {
+                await this.addLog(submissionId, '[Warning] Command timed out - this may indicate network issues or the command is taking too long')
+              }
               // Also log any output even if it failed
               if (gitResult.results.apply.output) {
                 const lines = gitResult.results.apply.output.split('\n').filter(l => l.trim())

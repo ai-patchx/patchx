@@ -35,6 +35,10 @@ const crypto = require('crypto')
 const app = express()
 const PORT = process.env.PORT || 7000
 const API_KEY = process.env.API_KEY || '' // Optional API key for authentication
+const DEFAULT_TIMEOUT = parseInt(process.env.DEFAULT_TIMEOUT || '300000', 10) // Default 5 minutes
+
+// Track active command executions for cancellation
+const activeCommands = new Map() // commandId -> { sshClient, stream, timeoutId, startTime }
 
 // Middleware
 app.use(express.json({ limit: '10mb' }))
@@ -427,9 +431,67 @@ bash /tmp/git-clone-*.sh '${escapedProject}' '${escapedBranch}' '${escapedGerrit
   }
 })
 
+// Cancel command endpoint
+app.post('/cancel', authenticate, async (req, res) => {
+  const { commandId } = req.body
+
+  if (!commandId) {
+    return res.status(400).json({
+      success: false,
+      error: 'Missing required field: commandId'
+    })
+  }
+
+  const commandInfo = activeCommands.get(commandId)
+  if (!commandInfo) {
+    return res.status(404).json({
+      success: false,
+      error: 'Command not found or already completed'
+    })
+  }
+
+  try {
+    // Clear timeout
+    if (commandInfo.timeoutId) {
+      clearTimeout(commandInfo.timeoutId)
+    }
+
+    // Kill the stream if it exists
+    if (commandInfo.stream) {
+      try {
+        commandInfo.stream.destroy()
+      } catch (err) {
+        console.error('Error destroying stream:', err)
+      }
+    }
+
+    // Close SSH connection
+    if (commandInfo.sshClient) {
+      try {
+        commandInfo.sshClient.end()
+      } catch (err) {
+        console.error('Error closing SSH client:', err)
+      }
+    }
+
+    // Remove from active commands
+    activeCommands.delete(commandId)
+
+    res.json({
+      success: true,
+      message: 'Command cancelled successfully'
+    })
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to cancel command'
+    })
+  }
+})
+
 // Execute SSH command endpoint
 app.post('/execute', authenticate, async (req, res) => {
-  const { host, port, username, authType, sshKey, password, command } = req.body
+  const { host, port, username, authType, sshKey, password, command, timeout } = req.body
 
   // Validate required fields
   if (!host || !username || !authType || !command) {
@@ -454,8 +516,12 @@ app.post('/execute', authenticate, async (req, res) => {
   }
 
   const targetPort = port || 22
+  const commandTimeout = timeout || DEFAULT_TIMEOUT
+  const commandId = crypto.randomBytes(16).toString('hex')
   const sshClient = new Client()
   let tempKeyFile = null
+  let timeoutId = null
+  let commandStream = null
 
   try {
     // If using SSH key, write it to a temporary file
@@ -491,8 +557,37 @@ app.post('/execute', authenticate, async (req, res) => {
     const result = await new Promise((resolve, reject) => {
       sshClient.exec(command, (err, stream) => {
         if (err) {
+          activeCommands.delete(commandId)
           reject(err)
           return
+        }
+
+        commandStream = stream
+
+        // Store command info for cancellation
+        activeCommands.set(commandId, {
+          sshClient,
+          stream,
+          timeoutId: null,
+          startTime: Date.now()
+        })
+
+        // Set up timeout
+        timeoutId = setTimeout(() => {
+          activeCommands.delete(commandId)
+          try {
+            stream.destroy()
+            sshClient.end()
+          } catch (err) {
+            console.error('Error during timeout cleanup:', err)
+          }
+          reject(new Error(`Command execution timed out after ${commandTimeout}ms`))
+        }, commandTimeout)
+
+        // Update timeout ID in active commands
+        const commandInfo = activeCommands.get(commandId)
+        if (commandInfo) {
+          commandInfo.timeoutId = timeoutId
         }
 
         let stdout = ''
@@ -501,6 +596,14 @@ app.post('/execute', authenticate, async (req, res) => {
         let stderrLines = []
 
         stream.on('close', (code, signal) => {
+          // Clear timeout
+          if (timeoutId) {
+            clearTimeout(timeoutId)
+          }
+
+          // Remove from active commands
+          activeCommands.delete(commandId)
+
           sshClient.end()
 
           // Combine stdout and stderr for full output, preserving order where possible
@@ -516,7 +619,8 @@ app.post('/execute', authenticate, async (req, res) => {
               stdout: fullOutput,
               stderr: fullError,
               combined: combinedOutput,
-              exitCode: code
+              exitCode: code,
+              commandId
             })
           } else {
             resolve({
@@ -526,7 +630,8 @@ app.post('/execute', authenticate, async (req, res) => {
               stderr: fullError,
               combined: combinedOutput,
               error: fullError || `Command exited with code ${code}`,
-              exitCode: code
+              exitCode: code,
+              commandId
             })
           }
         })
@@ -546,6 +651,14 @@ app.post('/execute', authenticate, async (req, res) => {
           const lines = text.split('\n').filter(l => l.trim())
           stderrLines.push(...lines)
         })
+
+        stream.on('error', (err) => {
+          if (timeoutId) {
+            clearTimeout(timeoutId)
+          }
+          activeCommands.delete(commandId)
+          reject(err)
+        })
       })
     })
 
@@ -557,6 +670,12 @@ app.post('/execute', authenticate, async (req, res) => {
     res.json(result)
 
   } catch (error) {
+    // Clean up on error
+    if (timeoutId) {
+      clearTimeout(timeoutId)
+    }
+    activeCommands.delete(commandId)
+
     // Clean up temporary key file on error
     if (tempKeyFile && fs.existsSync(tempKeyFile)) {
       try {
@@ -575,10 +694,12 @@ app.post('/execute', authenticate, async (req, res) => {
       }
     }
 
-    res.status(500).json({
+    const isTimeout = error.message && error.message.includes('timed out')
+    res.status(isTimeout ? 408 : 500).json({
       success: false,
       error: error.message || 'Failed to execute SSH command',
-      output: ''
+      output: '',
+      commandId: isTimeout ? commandId : undefined
     })
   }
 })
