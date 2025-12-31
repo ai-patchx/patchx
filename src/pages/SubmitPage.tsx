@@ -167,11 +167,6 @@ const SubmitPage: React.FC = () => {
     }
   }, [selectedProject, getCachedBranches])
 
-  useEffect(() => {
-    if (authorEmail && !notificationReceiversInput) {
-      setNotificationReceiversInput(authorEmail)
-    }
-  }, [authorEmail, notificationReceiversInput])
 
   // Save commandIds to localStorage whenever they change
   useEffect(() => {
@@ -1035,12 +1030,14 @@ const SubmitPage: React.FC = () => {
                 </div>
               </label>
               <input
-                type="email"
+                type="text"
                 value={authorEmail}
                 onChange={(e) => setAuthorEmail(e.target.value)}
                 placeholder="Enter author email for git commit --author"
                 disabled={isSubmitting}
-                autoComplete="off"
+                autoComplete="new-password"
+                name="author-email-field"
+                id="author-email-field"
                 className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent ${
                   theme === 'dark'
                     ? 'input-gradient border-gradient-accent'
@@ -1068,7 +1065,9 @@ const SubmitPage: React.FC = () => {
                 onChange={(e) => setNotificationReceiversInput(e.target.value)}
                 placeholder="Add email receivers, e.g. alice@example.com, bob@example.com"
                 disabled={isSubmitting}
-                autoComplete="off"
+                autoComplete="new-password"
+                name="notification-emails-field"
+                id="notification-emails-field"
                 className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent ${
                   theme === 'dark'
                     ? 'input-gradient border-gradient-accent'
