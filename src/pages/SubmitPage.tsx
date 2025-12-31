@@ -360,8 +360,13 @@ const SubmitPage: React.FC = () => {
         throw new Error('File upload failed')
       }
 
-      const uploadResult: { uploadId: string } = await uploadResponse.json()
-      const uploadId = uploadResult.uploadId
+      const uploadResult: { success: boolean; data?: { uploadId: string; status: string; message: string } } = await uploadResponse.json()
+
+      if (!uploadResult.success || !uploadResult.data?.uploadId) {
+        throw new Error(uploadResult.data?.message || 'File upload failed')
+      }
+
+      const uploadId = uploadResult.data.uploadId
       setUploadId(uploadId)
       addConsoleOutput(`File uploaded successfully, Upload ID: ${uploadId}`, 'success')
 
@@ -402,7 +407,8 @@ const SubmitPage: React.FC = () => {
       })
 
       if (!submitResponse.ok) {
-        throw new Error('Patch submission failed')
+        const errorData = await submitResponse.json().catch(() => ({ error: 'Patch submission failed' })) as { error?: string; message?: string }
+        throw new Error(errorData.error || errorData.message || 'Patch submission failed')
       }
 
       type SubmitResponse = {

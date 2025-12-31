@@ -16,8 +16,11 @@ export const validatePatchFile = (content: string): { valid: boolean; error?: st
       const block = diffBlocks[i]
       const lines = block.split('\n')
 
-      // 检查diff头格式
-      const headerMatch = lines[0].match(/@@\s*-\d+(?:,\d+)?\s*\+\d+(?:,\d+)?\s*@@/)
+      // 检查diff头格式 - 由于split移除了@@，需要重新添加或直接匹配内容
+      // lines[0] 应该是类似 " -209,8 +209,8 @@" 的格式（没有开头的@@）
+      const firstLine = lines[0].trim()
+      // 匹配格式: -数字(,数字)? +数字(,数字)? @@ (可选的其他内容如函数名)
+      const headerMatch = firstLine.match(/^-\d+(?:,\d+)?\s+\+\d+(?:,\d+)?\s+@@.*$/)
       if (!headerMatch) {
         return { valid: false, error: `第 ${i} 个diff块格式错误` }
       }
@@ -27,6 +30,14 @@ export const validatePatchFile = (content: string): { valid: boolean; error?: st
       for (let j = 1; j < lines.length; j++) {
         const line = lines[j]
         if (line.length === 0) continue
+
+        // 如果遇到新文件或新diff块的标记，停止检查（这些是下一个文件/块的内容）
+        if (line.startsWith('diff --git') ||
+            (line.startsWith('--- ') && j > 1) ||
+            (line.startsWith('+++ ') && j > 1) ||
+            line.startsWith('index ')) {
+          break
+        }
 
         // 检查行前缀
         const firstChar = line[0]

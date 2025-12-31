@@ -14,8 +14,43 @@ export async function onRequest(context) {
     });
   }
 
+  // Proxy /api/upload to Worker (for file uploads)
+  if (pathname === '/api/upload' && request.method === 'POST') {
+    return proxyToWorker(request, 'https://patchx-service.angersax.workers.dev');
+  }
+
+  // Proxy /api/submit to Worker (for patch submission)
+  if (pathname === '/api/submit' && request.method === 'POST') {
+    return proxyToWorker(request, 'https://patchx-service.angersax.workers.dev');
+  }
+
+  // Proxy /api/status/:id to Worker (for submission status)
+  if (pathname.startsWith('/api/status/') && request.method === 'GET') {
+    return proxyToWorker(request, 'https://patchx-service.angersax.workers.dev');
+  }
+
   // Proxy /api/auth/login to Worker (Worker has TEST_USER_PASSWORD and ADMIN_USER_PASSWORD env vars configured)
   if (pathname === '/api/auth/login' && request.method === 'POST') {
+    return proxyToWorker(request, 'https://patchx-service.angersax.workers.dev');
+  }
+
+  // Proxy /api/ai/resolve-conflict to Worker
+  if (pathname === '/api/ai/resolve-conflict' && request.method === 'POST') {
+    return proxyToWorker(request, 'https://patchx-service.angersax.workers.dev');
+  }
+
+  // Proxy /api/ai/providers to Worker
+  if (pathname === '/api/ai/providers' && request.method === 'GET') {
+    return proxyToWorker(request, 'https://patchx-service.angersax.workers.dev');
+  }
+
+  // Proxy /api/ai/test-providers to Worker
+  if (pathname === '/api/ai/test-providers' && request.method === 'POST') {
+    return proxyToWorker(request, 'https://patchx-service.angersax.workers.dev');
+  }
+
+  // Proxy /api/config/public to Worker
+  if (pathname === '/api/config/public' && request.method === 'GET') {
     return proxyToWorker(request, 'https://patchx-service.angersax.workers.dev');
   }
 
@@ -81,7 +116,7 @@ async function proxyToWorker(request, workerUrl) {
     const url = new URL(request.url);
     const workerRequestUrl = `${workerUrl}${url.pathname}${url.search}`;
 
-    // Prepare headers
+    // Prepare headers - preserve all original headers, especially Content-Type for file uploads
     const headers = new Headers(request.headers);
     headers.set('Host', new URL(workerUrl).hostname);
 
@@ -92,7 +127,8 @@ async function proxyToWorker(request, workerUrl) {
       const clonedRequest = request.clone();
       body = await clonedRequest.arrayBuffer();
 
-      // Ensure Content-Type is set if it's not already set
+      // Only set Content-Type to application/json if it's not already set
+      // Important: Don't override Content-Type for multipart/form-data (file uploads)
       if (!headers.has('Content-Type') && body.byteLength > 0) {
         headers.set('Content-Type', 'application/json');
       }

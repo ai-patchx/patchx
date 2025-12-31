@@ -1,4 +1,4 @@
-feat(android): Export FirstUnique and FirstUniqueInPlace functions
+Export FirstUnique and FirstUniqueInPlace functions
 
 Export the firstUnique and firstUniqueInPlace functions as FirstUnique
 and FirstUniqueInPlace to make them available for use in other packages.
