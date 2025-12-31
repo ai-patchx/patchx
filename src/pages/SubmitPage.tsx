@@ -70,6 +70,69 @@ const SubmitPage: React.FC = () => {
 
     fetchProjects()
     fetchNodes()
+
+    // Restore active submission state if returning from another page
+    const restoreActiveSubmission = async () => {
+      try {
+        const savedSubmissionId = localStorage.getItem('activeSubmissionId')
+        const savedRemoteNode = localStorage.getItem('activeSubmissionRemoteNode')
+        const savedCommandIds = localStorage.getItem('activeSubmissionCommandIds')
+
+        if (savedSubmissionId) {
+          // Check if submission is still active
+          const response = await fetch(`/api/status/${savedSubmissionId}`)
+          if (response.ok) {
+            const result = await response.json() as { success: boolean; data?: { status: string; logs?: string[] } }
+            if (result.success && result.data) {
+              const { status, logs } = result.data
+              // Only restore if still processing
+              if (status === 'processing' || status === 'pending') {
+                setCurrentSubmissionId(savedSubmissionId)
+                setIsSubmitting(true)
+                if (savedRemoteNode) {
+                  setSelectedRemoteNode(savedRemoteNode)
+                }
+                if (savedCommandIds) {
+                  try {
+                    const commandIdsArray = JSON.parse(savedCommandIds)
+                    if (Array.isArray(commandIdsArray)) {
+                      setCommandIds(commandIdsArray)
+                    }
+                  } catch (e) {
+                    console.error('Failed to parse saved command IDs:', e)
+                  }
+                }
+                // Restore logs if available
+                if (logs && Array.isArray(logs)) {
+                  setConsoleOutput(logs)
+                }
+                // Resume polling
+                pollSubmissionLogs(savedSubmissionId)
+                addConsoleOutput('[Info] Resumed monitoring active submission', 'info')
+              } else {
+                // Submission completed or failed, clear saved state
+                localStorage.removeItem('activeSubmissionId')
+                localStorage.removeItem('activeSubmissionRemoteNode')
+                localStorage.removeItem('activeSubmissionCommandIds')
+              }
+            }
+          } else {
+            // Submission not found or error, clear saved state
+            localStorage.removeItem('activeSubmissionId')
+            localStorage.removeItem('activeSubmissionRemoteNode')
+            localStorage.removeItem('activeSubmissionCommandIds')
+          }
+        }
+      } catch (error) {
+        console.error('Error restoring active submission:', error)
+        // Clear saved state on error
+        localStorage.removeItem('activeSubmissionId')
+        localStorage.removeItem('activeSubmissionRemoteNode')
+        localStorage.removeItem('activeSubmissionCommandIds')
+      }
+    }
+
+    restoreActiveSubmission()
   }, [loadFromStorage, loadCacheFromStorage, getCachedProjects, fetchNodes])
 
   // Cleanup polling interval on unmount
@@ -109,6 +172,36 @@ const SubmitPage: React.FC = () => {
       setNotificationReceiversInput(authorEmail)
     }
   }, [authorEmail, notificationReceiversInput])
+
+  // Save commandIds to localStorage whenever they change
+  useEffect(() => {
+    if (commandIds.length > 0 && currentSubmissionId) {
+      localStorage.setItem('activeSubmissionCommandIds', JSON.stringify(commandIds))
+    }
+  }, [commandIds, currentSubmissionId])
+
+  // Extract command IDs from logs if they contain command ID information
+  useEffect(() => {
+    if (consoleOutput.length > 0 && currentSubmissionId) {
+      // Try to extract command IDs from logs (look for patterns like "commandId: xxx" or similar)
+      const commandIdPattern = /commandId[:\s]+([a-f0-9-]{8,})/gi
+      const extractedIds: string[] = []
+      consoleOutput.forEach(log => {
+        const matches = log.matchAll(commandIdPattern)
+        for (const match of matches) {
+          if (match[1] && !extractedIds.includes(match[1])) {
+            extractedIds.push(match[1])
+          }
+        }
+      })
+      if (extractedIds.length > 0) {
+        setCommandIds(prev => {
+          const combined = [...new Set([...prev, ...extractedIds])]
+          return combined
+        })
+      }
+    }
+  }, [consoleOutput, currentSubmissionId])
 
   const fetchProjects = async (forceRefresh: boolean = false) => {
     // Check cache first unless forcing refresh
@@ -338,6 +431,10 @@ const SubmitPage: React.FC = () => {
             setIsSubmitting(false)
             setCurrentProcess('')
             setCurrentSubmissionId(null)
+            // Clear saved submission state
+            localStorage.removeItem('activeSubmissionId')
+            localStorage.removeItem('activeSubmissionRemoteNode')
+            localStorage.removeItem('activeSubmissionCommandIds')
           } else if (status === 'failed') {
             setCurrentProcess('Failed')
             if (error) {
@@ -348,6 +445,10 @@ const SubmitPage: React.FC = () => {
             setIsSubmitting(false)
             setCurrentProcess('')
             setCurrentSubmissionId(null)
+            // Clear saved submission state
+            localStorage.removeItem('activeSubmissionId')
+            localStorage.removeItem('activeSubmissionRemoteNode')
+            localStorage.removeItem('activeSubmissionCommandIds')
           }
         }
 
@@ -359,6 +460,10 @@ const SubmitPage: React.FC = () => {
           setIsSubmitting(false)
           setCurrentProcess('')
           setCurrentSubmissionId(null)
+          // Clear saved submission state
+          localStorage.removeItem('activeSubmissionId')
+          localStorage.removeItem('activeSubmissionRemoteNode')
+          localStorage.removeItem('activeSubmissionCommandIds')
         }
       } catch (error) {
         console.error('Error polling submission status:', error)
@@ -369,6 +474,10 @@ const SubmitPage: React.FC = () => {
           setIsSubmitting(false)
           setCurrentProcess('')
           setCurrentSubmissionId(null)
+          // Clear saved submission state
+          localStorage.removeItem('activeSubmissionId')
+          localStorage.removeItem('activeSubmissionRemoteNode')
+          localStorage.removeItem('activeSubmissionCommandIds')
         }
       }
     }, 1000) // Poll every second
@@ -432,6 +541,10 @@ const SubmitPage: React.FC = () => {
     setIsSubmitting(false)
     setCurrentProcess('')
     setCurrentSubmissionId(null)
+    // Clear saved submission state
+    localStorage.removeItem('activeSubmissionId')
+    localStorage.removeItem('activeSubmissionRemoteNode')
+    localStorage.removeItem('activeSubmissionCommandIds')
     addConsoleOutput('[Warning] Submission cancelled by user', 'warning')
   }
 
@@ -584,6 +697,12 @@ const SubmitPage: React.FC = () => {
         addConsoleOutput(`Submission ID: ${submissionId}`, 'success')
         addConsoleOutput('Polling for submission logs...', 'info')
         setCurrentSubmissionId(submissionId)
+
+        // Save submission state to localStorage for persistence across navigation
+        localStorage.setItem('activeSubmissionId', submissionId)
+        if (selectedRemoteNode) {
+          localStorage.setItem('activeSubmissionRemoteNode', selectedRemoteNode)
+        }
 
         // Start polling for logs - keep isSubmitting true during polling
         // The polling function will set isSubmitting to false when done
