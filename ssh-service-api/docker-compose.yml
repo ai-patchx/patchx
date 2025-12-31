@@ -3,6 +3,7 @@ version: '3.8'
 services:
   ssh-service-api:
     build: .
+    image: ssh-service-api:latest
     container_name: ssh-service-api
     ports:
       - "7000:7000"
