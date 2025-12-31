@@ -477,7 +477,7 @@ const SubmitPage: React.FC = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
-    if (!file || !selectedProject || !subject) {
+    if (!file || !selectedProject || !subject || !selectedRemoteNode) {
       setError('Please fill in all required fields')
       return
     }
@@ -789,6 +789,7 @@ const SubmitPage: React.FC = () => {
                 <div className="flex items-center space-x-2">
                   <Server className="w-5 h-5" />
                   <span>Remote Node</span>
+                  <span className="text-red-500">*</span>
                 </div>
               </label>
               <SearchableSelect
@@ -799,7 +800,7 @@ const SubmitPage: React.FC = () => {
                 }))}
                 value={selectedRemoteNode}
                 onChange={setSelectedRemoteNode}
-                placeholder="Select a remote node (optional)"
+                placeholder="Select a remote node"
                 disabled={nodes.length === 0 || isSubmitting}
                 isLoading={false}
                 emptyMessage="No remote nodes available. Configure nodes in Settings page."
@@ -996,12 +997,12 @@ const SubmitPage: React.FC = () => {
               </button>
               <button
                 type="submit"
-                disabled={!file || !selectedProject || !subject || isSubmitting}
+                disabled={!file || !selectedProject || !subject || !selectedRemoteNode || isSubmitting}
                 className={`
                   flex items-center space-x-2 px-6 py-3 rounded-md font-medium
                   transition-colors duration-200
                   ${
-                    !file || !selectedProject || !subject || isSubmitting
+                    !file || !selectedProject || !subject || !selectedRemoteNode || isSubmitting
                       ? theme === 'dark'
                         ? 'bg-gradient-highlight text-gradient-secondary cursor-not-allowed'
                         : 'bg-gray-300 text-gray-500 cursor-not-allowed'
