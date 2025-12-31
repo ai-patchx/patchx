@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { FileText, Settings, Send, Moon, Sun, Eye, Terminal, Github, Code, RefreshCw, Folder, GitBranch, MessageSquare, AlignLeft, User, Mail, Bell, Server } from 'lucide-react'
+import { FileText, Settings, Send, Moon, Sun, Eye, Terminal, Github, Code, RefreshCw, Folder, GitBranch, MessageSquare, AlignLeft, User, Mail, Bell, Server, X } from 'lucide-react'
 import FileUpload from '../components/FileUpload'
 import SearchableSelect from '../components/SearchableSelect'
 import useFileUploadStore from '../stores/fileUploadStore'
@@ -54,6 +54,9 @@ const SubmitPage: React.FC = () => {
   const [currentProcess, setCurrentProcess] = useState('')
   const [notificationReceiversInput, setNotificationReceiversInput] = useState('')
   const [emailValidationError, setEmailValidationError] = useState<string | null>(null)
+  const [pollingInterval, setPollingInterval] = useState<NodeJS.Timeout | null>(null)
+  const [currentSubmissionId, setCurrentSubmissionId] = useState<string | null>(null)
+  const [commandIds, setCommandIds] = useState<string[]>([]) // Track command IDs for cancellation
 
   useEffect(() => {
     loadFromStorage()
@@ -68,6 +71,15 @@ const SubmitPage: React.FC = () => {
     fetchProjects()
     fetchNodes()
   }, [loadFromStorage, loadCacheFromStorage, getCachedProjects, fetchNodes])
+
+  // Cleanup polling interval on unmount
+  useEffect(() => {
+    return () => {
+      if (pollingInterval) {
+        clearInterval(pollingInterval)
+      }
+    }
+  }, [pollingInterval])
 
   useEffect(() => {
     if (selectedProject) {
@@ -272,9 +284,11 @@ const SubmitPage: React.FC = () => {
         if (!response.ok) {
           if (pollCount >= maxPolls) {
             clearInterval(pollInterval)
+            setPollingInterval(null)
             addConsoleOutput('Polling timeout: Could not retrieve submission status', 'warning')
             setIsSubmitting(false)
             setCurrentProcess('')
+            setCurrentSubmissionId(null)
           }
           return
         }
@@ -303,36 +317,105 @@ const SubmitPage: React.FC = () => {
               addConsoleOutput(`Change URL: ${changeUrl}`, 'success')
             }
             clearInterval(pollInterval)
+            setPollingInterval(null)
             setIsSubmitting(false)
             setCurrentProcess('')
+            setCurrentSubmissionId(null)
           } else if (status === 'failed') {
             setCurrentProcess('Failed')
             if (error) {
               addConsoleOutput(`Error: ${error}`, 'error')
             }
             clearInterval(pollInterval)
+            setPollingInterval(null)
             setIsSubmitting(false)
             setCurrentProcess('')
+            setCurrentSubmissionId(null)
           }
         }
 
         // Stop polling after max attempts
         if (pollCount >= maxPolls) {
           clearInterval(pollInterval)
+          setPollingInterval(null)
           addConsoleOutput('Polling timeout: Maximum polling attempts reached', 'warning')
           setIsSubmitting(false)
           setCurrentProcess('')
+          setCurrentSubmissionId(null)
         }
       } catch (error) {
         console.error('Error polling submission status:', error)
         if (pollCount >= maxPolls) {
           clearInterval(pollInterval)
+          setPollingInterval(null)
           addConsoleOutput('Polling error: Could not retrieve submission status', 'error')
           setIsSubmitting(false)
           setCurrentProcess('')
+          setCurrentSubmissionId(null)
         }
       }
     }, 1000) // Poll every second
+
+    // Store the interval reference
+    setPollingInterval(pollInterval)
+  }
+
+  const handleCancel = async () => {
+    if (!isSubmitting) {
+      return
+    }
+
+    addConsoleOutput('[Info] Cancelling submission...', 'warning')
+
+    // Stop polling
+    if (pollingInterval) {
+      clearInterval(pollingInterval)
+      setPollingInterval(null)
+    }
+
+    // Cancel SSH commands if we have command IDs and a remote node is selected
+    if (commandIds.length > 0 && selectedRemoteNode) {
+      try {
+        // Get the remote node info to find SSH service API URL
+        const nodesResponse = await fetch('/api/remote-nodes').catch(() => null)
+        if (nodesResponse) {
+          const nodesData = await nodesResponse.json().catch(() => ({ data: [] }))
+          const node = nodesData.data?.find((n: any) => n.id === selectedRemoteNode)
+
+          if (node?.sshServiceApiUrl) {
+            for (const commandId of commandIds) {
+              try {
+                const headers: Record<string, string> = {
+                  'Content-Type': 'application/json'
+                }
+                if (node.sshServiceApiKey) {
+                  headers['Authorization'] = `Bearer ${node.sshServiceApiKey}`
+                }
+
+                await fetch(`${node.sshServiceApiUrl}/cancel`, {
+                  method: 'POST',
+                  headers,
+                  body: JSON.stringify({ commandId })
+                })
+                addConsoleOutput(`[Info] Cancelled SSH command: ${commandId.substring(0, 8)}...`, 'info')
+              } catch (error) {
+                console.error('Error cancelling command:', error)
+                addConsoleOutput(`[Warning] Failed to cancel command ${commandId.substring(0, 8)}...`, 'warning')
+              }
+            }
+          }
+        }
+      } catch (error) {
+        console.error('Error fetching remote nodes for cancellation:', error)
+      }
+      setCommandIds([])
+    }
+
+    // Reset state
+    setIsSubmitting(false)
+    setCurrentProcess('')
+    setCurrentSubmissionId(null)
+    addConsoleOutput('[Warning] Submission cancelled by user', 'warning')
   }
 
   const handlePreview = () => {
@@ -417,6 +500,8 @@ const SubmitPage: React.FC = () => {
     setUploadStatus('uploading')
     setError(null)
     clearConsole()
+    setCommandIds([]) // Clear any previous command IDs
+    setCurrentSubmissionId(null) // Clear previous submission ID
 
     try {
       addConsoleOutput('Starting submission process...', 'info')
@@ -486,8 +571,10 @@ const SubmitPage: React.FC = () => {
       if (submissionId) {
         addConsoleOutput(`Submission ID: ${submissionId}`, 'success')
         addConsoleOutput('Polling for submission logs...', 'info')
+        setCurrentSubmissionId(submissionId)
 
-        // Start polling for logs
+        // Start polling for logs - keep isSubmitting true during polling
+        // The polling function will set isSubmitting to false when done
         pollSubmissionLogs(submissionId)
       } else {
         addConsoleOutput('Warning: No submission ID received', 'warning')
@@ -500,7 +587,6 @@ const SubmitPage: React.FC = () => {
       setError(error instanceof Error ? error.message : 'Submission failed')
       setUploadStatus('error')
       addConsoleOutput(`Error: ${error instanceof Error ? error.message : 'Submission failed'}`, 'error')
-    } finally {
       setIsSubmitting(false)
       setCurrentProcess('')
     }
@@ -928,6 +1014,24 @@ const SubmitPage: React.FC = () => {
                 <Send className="w-5 h-5" />
                 <span>{isSubmitting ? 'Submitting...' : 'Submit Patch'}</span>
               </button>
+              {isSubmitting && (
+                <button
+                  type="button"
+                  onClick={handleCancel}
+                  className={`
+                    flex items-center space-x-2 px-6 py-3 rounded-md font-medium
+                    transition-colors duration-200
+                    ${
+                      theme === 'dark'
+                        ? 'bg-red-600 text-white hover:bg-red-700'
+                        : 'bg-red-600 text-white hover:bg-red-700'
+                    }
+                  `}
+                >
+                  <X className="w-5 h-5" />
+                  <span>Cancel</span>
+                </button>
+              )}
             </div>
 
             {/* Console Output */}

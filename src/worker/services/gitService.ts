@@ -247,26 +247,38 @@ export class GitService {
           }
         }
 
-        const result = await response.json() as { success: boolean; output?: string; error?: string }
+        const result = await response.json() as {
+          success: boolean
+          output?: string
+          stdout?: string
+          stderr?: string
+          combined?: string
+          error?: string
+          exitCode?: number
+        }
+
+        // Use combined output if available (includes both stdout and stderr), otherwise fall back to output
+        const fullOutput = result.combined || result.stdout || result.output || ''
+        const errorOutput = result.stderr || result.error || ''
 
         // Extract target directory from output if available
-        const targetDirMatch = result.output?.match(/TARGET_DIR=([^\n]+)/)
+        const targetDirMatch = fullOutput.match(/TARGET_DIR=([^\n]+)/)
         const extractedTargetDir = targetDirMatch ? targetDirMatch[1] : undefined
 
         // Log output to console for debugging
-        if (result.output) {
-          console.log(`[Git Clone] Output:\n${result.output}`)
+        if (fullOutput) {
+          console.log(`[Git Clone] Output:\n${fullOutput}`)
         }
         if (result.success) {
           console.log(`[Git Clone] Success! Repository cloned to: ${extractedTargetDir || 'unknown'}`)
         } else {
-          console.error(`[Git Clone] Failed: ${result.error || 'Unknown error'}`)
+          console.error(`[Git Clone] Failed: ${errorOutput || 'Unknown error'}`)
         }
 
         return {
           success: result.success,
-          output: result.output || '',
-          error: result.error,
+          output: fullOutput,
+          error: result.success ? undefined : (errorOutput || result.error),
           targetDir: extractedTargetDir
         }
       } catch (error) {
@@ -467,8 +479,8 @@ fi
       return writeResult
     }
 
-    // Build git apply command
-    let applyCommand = 'git apply'
+    // Build git apply command with verbose output
+    let applyCommand = 'git apply --verbose'
     if (options?.check) {
       applyCommand += ' --check'
     }
@@ -478,7 +490,7 @@ fi
     if (options?.directory) {
       applyCommand += ` --directory=${options.directory}`
     }
-    applyCommand += ` ${patchFileName}`
+    applyCommand += ` ${patchFileName} 2>&1` // Redirect stderr to stdout to capture all output
 
     const applyResult = await this.executeSSHCommand(node, applyCommand, repositoryPath)
 
@@ -508,8 +520,8 @@ fi
     }
 
     const checkoutCommand = createIfNotExists
-      ? `git checkout -b ${branch}`
-      : `git checkout ${branch}`
+      ? `git checkout -b ${branch} 2>&1`
+      : `git checkout ${branch} 2>&1`
 
     return await this.executeSSHCommand(node, checkoutCommand, repositoryPath)
   }

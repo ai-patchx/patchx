@@ -118,8 +118,12 @@ export class SubmissionService {
           await this.addLog(submissionId, '[Info] Starting git workflow on remote node...')
           await this.addLog(submissionId, `[Info] Repository: ${submission.gitRepository}`)
           await this.addLog(submissionId, `[Info] Branch: ${submission.branch}`)
+          await this.addLog(submissionId, '[Info] Step 1: Cloning repository...')
+          await this.addLog(submissionId, '[Info] This log entry tests that logging is working')
 
           const workDir = `/tmp/git-work-${submission.id}`
+          await this.addLog(submissionId, `[Info] Working directory: ${workDir}`)
+
           const gitResult = await this.gitService.executeGitWorkflow(
             submission.remoteNodeId,
             submission.gitRepository,
@@ -128,32 +132,43 @@ export class SubmissionService {
             workDir
           )
 
+          // Debug: Log if we got results
+          if (!gitResult.results.clone && !gitResult.results.apply) {
+            await this.addLog(submissionId, '[Warning] Git workflow returned no results')
+          }
+
           // Log git clone results
           if (gitResult.results.clone) {
+            // Always log output first, regardless of success/failure
+            if (gitResult.results.clone.output) {
+              // The git clone script outputs logs with [INFO], [SUCCESS], [WARN], [ERROR] prefixes
+              // Split by newlines and log each line
+              const allLines = gitResult.results.clone.output.split(/\r?\n/)
+              for (const line of allLines) {
+                const trimmedLine = line.trim()
+                if (!trimmedLine) continue // Skip empty lines
+                // Skip the TARGET_DIR= line which is just metadata
+                if (trimmedLine.startsWith('TARGET_DIR=')) {
+                  continue
+                }
+                // Preserve the log prefixes from the script - they already have proper formatting
+                // The script outputs: [INFO] message, [SUCCESS] message, etc.
+                await this.addLog(submissionId, trimmedLine)
+              }
+            }
+            // Also log stderr if present (warnings/errors from the script)
+            if (gitResult.results.clone.error) {
+              const errorLines = gitResult.results.clone.error.split(/\r?\n/)
+              for (const line of errorLines) {
+                const trimmedLine = line.trim()
+                if (trimmedLine) {
+                  await this.addLog(submissionId, trimmedLine)
+                }
+              }
+            }
+
             if (gitResult.results.clone.success) {
               await this.addLog(submissionId, '[Success] Git clone completed successfully')
-              if (gitResult.results.clone.output) {
-                // Parse output lines - the git clone script uses [INFO], [SUCCESS], [WARN], [ERROR] prefixes
-                const lines = gitResult.results.clone.output.split('\n').filter(l => l.trim())
-                for (const line of lines) {
-                  // Skip the TARGET_DIR= line which is just metadata
-                  if (line.startsWith('TARGET_DIR=')) {
-                    continue
-                  }
-                  // Preserve the log prefixes from the script ([INFO], [SUCCESS], etc.)
-                  if (line.includes('[INFO]') || line.includes('[SUCCESS]') || line.includes('[WARN]') || line.includes('[ERROR]')) {
-                    await this.addLog(submissionId, line)
-                  } else {
-                    await this.addLog(submissionId, `[Git Clone] ${line}`)
-                  }
-                }
-              }
-              if (gitResult.results.clone.error) {
-                const errorLines = gitResult.results.clone.error.split('\n').filter(l => l.trim())
-                for (const line of errorLines) {
-                  await this.addLog(submissionId, `[Git Clone Error] ${line}`)
-                }
-              }
             } else {
               const errorMsg = gitResult.results.clone.error || 'Unknown error'
               const isTimeout = errorMsg.includes('timed out') || errorMsg.includes('timeout')
@@ -161,54 +176,65 @@ export class SubmissionService {
               if (isTimeout) {
                 await this.addLog(submissionId, '[Warning] Command timed out - this may indicate network issues or the command is taking too long')
               }
-              // Also log any output even if it failed
-              if (gitResult.results.clone.output) {
-                const lines = gitResult.results.clone.output.split('\n').filter(l => l.trim())
-                for (const line of lines) {
-                  await this.addLog(submissionId, `[Git Clone] ${line}`)
-                }
-              }
             }
+          } else {
+            await this.addLog(submissionId, '[Warning] No git clone result available')
           }
 
           // Log checkout results
           if (gitResult.results.checkout) {
+            await this.addLog(submissionId, '[Info] Step 2: Checking out branch...')
             if (gitResult.results.checkout.success) {
-              await this.addLog(submissionId, '[Success] Branch checkout completed')
               if (gitResult.results.checkout.output) {
                 const lines = gitResult.results.checkout.output.split('\n').filter(l => l.trim())
                 for (const line of lines) {
                   await this.addLog(submissionId, `[Git Checkout] ${line}`)
                 }
               }
+              await this.addLog(submissionId, '[Success] Branch checkout completed')
             } else {
+              if (gitResult.results.checkout.output) {
+                const lines = gitResult.results.checkout.output.split('\n').filter(l => l.trim())
+                for (const line of lines) {
+                  await this.addLog(submissionId, `[Git Checkout] ${line}`)
+                }
+              }
               await this.addLog(submissionId, `[Warning] Branch checkout: ${gitResult.results.checkout.error || 'Unknown warning'}`)
             }
           }
 
           // Log patch apply results
           if (gitResult.results.apply) {
-            if (gitResult.results.apply.success) {
-              await this.addLog(submissionId, '[Success] Patch applied successfully')
-              if (gitResult.results.apply.output) {
-                const lines = gitResult.results.apply.output.split('\n').filter(l => l.trim())
-                for (const line of lines) {
-                  await this.addLog(submissionId, `[Patch Apply] ${line}`)
+            await this.addLog(submissionId, '[Info] Step 3: Applying patch...')
+            // Always log output first
+            if (gitResult.results.apply.output) {
+              const lines = gitResult.results.apply.output.split(/\r?\n/)
+              for (const line of lines) {
+                const trimmedLine = line.trim()
+                if (trimmedLine) {
+                  await this.addLog(submissionId, `[Patch Apply] ${trimmedLine}`)
                 }
               }
+            }
+            // Log stderr if present
+            if (gitResult.results.apply.error) {
+              const errorLines = gitResult.results.apply.error.split(/\r?\n/)
+              for (const line of errorLines) {
+                const trimmedLine = line.trim()
+                if (trimmedLine) {
+                  await this.addLog(submissionId, `[Patch Apply Error] ${trimmedLine}`)
+                }
+              }
+            }
+
+            if (gitResult.results.apply.success) {
+              await this.addLog(submissionId, '[Success] Patch applied successfully')
             } else {
               const errorMsg = gitResult.results.apply.error || 'Unknown error'
               const isTimeout = errorMsg.includes('timed out') || errorMsg.includes('timeout')
               await this.addLog(submissionId, `[Error] Patch apply failed: ${errorMsg}`)
               if (isTimeout) {
                 await this.addLog(submissionId, '[Warning] Command timed out - this may indicate network issues or the command is taking too long')
-              }
-              // Also log any output even if it failed
-              if (gitResult.results.apply.output) {
-                const lines = gitResult.results.apply.output.split('\n').filter(l => l.trim())
-                for (const line of lines) {
-                  await this.addLog(submissionId, `[Patch Apply] ${line}`)
-                }
               }
             }
           }
