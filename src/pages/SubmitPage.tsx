@@ -446,13 +446,8 @@ const SubmitPage: React.FC = () => {
       lines.push('')
       lines.push(description)
     }
-    lines.push('')
-    lines.push(`Project: ${selectedProject || '(No project selected)'}`)
-    lines.push(`Branch: ${selectedBranch}`)
-    if (file?.name) {
-      lines.push(`File: ${file.name}`)
-    }
     if (authorName && authorEmail) {
+      lines.push('')
       lines.push(`Signed-off-by: ${authorName} <${authorEmail}>`)
     }
     return lines.join('\n')
