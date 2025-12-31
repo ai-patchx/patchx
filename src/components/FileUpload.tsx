@@ -6,12 +6,14 @@ interface FileUploadProps {
   onFileSelect: (file: File) => void
   accept?: string
   maxSize?: number
+  disabled?: boolean
 }
 
 const FileUpload: React.FC<FileUploadProps> = ({
   onFileSelect,
   accept = '.patch,.diff',
-  maxSize = 10 * 1024 * 1024 // 10MB
+  maxSize = 10 * 1024 * 1024, // 10MB
+  disabled = false
 }) => {
   const [isDragOver, setIsDragOver] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -30,6 +32,10 @@ const FileUpload: React.FC<FileUploadProps> = ({
   }
 
   const handleFileSelect = (selectedFile: File) => {
+    if (disabled) {
+      return
+    }
+
     const validationError = validateFile(selectedFile)
 
     if (validationError) {
@@ -86,26 +92,28 @@ const FileUpload: React.FC<FileUploadProps> = ({
     <div className="w-full">
       <div
         className={`
-          border-2 border-dashed rounded-lg p-8 text-center cursor-pointer
-          transition-all duration-200 ease-in-out
+          border-2 border-dashed rounded-lg p-8 text-center transition-all duration-200 ease-in-out
           ${
-            isDragOver
-              ? 'border-green-400 bg-green-50'
+            disabled
+              ? 'opacity-50 cursor-not-allowed border-gray-200 bg-gray-50'
+              : isDragOver
+              ? 'border-green-400 bg-green-50 cursor-pointer'
               : error
-              ? 'border-red-400 bg-red-50'
-              : 'border-gray-300 hover:border-gray-400'
+              ? 'border-red-400 bg-red-50 cursor-pointer'
+              : 'border-gray-300 hover:border-gray-400 cursor-pointer'
           }
         `}
-        onDrop={handleDrop}
-        onDragOver={handleDragOver}
-        onDragLeave={handleDragLeave}
-        onClick={handleClick}
+        onDrop={disabled ? undefined : handleDrop}
+        onDragOver={disabled ? undefined : handleDragOver}
+        onDragLeave={disabled ? undefined : handleDragLeave}
+        onClick={disabled ? undefined : handleClick}
       >
         <input
           ref={fileInputRef}
           type="file"
           accept={accept}
           onChange={handleFileInputChange}
+          disabled={disabled}
           className="hidden"
         />
 

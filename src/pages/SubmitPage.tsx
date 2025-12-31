@@ -242,7 +242,7 @@ const SubmitPage: React.FC = () => {
     }
   }
 
-  const handleFileSelect = async (selectedFile: File) => {
+  const handleFileSelect = (selectedFile: File) => {
     // File preview logic can be added here
     console.log('Selected file:', selectedFile)
   }
@@ -587,7 +587,7 @@ const SubmitPage: React.FC = () => {
                   <span className="text-red-500">*</span>
                 </div>
               </label>
-              <FileUpload onFileSelect={handleFileSelect} />
+              <FileUpload onFileSelect={handleFileSelect} disabled={isSubmitting} />
             </div>
 
             {/* Separator */}
@@ -608,12 +608,12 @@ const SubmitPage: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => fetchProjects(true)}
-                  disabled={isLoadingProjects}
+                  disabled={isLoadingProjects || isSubmitting}
                   className={`p-1.5 rounded-md transition-colors duration-200 ${
                     theme === 'dark'
                       ? 'text-gradient-secondary hover:text-gradient-primary hover:bg-gradient-accent'
                       : 'text-gray-500 hover:text-gray-700 hover:bg-gray-200'
-                  } ${isLoadingProjects ? 'opacity-50 cursor-not-allowed' : ''}`}
+                  } ${isLoadingProjects || isSubmitting ? 'opacity-50 cursor-not-allowed' : ''}`}
                   title="Refresh projects list"
                 >
                   <RefreshCw className={`w-4 h-4 ${isLoadingProjects ? 'animate-spin' : ''}`} />
@@ -627,7 +627,7 @@ const SubmitPage: React.FC = () => {
                 value={selectedProject}
                 onChange={setSelectedProject}
                 placeholder="Please select an AOSP project"
-                disabled={isLoadingProjects}
+                disabled={isLoadingProjects || isSubmitting}
                 isLoading={isLoadingProjects}
                 emptyMessage="No projects available (check Gerrit configuration)"
                 loadingMessage="Loading projects from Gerrit..."
@@ -657,12 +657,12 @@ const SubmitPage: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => fetchBranches(selectedProject, true)}
-                    disabled={isLoadingBranches || !selectedProject}
+                    disabled={isLoadingBranches || !selectedProject || isSubmitting}
                     className={`p-1.5 rounded-md transition-colors duration-200 ${
                       theme === 'dark'
                         ? 'text-gradient-secondary hover:text-gradient-primary hover:bg-gradient-accent'
                         : 'text-gray-500 hover:text-gray-700 hover:bg-gray-200'
-                    } ${isLoadingBranches || !selectedProject ? 'opacity-50 cursor-not-allowed' : ''}`}
+                    } ${isLoadingBranches || !selectedProject || isSubmitting ? 'opacity-50 cursor-not-allowed' : ''}`}
                     title="Refresh branches list"
                   >
                     <RefreshCw className={`w-4 h-4 ${isLoadingBranches ? 'animate-spin' : ''}`} />
@@ -677,7 +677,7 @@ const SubmitPage: React.FC = () => {
                 value={selectedBranch}
                 onChange={setSelectedBranch}
                 placeholder={!selectedProject ? "Please select a project first" : "Please select a branch"}
-                disabled={!selectedProject || isLoadingBranches}
+                disabled={!selectedProject || isLoadingBranches || isSubmitting}
                 isLoading={isLoadingBranches}
                 emptyMessage="No branches available"
                 loadingMessage="Loading branches..."
@@ -714,7 +714,7 @@ const SubmitPage: React.FC = () => {
                 value={selectedRemoteNode}
                 onChange={setSelectedRemoteNode}
                 placeholder="Select a remote node (optional)"
-                disabled={nodes.length === 0}
+                disabled={nodes.length === 0 || isSubmitting}
                 isLoading={false}
                 emptyMessage="No remote nodes available. Configure nodes in Settings page."
                 loadingMessage="Loading remote nodes..."
@@ -742,11 +742,12 @@ const SubmitPage: React.FC = () => {
                 value={subject}
                 onChange={(e) => setSubject(e.target.value)}
                 placeholder="Briefly describe your changes, e.g.: Fix memory leak in ActivityManager"
+                disabled={isSubmitting}
                 className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent ${
                   theme === 'dark'
                     ? 'input-gradient border-gradient-accent'
                     : 'border-gray-300 bg-white'
-                }`}
+                } ${isSubmitting ? 'opacity-50 cursor-not-allowed' : ''}`}
                 required
               />
             </div>
@@ -766,11 +767,12 @@ const SubmitPage: React.FC = () => {
                 onChange={(e) => setDescription(e.target.value)}
                 placeholder="Describe your changes in detail, including reasons and impact..."
                 rows={4}
+                disabled={isSubmitting}
                 className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent ${
                   theme === 'dark'
                     ? 'input-gradient border-gradient-accent'
                     : 'border-gray-300 bg-white'
-                }`}
+                } ${isSubmitting ? 'opacity-50 cursor-not-allowed' : ''}`}
               />
             </div>
 
@@ -792,11 +794,12 @@ const SubmitPage: React.FC = () => {
                 value={authorName}
                 onChange={(e) => setAuthorName(e.target.value)}
                 placeholder="Enter author name for git commit --author"
+                disabled={isSubmitting}
                 className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent ${
                   theme === 'dark'
                     ? 'input-gradient border-gradient-accent'
                     : 'border-gray-300 bg-white'
-                }`}
+                } ${isSubmitting ? 'opacity-50 cursor-not-allowed' : ''}`}
               />
             </div>
 
@@ -815,11 +818,12 @@ const SubmitPage: React.FC = () => {
                 value={authorEmail}
                 onChange={(e) => setAuthorEmail(e.target.value)}
                 placeholder="Enter author email for git commit --author"
+                disabled={isSubmitting}
                 className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent ${
                   theme === 'dark'
                     ? 'input-gradient border-gradient-accent'
                     : 'border-gray-300 bg-white'
-                }`}
+                } ${isSubmitting ? 'opacity-50 cursor-not-allowed' : ''}`}
               />
             </div>
 
@@ -841,11 +845,12 @@ const SubmitPage: React.FC = () => {
                 onChange={(e) => setNotificationReceiversInput(e.target.value)}
                 placeholder="Add email receivers, e.g. alice@example.com, bob@example.com"
                 rows={2}
+                disabled={isSubmitting}
                 className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent ${
                   theme === 'dark'
                     ? 'input-gradient border-gradient-accent'
                     : 'border-gray-300 bg-white'
-                }`}
+                } ${isSubmitting ? 'opacity-50 cursor-not-allowed' : ''}`}
               />
               {renderEmailChips(notificationReceivers)}
             </div>
@@ -881,17 +886,22 @@ const SubmitPage: React.FC = () => {
               <button
                 type="button"
                 onClick={handlePreview}
+                disabled={isSubmitting}
                 className={`
                   flex items-center space-x-2 px-4 py-3 rounded-md font-medium
                   transition-colors duration-200
                   ${
-                    theme === 'dark'
-                      ? showPreview
-                        ? 'bg-gradient-accent text-gradient-primary hover:bg-gradient-highlight'
-                        : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-                      : showPreview
-                        ? 'bg-blue-600 text-white hover:bg-blue-700'
-                        : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                    isSubmitting
+                      ? theme === 'dark'
+                        ? 'bg-gray-700 text-gray-500 cursor-not-allowed opacity-50'
+                        : 'bg-gray-200 text-gray-400 cursor-not-allowed opacity-50'
+                      : theme === 'dark'
+                        ? showPreview
+                          ? 'bg-gradient-accent text-gradient-primary hover:bg-gradient-highlight'
+                          : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                        : showPreview
+                          ? 'bg-blue-600 text-white hover:bg-blue-700'
+                          : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
                   }
                 `}
               >
