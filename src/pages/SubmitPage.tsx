@@ -961,6 +961,7 @@ const SubmitPage: React.FC = () => {
                 onChange={(e) => setSubject(e.target.value)}
                 placeholder="Briefly describe your changes, e.g.: Fix memory leak in ActivityManager"
                 disabled={isSubmitting}
+                autoComplete="off"
                 className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent ${
                   theme === 'dark'
                     ? 'input-gradient border-gradient-accent'
@@ -986,6 +987,7 @@ const SubmitPage: React.FC = () => {
                 placeholder="Describe your changes in detail, including reasons and impact..."
                 rows={4}
                 disabled={isSubmitting}
+                autoComplete="off"
                 className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent ${
                   theme === 'dark'
                     ? 'input-gradient border-gradient-accent'
@@ -1013,6 +1015,7 @@ const SubmitPage: React.FC = () => {
                 onChange={(e) => setAuthorName(e.target.value)}
                 placeholder="Enter author name for git commit --author"
                 disabled={isSubmitting}
+                autoComplete="off"
                 className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent ${
                   theme === 'dark'
                     ? 'input-gradient border-gradient-accent'
@@ -1037,6 +1040,7 @@ const SubmitPage: React.FC = () => {
                 onChange={(e) => setAuthorEmail(e.target.value)}
                 placeholder="Enter author email for git commit --author"
                 disabled={isSubmitting}
+                autoComplete="off"
                 className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent ${
                   theme === 'dark'
                     ? 'input-gradient border-gradient-accent'
@@ -1058,12 +1062,13 @@ const SubmitPage: React.FC = () => {
                   <span>Email Notifications</span>
                 </div>
               </label>
-              <textarea
+              <input
+                type="text"
                 value={notificationReceiversInput}
                 onChange={(e) => setNotificationReceiversInput(e.target.value)}
                 placeholder="Add email receivers, e.g. alice@example.com, bob@example.com"
-                rows={2}
                 disabled={isSubmitting}
+                autoComplete="off"
                 className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent ${
                   theme === 'dark'
                     ? 'input-gradient border-gradient-accent'
