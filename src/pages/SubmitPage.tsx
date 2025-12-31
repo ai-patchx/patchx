@@ -298,11 +298,28 @@ const SubmitPage: React.FC = () => {
         if (result.success && result.data) {
           const { status, logs, changeId, changeUrl, error } = result.data
 
+          // Debug: Log polling info
+          if (pollCount % 10 === 0) { // Log every 10 polls (every 10 seconds)
+            console.log(`[Polling] Poll #${pollCount}, Status: ${status}, Logs count: ${logs?.length || 0}, Last log count: ${lastLogCount}`)
+          }
+
           // Add new logs to console output (logs from server already have timestamps)
-          if (logs && logs.length > lastLogCount) {
-            const newLogs = logs.slice(lastLogCount)
-            setConsoleOutput(prev => [...prev, ...newLogs])
-            lastLogCount = logs.length
+          if (logs && Array.isArray(logs)) {
+            if (logs.length > lastLogCount) {
+              const newLogs = logs.slice(lastLogCount)
+              console.log(`[Polling] Adding ${newLogs.length} new logs (total: ${logs.length}, previous: ${lastLogCount})`)
+              setConsoleOutput(prev => [...prev, ...newLogs])
+              lastLogCount = logs.length
+            } else if (logs.length < lastLogCount) {
+              // Log count decreased (shouldn't happen, but log it)
+              console.warn(`[Polling] Log count decreased from ${lastLogCount} to ${logs.length}, resetting`)
+              lastLogCount = logs.length
+            }
+          } else if (!logs) {
+            // No logs array in response
+            if (pollCount % 10 === 0) {
+              console.warn(`[Polling] No logs array in response (poll #${pollCount})`)
+            }
           }
 
           // Update current process based on status

@@ -618,8 +618,32 @@ async function handleSubmit(request: Request, env: Env, corsHeaders: Record<stri
     )
 
     // 异步提交到Gerrit或执行git命令（不等待完成）
-    submissionService.submitToGerrit(submission.id).catch(error => {
+    console.log(`[Submit Handler] Starting async submission processing for ID: ${submission.id}`)
+    submissionService.submitToGerrit(submission.id)
+      .then(async (result) => {
+        console.log(`[Submit Handler] Submission ${submission.id} completed successfully`)
+        // Log completion (logs should already be added by submitToGerrit)
+      })
+      .catch(async (error) => {
       console.error('Submission processing failed:', error)
+      // Try to log the error to the submission
+      try {
+        const failedSubmission = await submissionService.getSubmission(submission.id)
+        if (failedSubmission) {
+          failedSubmission.status = 'failed'
+          failedSubmission.error = error instanceof Error ? error.message : String(error)
+          failedSubmission.updatedAt = new Date().toISOString()
+          if (!failedSubmission.logs) {
+            failedSubmission.logs = []
+          }
+          failedSubmission.logs.push(`[${new Date().toLocaleTimeString('en-US')}] [Error] Submission processing failed: ${error instanceof Error ? error.message : String(error)}`)
+          // Use SubmissionService's internal KV access instead of direct env.KV
+          const kv = getKvNamespace(env)
+          await kv.put(`submissions:${submission.id}`, JSON.stringify(failedSubmission))
+        }
+      } catch (logError) {
+        console.error('Failed to log error to submission:', logError)
+      }
     })
 
     return new Response(

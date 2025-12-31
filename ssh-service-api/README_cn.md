@@ -289,6 +289,29 @@ sudo certbot --nginx -d your-domain.com
 
 ## 测试
 
+### 测试脚本
+
+**快速开始：**
+```bash
+# 使脚本可执行
+chmod +x test-*.sh
+
+# 测试所有端点和连接性（默认为 https://supagraph.ai:8443/api/ssh）
+./test-connection.sh
+
+# 测试 git clone 端点（如果未提供密码，将提示输入）
+./test-git-clone.sh https://supagraph.ai:8443/api/ssh sk-1234 your-host your-user your-password
+
+# 测试 execute 端点
+./test-execute.sh https://supagraph.ai:8443/api/ssh sk-1234 your-host your-user your-password "echo test"
+
+# 测试补丁合并工作流
+./test-patch-merge.sh https://supagraph.ai:8443/api/ssh sk-1234 your-host your-user your-password ~/git-work/repo ../examples/platform-build-soong.patch
+
+# 测试完整工作流（克隆 + 补丁 + 状态）
+./test-full-workflow.sh https://supagraph.ai:8443/api/ssh sk-1234 your-host your-user your-password platform/build/soong master https://android-review.googlesource.com ../examples/platform-build-soong.patch
+```
+
 ### 健康检查
 
 测试健康检查端点：

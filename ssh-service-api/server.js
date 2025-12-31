@@ -154,6 +154,21 @@ if [ -z "\$WORKING_HOME" ]; then
     WORKING_HOME="\$HOME/git-work"
 fi
 
+# Expand ~ to $HOME if WORKING_HOME starts with ~
+# This handles cases where ~ is passed as a literal string (e.g., "~/git-work")
+# Check if WORKING_HOME starts with ~ (not using glob pattern to avoid issues)
+if [ "\${WORKING_HOME:0:1}" = "~" ]; then
+    # Replace ~ with $HOME using parameter expansion
+    WORKING_HOME="\${WORKING_HOME/#\\~/\$HOME}"
+fi
+
+# Expand $HOME if it's still a literal string (e.g., "$HOME/git-work" passed from JavaScript)
+# This happens when $HOME is passed as a literal string in quotes
+if echo "\$WORKING_HOME" | grep -q '\$HOME'; then
+    # Use eval to expand $HOME, but be safe about it
+    WORKING_HOME=\$(eval echo "\$WORKING_HOME")
+fi
+
 log_info "Starting git clone operation"
 log_info "Repository URL: \$REPOSITORY_URL"
 log_info "Project: \$TARGET_PROJECT"

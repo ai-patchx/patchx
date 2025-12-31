@@ -289,6 +289,29 @@ sudo certbot --nginx -d your-domain.com
 
 ## Testing
 
+### Test Scripts
+
+**Quick Start:**
+```bash
+# Make scripts executable
+chmod +x test-*.sh
+
+# Test all endpoints and connectivity (defaults to https://supagraph.ai:8443/api/ssh)
+./test-connection.sh
+
+# Test git clone endpoint (password will be prompted if not provided)
+./test-git-clone.sh https://supagraph.ai:8443/api/ssh sk-1234 your-host your-user your-password
+
+# Test execute endpoint
+./test-execute.sh https://supagraph.ai:8443/api/ssh sk-1234 your-host your-user your-password "echo test"
+
+# Test patch merge workflow
+./test-patch-merge.sh https://supagraph.ai:8443/api/ssh sk-1234 your-host your-user your-password ~/git-work/repo ../examples/platform-build-soong.patch
+
+# Test full workflow (clone + patch + status)
+./test-full-workflow.sh https://supagraph.ai:8443/api/ssh sk-1234 your-host your-user your-password platform/build/soong master https://android-review.googlesource.com ../examples/platform-build-soong.patch
+```
+
 ### Health Check
 
 Test the health endpoint:

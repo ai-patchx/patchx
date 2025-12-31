@@ -102,140 +102,118 @@ export class SubmissionService {
       }
       await this.kv.put(`submissions:${submissionId}`, JSON.stringify(submission))
       await this.addLog(submissionId, '[Info] Starting submission process...')
-      await this.sendNotification(submission, 'processing')
+      await this.addLog(submissionId, '[Info] Submission service initialized')
+      await this.addLog(submissionId, `[Info] Submission ID: ${submissionId}`)
+      await this.addLog(submissionId, `[Info] Upload ID: ${submission.uploadId}`)
+
+      try {
+        await this.addLog(submissionId, '[Info] Sending notification...')
+        await this.sendNotification(submission, 'processing')
+        await this.addLog(submissionId, '[Info] Notification sent successfully')
+      } catch (notifError) {
+        // Non-fatal, just log it
+        await this.addLog(submissionId, `[Warning] Failed to send notification: ${notifError instanceof Error ? notifError.message : String(notifError)}`)
+      }
 
       // 获取上传的文件内容
+      await this.addLog(submissionId, `[Info] Retrieving upload with ID: ${submission.uploadId}`)
+      const uploadStartTime = Date.now()
       const upload = await this.uploadService.getUpload(submission.uploadId)
+      const uploadDuration = Date.now() - uploadStartTime
+      await this.addLog(submissionId, `[Info] Upload retrieval completed in ${uploadDuration}ms`)
       if (!upload) {
+        await this.addLog(submissionId, `[Error] Upload not found for ID: ${submission.uploadId}`)
         throw new Error('上传文件不存在')
       }
 
-      await this.addLog(submissionId, `[Info] File uploaded: ${upload.filename}`)
+      await this.addLog(submissionId, `[Success] File uploaded: ${upload.filename}`)
+      await this.addLog(submissionId, `[Debug] Submission details - remoteNodeId: ${submission.remoteNodeId || 'not set'}, gitRepository: ${submission.gitRepository || 'not set'}, branch: ${submission.branch || 'not set'}`)
 
       // If remote node and git repository are specified, execute git commands first
       if (submission.remoteNodeId && submission.gitRepository) {
+        await this.addLog(submissionId, '[Info] Remote node and git repository configured - executing git workflow')
         try {
           await this.addLog(submissionId, '[Info] Starting git workflow on remote node...')
           await this.addLog(submissionId, `[Info] Repository: ${submission.gitRepository}`)
           await this.addLog(submissionId, `[Info] Branch: ${submission.branch}`)
+          await this.addLog(submissionId, `[Info] Remote Node ID: ${submission.remoteNodeId}`)
           await this.addLog(submissionId, '[Info] Step 1: Cloning repository...')
-          await this.addLog(submissionId, '[Info] This log entry tests that logging is working')
 
           const workDir = `/tmp/git-work-${submission.id}`
           await this.addLog(submissionId, `[Info] Working directory: ${workDir}`)
+          await this.addLog(submissionId, '[Info] Calling git service executeGitWorkflow...')
+          await this.addLog(submissionId, '[Info] This may take several minutes, please wait...')
 
-          const gitResult = await this.gitService.executeGitWorkflow(
+          // Add timeout wrapper for git workflow (10 minutes total)
+          const gitWorkflowPromise = this.gitService.executeGitWorkflow(
             submission.remoteNodeId,
             submission.gitRepository,
             submission.branch,
             upload.content,
-            workDir
+            workDir,
+            async (message: string) => {
+              await this.addLog(submissionId, message)
+            }
           )
+
+          // Add timeout (10 minutes)
+          const timeoutPromise = new Promise<never>((_, reject) => {
+            setTimeout(() => {
+              reject(new Error('Git workflow timed out after 10 minutes'))
+            }, 600000) // 10 minutes
+          })
+
+          // Pass log callback to git service for real-time logging
+          const gitResult = await Promise.race([gitWorkflowPromise, timeoutPromise])
+
+          await this.addLog(submissionId, '[Info] Git workflow execution completed')
 
           // Debug: Log if we got results
           if (!gitResult.results.clone && !gitResult.results.apply) {
             await this.addLog(submissionId, '[Warning] Git workflow returned no results')
+          } else {
+            await this.addLog(submissionId, `[Info] Git workflow returned results: clone=${!!gitResult.results.clone}, checkout=${!!gitResult.results.checkout}, apply=${!!gitResult.results.apply}, status=${!!gitResult.results.status}`)
           }
 
-          // Log git clone results
+          // Log git clone results (output already logged via callback, but log summary)
           if (gitResult.results.clone) {
-            // Always log output first, regardless of success/failure
-            if (gitResult.results.clone.output) {
-              // The git clone script outputs logs with [INFO], [SUCCESS], [WARN], [ERROR] prefixes
-              // Split by newlines and log each line
-              const allLines = gitResult.results.clone.output.split(/\r?\n/)
-              for (const line of allLines) {
-                const trimmedLine = line.trim()
-                if (!trimmedLine) continue // Skip empty lines
-                // Skip the TARGET_DIR= line which is just metadata
-                if (trimmedLine.startsWith('TARGET_DIR=')) {
-                  continue
-                }
-                // Preserve the log prefixes from the script - they already have proper formatting
-                // The script outputs: [INFO] message, [SUCCESS] message, etc.
-                await this.addLog(submissionId, trimmedLine)
-              }
-            }
-            // Also log stderr if present (warnings/errors from the script)
-            if (gitResult.results.clone.error) {
-              const errorLines = gitResult.results.clone.error.split(/\r?\n/)
-              for (const line of errorLines) {
-                const trimmedLine = line.trim()
-                if (trimmedLine) {
-                  await this.addLog(submissionId, trimmedLine)
-                }
-              }
-            }
-
+            // Log summary and any additional info not captured by callback
             if (gitResult.results.clone.success) {
-              await this.addLog(submissionId, '[Success] Git clone completed successfully')
+              // Success already logged by callback
+              if (!gitResult.results.clone.output || gitResult.results.clone.output.trim().length === 0) {
+                await this.addLog(submissionId, '[Warning] Git clone succeeded but produced no output')
+              }
             } else {
               const errorMsg = gitResult.results.clone.error || 'Unknown error'
               const isTimeout = errorMsg.includes('timed out') || errorMsg.includes('timeout')
-              await this.addLog(submissionId, `[Error] Git clone failed: ${errorMsg}`)
+              // Error already logged by callback, but add timeout warning if needed
               if (isTimeout) {
                 await this.addLog(submissionId, '[Warning] Command timed out - this may indicate network issues or the command is taking too long')
               }
             }
           } else {
-            await this.addLog(submissionId, '[Warning] No git clone result available')
+            await this.addLog(submissionId, '[Error] Git clone did not execute - no result returned')
           }
 
-          // Log checkout results
+          // Log checkout results (output already logged via callback)
           if (gitResult.results.checkout) {
-            await this.addLog(submissionId, '[Info] Step 2: Checking out branch...')
-            if (gitResult.results.checkout.success) {
-              if (gitResult.results.checkout.output) {
-                const lines = gitResult.results.checkout.output.split('\n').filter(l => l.trim())
-                for (const line of lines) {
-                  await this.addLog(submissionId, `[Git Checkout] ${line}`)
-                }
-              }
-              await this.addLog(submissionId, '[Success] Branch checkout completed')
-            } else {
-              if (gitResult.results.checkout.output) {
-                const lines = gitResult.results.checkout.output.split('\n').filter(l => l.trim())
-                for (const line of lines) {
-                  await this.addLog(submissionId, `[Git Checkout] ${line}`)
-                }
-              }
-              await this.addLog(submissionId, `[Warning] Branch checkout: ${gitResult.results.checkout.error || 'Unknown warning'}`)
+            // Summary already logged by callback
+            if (!gitResult.results.checkout.success && !gitResult.results.checkout.output) {
+              await this.addLog(submissionId, `[Warning] Branch checkout failed with no output: ${gitResult.results.checkout.error || 'Unknown error'}`)
             }
           }
 
-          // Log patch apply results
+          // Log patch apply results (output already logged via callback)
           if (gitResult.results.apply) {
-            await this.addLog(submissionId, '[Info] Step 3: Applying patch...')
-            // Always log output first
-            if (gitResult.results.apply.output) {
-              const lines = gitResult.results.apply.output.split(/\r?\n/)
-              for (const line of lines) {
-                const trimmedLine = line.trim()
-                if (trimmedLine) {
-                  await this.addLog(submissionId, `[Patch Apply] ${trimmedLine}`)
-                }
-              }
-            }
-            // Log stderr if present
-            if (gitResult.results.apply.error) {
-              const errorLines = gitResult.results.apply.error.split(/\r?\n/)
-              for (const line of errorLines) {
-                const trimmedLine = line.trim()
-                if (trimmedLine) {
-                  await this.addLog(submissionId, `[Patch Apply Error] ${trimmedLine}`)
-                }
-              }
-            }
-
-            if (gitResult.results.apply.success) {
-              await this.addLog(submissionId, '[Success] Patch applied successfully')
-            } else {
+            // Summary already logged by callback
+            if (!gitResult.results.apply.success) {
               const errorMsg = gitResult.results.apply.error || 'Unknown error'
               const isTimeout = errorMsg.includes('timed out') || errorMsg.includes('timeout')
-              await this.addLog(submissionId, `[Error] Patch apply failed: ${errorMsg}`)
               if (isTimeout) {
                 await this.addLog(submissionId, '[Warning] Command timed out - this may indicate network issues or the command is taking too long')
               }
+            } else if (!gitResult.results.apply.output || gitResult.results.apply.output.trim().length === 0) {
+              await this.addLog(submissionId, '[Info] Patch applied successfully (no output from git apply)')
             }
           }
 
@@ -256,9 +234,27 @@ export class SubmissionService {
 
           await this.addLog(submissionId, '[Success] Git workflow completed successfully')
         } catch (gitError) {
-          const errorMsg = gitError instanceof Error ? gitError.message : 'Unknown error'
+          const errorMsg = gitError instanceof Error ? gitError.message : String(gitError)
+          const errorStack = gitError instanceof Error ? gitError.stack : undefined
           await this.addLog(submissionId, `[Error] Git workflow failed: ${errorMsg}`)
-          throw new Error(`Git workflow failed: ${errorMsg}`)
+          if (errorStack) {
+            await this.addLog(submissionId, `[Error] Stack trace: ${errorStack}`)
+          }
+          // Don't throw - continue to Gerrit submission even if git workflow fails
+          // The user might still want to submit the patch directly
+          await this.addLog(submissionId, '[Warning] Continuing to Gerrit submission despite git workflow failure')
+        }
+      } else {
+        // Log if git workflow is not being executed
+        await this.addLog(submissionId, '[Info] Git workflow check:')
+        if (!submission.remoteNodeId) {
+          await this.addLog(submissionId, '[Info] - No remote node selected - skipping git workflow')
+        }
+        if (!submission.gitRepository) {
+          await this.addLog(submissionId, '[Info] - No git repository configured - skipping git workflow')
+        }
+        if (submission.remoteNodeId && submission.gitRepository) {
+          await this.addLog(submissionId, '[Warning] Both remote node and git repository are set, but git workflow was not executed (this should not happen)')
         }
       }
 
@@ -323,6 +319,17 @@ export class SubmissionService {
     const submission = await this.getSubmission(id)
     if (!submission) {
       throw new Error('提交记录不存在')
+    }
+
+    // Ensure logs array exists
+    if (!submission.logs) {
+      submission.logs = []
+    }
+
+    // Debug: Log status retrieval (only occasionally to avoid spam)
+    const shouldLog = Math.random() < 0.1 // Log 10% of requests
+    if (shouldLog) {
+      console.log(`[Submission Status] ID: ${id}, Status: ${submission.status}, Logs count: ${submission.logs.length}`)
     }
 
     return {

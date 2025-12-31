@@ -188,6 +188,7 @@ export class GitService {
     }
 
     // Use working home directory from node configuration, or default to ~/git-work
+    // Note: The script template will expand ~ to $HOME on the remote node
     const workingHome = node.workingHome || '~/git-work'
 
     // Extract project name from repository URL
@@ -218,36 +219,97 @@ export class GitService {
           headers['Authorization'] = `Bearer ${node.sshServiceApiKey}`
         }
 
-        const response = await fetch(`${node.sshServiceApiUrl}/git-clone`, {
-          method: 'POST',
-          headers,
-          body: JSON.stringify({
-            host: node.host,
-            port: node.port,
-            username: node.username,
-            authType: node.authType,
-            sshKey: node.sshKey,
-            password: node.password,
-            project: projectName,
-            gerritBaseUrl: this.env.GERRIT_BASE_URL,
-            branch,
-            workingHome,
-            targetDir
-          })
-        })
+        const requestUrl = `${node.sshServiceApiUrl}/git-clone`
+        const requestBody = {
+          host: node.host,
+          port: node.port,
+          username: node.username,
+          authType: node.authType,
+          sshKey: node.sshKey,
+          password: node.password,
+          project: projectName,
+          gerritBaseUrl: this.env.GERRIT_BASE_URL,
+          branch,
+          workingHome,
+          targetDir
+        }
 
-        if (!response.ok) {
-          const errorData = await response.json().catch(() => ({ error: 'Failed to execute git clone' })) as { error?: string }
-          console.error(`[Git Clone] Failed: ${errorData.error || 'Unknown error'}`)
+        console.log(`[Git Clone] Request URL: ${requestUrl}`)
+        console.log(`[Git Clone] Request headers: ${JSON.stringify(Object.keys(headers))}`)
+        console.log(`[Git Clone] Has API key: ${!!node.sshServiceApiKey}`)
+        console.log(`[Git Clone] Request body keys: ${JSON.stringify(Object.keys(requestBody))}`)
+
+        // Add timeout (5 minutes for git clone)
+        const timeout = 300000 // 5 minutes
+        const controller = new AbortController()
+        const timeoutId = setTimeout(() => {
+          console.error(`[Git Clone] Timeout reached after ${timeout}ms, aborting request`)
+          controller.abort()
+        }, timeout)
+
+        let response: Response
+        const fetchStartTime = Date.now()
+        console.log(`[Git Clone] Starting fetch request at ${new Date().toISOString()}`)
+        try {
+          response = await fetch(requestUrl, {
+            method: 'POST',
+            headers,
+            body: JSON.stringify(requestBody),
+            signal: controller.signal
+          })
+          clearTimeout(timeoutId)
+          const fetchDuration = Date.now() - fetchStartTime
+          console.log(`[Git Clone] Fetch completed in ${fetchDuration}ms, status: ${response.status}`)
+        } catch (fetchError) {
+          clearTimeout(timeoutId)
+          const fetchDuration = Date.now() - fetchStartTime
+          console.error(`[Git Clone] Fetch failed after ${fetchDuration}ms:`, fetchError)
+          if (fetchError instanceof Error && fetchError.name === 'AbortError') {
+            const errorMsg = `Git clone request timed out after ${timeout}ms (actual duration: ${fetchDuration}ms)`
+            console.error(`[Git Clone] ${errorMsg}`)
+            return {
+              success: false,
+              output: '',
+              error: errorMsg,
+              targetDir: undefined
+            }
+          }
+          const errorMsg = `Failed to fetch git clone endpoint after ${fetchDuration}ms: ${fetchError instanceof Error ? fetchError.message : String(fetchError)}`
+          console.error(`[Git Clone] ${errorMsg}`)
           return {
             success: false,
             output: '',
-            error: errorData.error || 'Unknown error',
+            error: errorMsg,
             targetDir: undefined
           }
         }
 
-        const result = await response.json() as {
+        const responseStartTime = Date.now()
+        console.log(`[Git Clone] Response status: ${response.status} ${response.statusText}`)
+        console.log(`[Git Clone] Response headers: ${JSON.stringify(Object.fromEntries(response.headers.entries()))}`)
+        console.log(`[Git Clone] Starting to read response body...`)
+
+        if (!response.ok) {
+          const errorText = await response.text().catch(() => 'Failed to read error response')
+          const errorReadTime = Date.now() - responseStartTime
+          console.log(`[Git Clone] Error response read in ${errorReadTime}ms`)
+          let errorData: { error?: string } = { error: 'Failed to execute git clone' }
+          try {
+            errorData = JSON.parse(errorText)
+          } catch {
+            errorData = { error: errorText || `HTTP ${response.status}: ${response.statusText}` }
+          }
+          console.error(`[Git Clone] Failed with status ${response.status}: ${errorData.error || 'Unknown error'}`)
+          console.error(`[Git Clone] Full error response: ${errorText}`)
+          return {
+            success: false,
+            output: '',
+            error: errorData.error || `HTTP ${response.status}: ${response.statusText}`,
+            targetDir: undefined
+          }
+        }
+
+        let result: {
           success: boolean
           output?: string
           stdout?: string
@@ -257,22 +319,54 @@ export class GitService {
           exitCode?: number
         }
 
+        try {
+          const jsonText = await response.text()
+          const jsonParseTime = Date.now() - responseStartTime
+          console.log(`[Git Clone] Response body read in ${jsonParseTime}ms, length: ${jsonText.length} characters`)
+          result = JSON.parse(jsonText) as typeof result
+        } catch (parseError) {
+          const parseDuration = Date.now() - responseStartTime
+          console.error(`[Git Clone] Failed to parse JSON response after ${parseDuration}ms:`, parseError)
+          return {
+            success: false,
+            output: '',
+            error: `Failed to parse response: ${parseError instanceof Error ? parseError.message : String(parseError)}`,
+            targetDir: undefined
+          }
+        }
+
+        console.log(`[Git Clone] Response parsed successfully, success: ${result.success}`)
+        console.log(`[Git Clone] Response has output: ${!!result.output}, has stdout: ${!!result.stdout}, has stderr: ${!!result.stderr}, has combined: ${!!result.combined}`)
+        if (result.exitCode !== undefined) {
+          console.log(`[Git Clone] Exit code: ${result.exitCode}`)
+        }
+
         // Use combined output if available (includes both stdout and stderr), otherwise fall back to output
         const fullOutput = result.combined || result.stdout || result.output || ''
         const errorOutput = result.stderr || result.error || ''
+
+        // Log output to console for debugging
+        if (fullOutput) {
+          console.log(`[Git Clone] Output length: ${fullOutput.length} characters`)
+          console.log(`[Git Clone] Output (first 500 chars):\n${fullOutput.substring(0, 500)}`)
+          if (fullOutput.length > 500) {
+            console.log(`[Git Clone] ... (truncated, ${fullOutput.length - 500} more characters)`)
+          }
+        } else {
+          console.log(`[Git Clone] No output received from API`)
+        }
 
         // Extract target directory from output if available
         const targetDirMatch = fullOutput.match(/TARGET_DIR=([^\n]+)/)
         const extractedTargetDir = targetDirMatch ? targetDirMatch[1] : undefined
 
-        // Log output to console for debugging
-        if (fullOutput) {
-          console.log(`[Git Clone] Output:\n${fullOutput}`)
-        }
         if (result.success) {
           console.log(`[Git Clone] Success! Repository cloned to: ${extractedTargetDir || 'unknown'}`)
         } else {
           console.error(`[Git Clone] Failed: ${errorOutput || 'Unknown error'}`)
+          if (fullOutput) {
+            console.error(`[Git Clone] Error output: ${fullOutput}`)
+          }
         }
 
         return {
@@ -580,13 +674,16 @@ fi
   /**
    * Execute a full workflow: clone, checkout branch, apply patch
    * Uses working home directory from remote node configuration
+   *
+   * @param onLog - Optional callback to log messages during execution
    */
   async executeGitWorkflow(
     nodeId: string,
     repositoryUrl: string,
     branch: string,
     patchContent: string,
-    workDir?: string
+    workDir?: string,
+    onLog?: (message: string) => Promise<void>
   ): Promise<{
     success: boolean
     results: {
@@ -611,21 +708,99 @@ fi
       console.log(`[Git Workflow] Node ID: ${nodeId}`)
 
       // Get node to access working home directory
-      const node = await this.getRemoteNode(nodeId)
-      if (!node) {
-        console.error(`[Git Workflow] Remote node ${nodeId} not found`)
+      let node
+      try {
+        if (onLog) await onLog(`[Info] Retrieving remote node configuration for node ID: ${nodeId}`)
+        node = await this.getRemoteNode(nodeId)
+        if (!node) {
+          const errorMsg = `Remote node ${nodeId} not found in storage`
+          console.error(`[Git Workflow] ${errorMsg}`)
+          if (onLog) await onLog(`[Error] ${errorMsg}`)
+          return {
+            success: false,
+            results,
+            error: errorMsg
+          }
+        }
+
+        // Verify node has required configuration
+        if (onLog) {
+          await onLog(`[Info] Remote node found: ${node.name || nodeId}`)
+          await onLog(`[Info] Node host: ${node.host}:${node.port || 22}`)
+          await onLog(`[Info] SSH Service API URL: ${node.sshServiceApiUrl || 'NOT CONFIGURED'}`)
+        }
+
+        if (!node.sshServiceApiUrl) {
+          const errorMsg = `Remote node ${nodeId} does not have SSH Service API URL configured`
+          console.error(`[Git Workflow] ${errorMsg}`)
+          if (onLog) await onLog(`[Error] ${errorMsg}`)
+          if (onLog) await onLog(`[Error] Please configure sshServiceApiUrl for this remote node`)
+          return {
+            success: false,
+            results,
+            error: errorMsg
+          }
+        }
+      } catch (nodeError) {
+        const errorMsg = `Failed to get remote node ${nodeId}: ${nodeError instanceof Error ? nodeError.message : String(nodeError)}`
+        console.error(`[Git Workflow] ${errorMsg}`, nodeError)
+        if (onLog) await onLog(`[Error] ${errorMsg}`)
         return {
           success: false,
           results,
-          error: `Remote node ${nodeId} not found`
+          error: errorMsg
         }
       }
 
       // Step 1: Clone repository (will use working home from node config)
+      if (onLog) await onLog('[Info] Executing git clone command...')
+      if (onLog) await onLog('[Info] This may take several minutes depending on repository size...')
+      if (onLog) await onLog(`[Info] Repository URL: ${repositoryUrl}`)
+      if (onLog) await onLog(`[Info] Branch: ${branch}`)
       console.log(`[Git Workflow] Step 1: Cloning repository...`)
+      console.log(`[Git Workflow] Repository: ${repositoryUrl}, Branch: ${branch}`)
+
+      const cloneStartTime = Date.now()
+      if (onLog) await onLog('[Info] Calling cloneRepository function...')
       const cloneResult = await this.cloneRepository(nodeId, repositoryUrl, branch, workDir)
+      const cloneDuration = Date.now() - cloneStartTime
+      console.log(`[Git Workflow] Clone completed in ${cloneDuration}ms`)
+      if (onLog) await onLog(`[Info] Git clone command completed in ${Math.round(cloneDuration / 1000)} seconds`)
+      if (onLog) await onLog(`[Info] Clone result - success: ${cloneResult.success}, has output: ${!!cloneResult.output}`)
+
       results.clone = cloneResult
+
+      // Log clone output immediately if available
+      if (onLog) {
+        console.log(`[Git Workflow] Clone result - success: ${cloneResult.success}, has output: ${!!cloneResult.output}, output length: ${cloneResult.output?.length || 0}`)
+        if (cloneResult.output) {
+          // Remove ANSI color codes if present (from the script's color output)
+          const cleanOutput = cloneResult.output.replace(/\x1b\[[0-9;]*m/g, '')
+          const lines = cleanOutput.split(/\r?\n/).filter(l => l.trim() && !l.startsWith('TARGET_DIR='))
+          console.log(`[Git Workflow] Parsed ${lines.length} lines from clone output`)
+          if (lines.length > 0) {
+            for (const line of lines) {
+              await onLog(line.trim())
+            }
+          } else {
+            await onLog('[Warning] Git clone command executed but produced no parseable output')
+            await onLog(`[Debug] Raw output (first 200 chars): ${cloneResult.output.substring(0, 200)}`)
+          }
+        } else {
+          await onLog('[Warning] Git clone command executed but no output was captured')
+          if (cloneResult.error) {
+            await onLog(`[Error] Clone error: ${cloneResult.error}`)
+          }
+        }
+      }
+
       if (!cloneResult.success) {
+        if (onLog) {
+          await onLog(`[Error] Git clone failed: ${cloneResult.error || 'Unknown error'}`)
+          if (cloneResult.error && cloneResult.error !== cloneResult.output) {
+            await onLog(`[Error Details] ${cloneResult.error}`)
+          }
+        }
         console.error(`[Git Workflow] Clone failed: ${cloneResult.error}`)
         return {
           success: false,
@@ -633,6 +808,7 @@ fi
           error: `Failed to clone repository: ${cloneResult.error}`
         }
       }
+      if (onLog) await onLog('[Success] Git clone completed successfully')
       console.log(`[Git Workflow] Step 1: Clone completed successfully`)
 
       // Use the target directory from clone result
@@ -640,21 +816,67 @@ fi
       console.log(`[Git Workflow] Working directory: ${actualWorkDir}`)
 
       // Step 2: Checkout branch (if needed) - clone already checks out the branch, but verify
+      if (onLog) await onLog(`[Info] Checking out branch: ${branch}...`)
       console.log(`[Git Workflow] Step 2: Checking out branch: ${branch}...`)
       const checkoutResult = await this.checkoutBranch(nodeId, actualWorkDir, branch)
       results.checkout = checkoutResult
+
+      // Log checkout output immediately
+      if (onLog) {
+        if (checkoutResult.output) {
+          const lines = checkoutResult.output.split(/\r?\n/).filter(l => l.trim())
+          if (lines.length > 0) {
+            for (const line of lines) {
+              await onLog(`[Git Checkout] ${line}`)
+            }
+          }
+        }
+      }
+
       if (!checkoutResult.success) {
         // Non-fatal: branch might already be checked out
+        if (onLog) await onLog(`[Warning] Branch checkout: ${checkoutResult.error || 'Unknown warning'}`)
         console.warn(`[Git Workflow] Checkout warning: ${checkoutResult.error}`)
       } else {
+        if (onLog) await onLog('[Success] Branch checkout completed')
         console.log(`[Git Workflow] Step 2: Branch checkout completed`)
       }
 
       // Step 3: Apply patch
+      if (onLog) await onLog('[Info] Applying patch to repository...')
       console.log(`[Git Workflow] Step 3: Applying patch...`)
       const applyResult = await this.applyPatch(nodeId, patchContent, actualWorkDir, { check: false })
       results.apply = applyResult
+
+      // Log patch apply output immediately
+      if (onLog) {
+        if (applyResult.output) {
+          const lines = applyResult.output.split(/\r?\n/).filter(l => l.trim())
+          if (lines.length > 0) {
+            for (const line of lines) {
+              await onLog(`[Patch Apply] ${line}`)
+            }
+          } else {
+            await onLog('[Info] Patch apply command executed (no output)')
+          }
+        } else {
+          await onLog('[Info] Patch apply command executed (no output captured)')
+        }
+        if (applyResult.error) {
+          const lines = applyResult.error.split(/\r?\n/).filter(l => l.trim())
+          for (const line of lines) {
+            await onLog(`[Patch Apply Error] ${line}`)
+          }
+        }
+      }
+
       if (!applyResult.success) {
+        if (onLog) {
+          await onLog(`[Error] Patch apply failed: ${applyResult.error || 'Unknown error'}`)
+          if (applyResult.error && applyResult.error !== applyResult.output) {
+            await onLog(`[Error Details] ${applyResult.error}`)
+          }
+        }
         console.error(`[Git Workflow] Patch apply failed: ${applyResult.error}`)
         return {
           success: false,
@@ -662,12 +884,24 @@ fi
           error: `Failed to apply patch: ${applyResult.error}`
         }
       }
+      if (onLog) await onLog('[Success] Patch applied successfully')
       console.log(`[Git Workflow] Step 3: Patch applied successfully`)
 
       // Step 4: Get status
+      if (onLog) await onLog('[Info] Getting repository status...')
       console.log(`[Git Workflow] Step 4: Getting repository status...`)
       const statusResult = await this.getStatus(nodeId, actualWorkDir)
       results.status = statusResult
+
+      // Log status output immediately
+      if (onLog && statusResult.output) {
+        await onLog('[Info] Repository status:')
+        const lines = statusResult.output.split(/\r?\n/).filter(l => l.trim())
+        for (const line of lines) {
+          await onLog(`[Git Status] ${line}`)
+        }
+      }
+
       if (statusResult.output) {
         console.log(`[Git Workflow] Repository status:\n${statusResult.output}`)
       }
@@ -679,10 +913,19 @@ fi
         targetDir: actualWorkDir
       }
     } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : String(error)
+      const errorStack = error instanceof Error ? error.stack : undefined
+      console.error(`[Git Workflow] Error during execution: ${errorMsg}`, errorStack)
+      if (onLog) {
+        await onLog(`[Error] Git workflow error: ${errorMsg}`)
+        if (errorStack) {
+          await onLog(`[Error] Stack trace: ${errorStack.substring(0, 500)}`) // Limit stack trace length
+        }
+      }
       return {
         success: false,
         results,
-        error: error instanceof Error ? error.message : 'Unknown error'
+        error: errorMsg
       }
     }
   }
