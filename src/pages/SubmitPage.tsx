@@ -258,6 +258,83 @@ const SubmitPage: React.FC = () => {
     setCurrentProcess('')
   }
 
+  const pollSubmissionLogs = async (submissionId: string) => {
+    let lastLogCount = 0
+    let pollCount = 0
+    const maxPolls = 300 // Poll for up to 5 minutes (300 * 1 second)
+
+    const pollInterval = setInterval(async () => {
+      pollCount++
+
+      try {
+        const response = await fetch(`/api/status/${submissionId}`)
+
+        if (!response.ok) {
+          if (pollCount >= maxPolls) {
+            clearInterval(pollInterval)
+            addConsoleOutput('Polling timeout: Could not retrieve submission status', 'warning')
+            setIsSubmitting(false)
+            setCurrentProcess('')
+          }
+          return
+        }
+
+        const result = await response.json() as { success: boolean; data?: { status: string; logs?: string[]; changeId?: string; changeUrl?: string; error?: string } }
+
+        if (result.success && result.data) {
+          const { status, logs, changeId, changeUrl, error } = result.data
+
+          // Add new logs to console output (logs from server already have timestamps)
+          if (logs && logs.length > lastLogCount) {
+            const newLogs = logs.slice(lastLogCount)
+            setConsoleOutput(prev => [...prev, ...newLogs])
+            lastLogCount = logs.length
+          }
+
+          // Update current process based on status
+          if (status === 'processing') {
+            setCurrentProcess('Processing')
+          } else if (status === 'completed') {
+            setCurrentProcess('Completed')
+            if (changeId) {
+              addConsoleOutput(`Change ID: ${changeId}`, 'success')
+            }
+            if (changeUrl) {
+              addConsoleOutput(`Change URL: ${changeUrl}`, 'success')
+            }
+            clearInterval(pollInterval)
+            setIsSubmitting(false)
+            setCurrentProcess('')
+          } else if (status === 'failed') {
+            setCurrentProcess('Failed')
+            if (error) {
+              addConsoleOutput(`Error: ${error}`, 'error')
+            }
+            clearInterval(pollInterval)
+            setIsSubmitting(false)
+            setCurrentProcess('')
+          }
+        }
+
+        // Stop polling after max attempts
+        if (pollCount >= maxPolls) {
+          clearInterval(pollInterval)
+          addConsoleOutput('Polling timeout: Maximum polling attempts reached', 'warning')
+          setIsSubmitting(false)
+          setCurrentProcess('')
+        }
+      } catch (error) {
+        console.error('Error polling submission status:', error)
+        if (pollCount >= maxPolls) {
+          clearInterval(pollInterval)
+          addConsoleOutput('Polling error: Could not retrieve submission status', 'error')
+          setIsSubmitting(false)
+          setCurrentProcess('')
+        }
+      }
+    }, 1000) // Poll every second
+  }
+
   const handlePreview = () => {
     setShowPreview(!showPreview)
   }
@@ -370,23 +447,7 @@ const SubmitPage: React.FC = () => {
       setUploadId(uploadId)
       addConsoleOutput(`File uploaded successfully, Upload ID: ${uploadId}`, 'success')
 
-      // 2. Conflict detection and resolution
-      setCurrentProcess('Conflict Detection')
-      addConsoleOutput('Detecting potential conflicts...', 'info')
-
-      // Simulate conflict detection process
-      await new Promise(resolve => setTimeout(resolve, 1000))
-      addConsoleOutput('Conflict detection completed, no conflicts found', 'success')
-
-      // 3. Generate submission record
-      setCurrentProcess('Submission Record Generation')
-      addConsoleOutput('Generating submission record...', 'info')
-
-      // Simulate submission record generation process
-      await new Promise(resolve => setTimeout(resolve, 800))
-      addConsoleOutput('Submission record generated successfully', 'success')
-
-      // 4. Submit patch
+      // 2. Submit patch
       setCurrentProcess('Patch Submission')
       addConsoleOutput('Submitting patch to Gerrit...', 'info')
 
@@ -420,19 +481,19 @@ const SubmitPage: React.FC = () => {
         }
       }
       const submitResult: SubmitResponse = await submitResponse.json()
-      addConsoleOutput('Patch submitted successfully', 'success')
       const submissionId = submitResult.data?.submissionId || submitResult.data?.changeId || null
-      addConsoleOutput(`Submission ID: ${submissionId || 'N/A'}`, 'success')
 
-      // 5. Complete
-      setCurrentProcess('Complete')
-      addConsoleOutput('All processes completed, redirecting to status page...', 'success')
+      if (submissionId) {
+        addConsoleOutput(`Submission ID: ${submissionId}`, 'success')
+        addConsoleOutput('Polling for submission logs...', 'info')
 
-      // 跳转到状态页面（优先使用 submissionId）
-      setTimeout(() => {
-        const idForRedirect = submissionId || uploadId
-        window.location.href = `/status/${idForRedirect}`
-      }, 1500)
+        // Start polling for logs
+        pollSubmissionLogs(submissionId)
+      } else {
+        addConsoleOutput('Warning: No submission ID received', 'warning')
+        setIsSubmitting(false)
+        setCurrentProcess('')
+      }
 
     } catch (error) {
       console.error('Submission failed:', error)

@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom'
 import SubmitPage from './pages/SubmitPage'
-import StatusPage from './pages/StatusPage'
 import LoginPage from './pages/LoginPage'
 import Home from './pages/Home'
 import EmailConfirmationPage from './pages/EmailConfirmationPage'
@@ -54,10 +53,6 @@ function App() {
           <Route
             path="/submit"
             element={(user || workerUser) ? <SubmitPage /> : <Navigate to="/" replace />}
-          />
-          <Route
-            path="/status/:id"
-            element={(user || workerUser) ? <StatusPage /> : <Navigate to="/" replace />}
           />
           <Route
             path="/settings"

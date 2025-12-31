@@ -58,11 +58,9 @@ export class EmailService {
     )
 
     const statusInfo = STATUS_COPY[stage]
-    const statusPageBase = this.env.VITE_PUBLIC_SITE_URL?.replace(/\/$/, '')
-    const statusPageUrl = statusPageBase ? `${statusPageBase}/status/${submission.id}` : undefined
 
-    const plainText = this.buildPlainText(submission, stage, statusInfo.description, statusPageUrl)
-    const html = this.buildHtml(submission, stage, statusInfo.description, statusPageUrl)
+    const plainText = this.buildPlainText(submission, stage, statusInfo.description)
+    const html = this.buildHtml(submission, stage, statusInfo.description)
     const subject = `[PatchX] ${statusInfo.title}: ${submission.subject}`
     const fromName = this.env.RESEND_FROM_NAME || this.env.MAILCHANNELS_FROM_NAME || 'PatchX'
     const replyTo = this.env.RESEND_REPLY_TO_EMAIL || this.env.MAILCHANNELS_REPLY_TO_EMAIL
@@ -147,8 +145,7 @@ export class EmailService {
   private buildPlainText(
     submission: Submission,
     stage: SubmissionStage,
-    description: string,
-    statusPageUrl?: string
+    description: string
   ): string {
     const lines = [
       description,
@@ -172,10 +169,6 @@ export class EmailService {
       lines.push('', `Error: ${submission.error}`)
     }
 
-    if (statusPageUrl) {
-      lines.push('', `View live status: ${statusPageUrl}`)
-    }
-
     lines.push('', 'This is an automated message from PatchX.')
 
     return lines.join('\n')
@@ -184,8 +177,7 @@ export class EmailService {
   private buildHtml(
     submission: Submission,
     stage: SubmissionStage,
-    description: string,
-    statusPageUrl?: string
+    description: string
   ): string {
     const statusColor = stage === 'completed' ? '#16a34a' : stage === 'failed' ? '#dc2626' : '#2563eb'
 
@@ -213,14 +205,6 @@ export class EmailService {
             ${submission.error ? this.buildRow('Error', submission.error) : ''}
           </tbody>
         </table>
-        ${
-          statusPageUrl
-            ? `<p style="margin-top: 16px;">
-                View live status:
-                <a href="${statusPageUrl}" target="_blank">${statusPageUrl}</a>
-              </p>`
-            : ''
-        }
         <p style="margin-top: 24px; color: #64748b; font-size: 12px;">
           This email was sent automatically by PatchX.
         </p>

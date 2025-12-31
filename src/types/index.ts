@@ -24,6 +24,7 @@ export interface Submission {
   notificationCc?: string[]
   remoteNodeId?: string
   gitRepository?: string
+  logs?: string[]
   createdAt: string
   updatedAt: string
 }
@@ -52,6 +53,7 @@ export interface StatusResponse {
   changeUrl?: string
   createdAt: string
   error?: string
+  logs?: string[]
 }
 
 export interface RemoteNode {

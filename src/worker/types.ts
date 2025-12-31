@@ -71,6 +71,7 @@ export interface Submission {
   notificationCc?: string[]
   remoteNodeId?: string
   gitRepository?: string
+  logs?: string[]
   createdAt: string
   updatedAt: string
 }

@@ -356,13 +356,29 @@ bash /tmp/git-clone-*.sh '${escapedProject}' '${escapedBranch}' '${escapedGerrit
         stream.on('close', (code, signal) => {
           sshClient.end()
 
+          // Combine stdout and stderr for full output
+          const fullOutput = stdout.trim()
+          const fullError = stderr.trim()
+          const combinedOutput = fullOutput + (fullError ? '\n' + fullError : '')
+
           if (code === 0) {
-            resolve({ success: true, output: stdout.trim() })
+            resolve({
+              success: true,
+              output: fullOutput,
+              stdout: fullOutput,
+              stderr: fullError,
+              combined: combinedOutput,
+              exitCode: code
+            })
           } else {
             resolve({
               success: false,
-              output: stdout.trim(),
-              error: stderr.trim() || `Command exited with code ${code}`
+              output: combinedOutput,
+              stdout: fullOutput,
+              stderr: fullError,
+              combined: combinedOutput,
+              error: fullError || `Command exited with code ${code}`,
+              exitCode: code
             })
           }
         })
@@ -481,27 +497,54 @@ app.post('/execute', authenticate, async (req, res) => {
 
         let stdout = ''
         let stderr = ''
+        let stdoutLines = []
+        let stderrLines = []
 
         stream.on('close', (code, signal) => {
           sshClient.end()
 
+          // Combine stdout and stderr for full output, preserving order where possible
+          // stderr is typically interleaved, so we include both
+          const fullOutput = stdout.trim()
+          const fullError = stderr.trim()
+          const combinedOutput = fullOutput + (fullError ? '\n' + fullError : '')
+
           if (code === 0) {
-            resolve({ success: true, output: stdout.trim() })
+            resolve({
+              success: true,
+              output: fullOutput,
+              stdout: fullOutput,
+              stderr: fullError,
+              combined: combinedOutput,
+              exitCode: code
+            })
           } else {
             resolve({
               success: false,
-              output: stdout.trim(),
-              error: stderr.trim() || `Command exited with code ${code}`
+              output: combinedOutput,
+              stdout: fullOutput,
+              stderr: fullError,
+              combined: combinedOutput,
+              error: fullError || `Command exited with code ${code}`,
+              exitCode: code
             })
           }
         })
 
         stream.on('data', (data) => {
-          stdout += data.toString()
+          const text = data.toString()
+          stdout += text
+          // Split into lines for better log handling
+          const lines = text.split('\n').filter(l => l.trim())
+          stdoutLines.push(...lines)
         })
 
         stream.stderr.on('data', (data) => {
-          stderr += data.toString()
+          const text = data.toString()
+          stderr += text
+          // Split into lines for better log handling
+          const lines = text.split('\n').filter(l => l.trim())
+          stderrLines.push(...lines)
         })
       })
     })

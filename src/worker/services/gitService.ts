@@ -96,11 +96,22 @@ export class GitService {
           }
         }
 
-        const result = await response.json() as { success: boolean; output?: string; error?: string }
+        const result = await response.json() as {
+          success: boolean
+          output?: string
+          stdout?: string
+          stderr?: string
+          combined?: string
+          error?: string
+          exitCode?: number
+        }
+        // Use combined output if available (includes both stdout and stderr), otherwise fall back to output
+        const fullOutput = result.combined || result.stdout || result.output || ''
+        const errorOutput = result.stderr || result.error || ''
         return {
           success: result.success,
-          output: result.output || '',
-          error: result.error
+          output: fullOutput,
+          error: result.success ? undefined : (errorOutput || result.error)
         }
       } catch (error) {
         return {
