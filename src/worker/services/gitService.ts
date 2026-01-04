@@ -1,5 +1,6 @@
 import { Env } from '../types'
 import { getKvNamespace, KVLike } from '../kv'
+import { getSupabaseClient } from '../supabase'
 
 interface RemoteNodeData {
   id: string
@@ -34,11 +35,44 @@ export class GitService {
   }
 
   /**
-   * Get remote node data from KV storage
+   * Get remote node data from Supabase
    */
   private async getRemoteNode(nodeId: string): Promise<RemoteNodeData | null> {
-    const nodeData = await this.kv.get(`remote_nodes:${nodeId}`, 'json')
-    return nodeData as RemoteNodeData | null
+    try {
+      const supabase = getSupabaseClient(this.env)
+      const { data: node, error } = await supabase
+        .from('remote_nodes')
+        .select('*')
+        .eq('id', nodeId)
+        .single()
+
+      if (error || !node) {
+        console.error(`[GitService] Failed to get remote node ${nodeId}:`, error)
+        return null
+      }
+
+      // Map Supabase data to RemoteNodeData format
+      const nodeData: RemoteNodeData = {
+        id: node.id,
+        name: node.name,
+        host: node.host,
+        port: node.port,
+        username: node.username,
+        authType: node.auth_type,
+        sshKey: node.ssh_key || undefined,
+        password: node.password || undefined,
+        workingHome: node.working_home || undefined,
+        sshServiceApiUrl: node.ssh_service_api_url || undefined,
+        sshServiceApiKey: node.ssh_service_api_key || undefined,
+        createdAt: node.created_at,
+        updatedAt: node.updated_at
+      }
+
+      return nodeData
+    } catch (error) {
+      console.error(`[GitService] Error getting remote node ${nodeId}:`, error)
+      return null
+    }
   }
 
   /**
@@ -727,6 +761,7 @@ fi
         if (onLog) {
           await onLog(`[Info] Remote node found: ${node.name || nodeId}`)
           await onLog(`[Info] Node host: ${node.host}:${node.port || 22}`)
+          await onLog(`[Info] Working Home: ${node.workingHome || '~/git-work (default)'}`)
           await onLog(`[Info] SSH Service API URL: ${node.sshServiceApiUrl || 'NOT CONFIGURED'}`)
         }
 

@@ -5,6 +5,7 @@ import { UploadService } from './uploadService'
 import { GerritService } from './gerritService'
 import { EmailService } from './emailService'
 import { GitService } from './gitService'
+import { getSupabaseClient } from '../supabase'
 
 export class SubmissionService {
   private env: Env
@@ -137,20 +138,43 @@ export class SubmissionService {
           await this.addLog(submissionId, `[Info] Repository: ${submission.gitRepository}`)
           await this.addLog(submissionId, `[Info] Branch: ${submission.branch}`)
           await this.addLog(submissionId, `[Info] Remote Node ID: ${submission.remoteNodeId}`)
-          await this.addLog(submissionId, '[Info] Step 1: Cloning repository...')
 
-          const workDir = `/tmp/git-work-${submission.id}`
-          await this.addLog(submissionId, `[Info] Working directory: ${workDir}`)
+          // Get remote node to retrieve workingHome
+          let workingHome: string | undefined
+          try {
+            const supabase = getSupabaseClient(this.env)
+            const { data: node, error: nodeError } = await supabase
+              .from('remote_nodes')
+              .select('working_home')
+              .eq('id', submission.remoteNodeId)
+              .single()
+
+            if (!nodeError && node) {
+              workingHome = node.working_home || undefined
+              if (workingHome) {
+                await this.addLog(submissionId, `[Info] Using working home from remote node: ${workingHome}`)
+              } else {
+                await this.addLog(submissionId, '[Info] No working home configured, using default: ~/git-work')
+              }
+            } else {
+              await this.addLog(submissionId, `[Warning] Could not retrieve remote node configuration: ${nodeError?.message || 'Node not found'}`)
+            }
+          } catch (nodeFetchError) {
+            await this.addLog(submissionId, `[Warning] Failed to get remote node configuration: ${nodeFetchError instanceof Error ? nodeFetchError.message : String(nodeFetchError)}`)
+          }
+
+          await this.addLog(submissionId, '[Info] Step 1: Cloning repository...')
           await this.addLog(submissionId, '[Info] Calling git service executeGitWorkflow...')
           await this.addLog(submissionId, '[Info] This may take several minutes, please wait...')
 
-          // Add timeout wrapper for git workflow (10 minutes total)
+          // Pass undefined for workDir to let git service use workingHome from node configuration
+          // The git service will auto-generate a target directory within the workingHome
           const gitWorkflowPromise = this.gitService.executeGitWorkflow(
             submission.remoteNodeId,
             submission.gitRepository,
             submission.branch,
             upload.content,
-            workDir,
+            undefined, // Let git service use workingHome from node and auto-generate targetDir
             async (message: string) => {
               await this.addLog(submissionId, message)
             }
