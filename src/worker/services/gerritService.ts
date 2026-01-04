@@ -13,7 +13,8 @@ export class GerritService {
     description: string,
     branch: string,
     project: string,
-    patchContent: string
+    patchContent: string,
+    timeoutMs: number = 180000 // Default 3 minutes timeout
   ): Promise<{
     changeId: string
     changeUrl: string
@@ -29,53 +30,87 @@ export class GerritService {
         status: 'NEW'
       }
 
-      // 创建change
-      const createResponse = await fetch(`${this.env.GERRIT_BASE_URL}/a/changes/`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Basic ${btoa(`${this.env.GERRIT_USERNAME}:${this.env.GERRIT_PASSWORD}`)}`
-        },
-        body: JSON.stringify(changeData)
-      })
+      // Create AbortController for timeout
+      const createController = new AbortController()
+      const createTimeoutId = setTimeout(() => {
+        createController.abort()
+      }, timeoutMs)
 
-      if (!createResponse.ok) {
-        const errorText = await createResponse.text()
-        throw new Error(`创建Gerrit change失败: ${errorText}`)
-      }
-
-      const changeInfo = await createResponse.json() as { _number?: number; id?: string }
-      const changeId = (changeInfo._number ?? changeInfo.id ?? '').toString()
-
-      // 上传patch set
-      const patchSetData = {
-        patch: patchContent,
-        message: `${subject}\n\n${description}`
-      }
-
-      const uploadResponse = await fetch(
-        `${this.env.GERRIT_BASE_URL}/a/changes/${changeId}/revisions/current/patch`,
-        {
-          method: 'PUT',
+      try {
+        // 创建change
+        const createResponse = await fetch(`${this.env.GERRIT_BASE_URL}/a/changes/`, {
+          method: 'POST',
           headers: {
             'Content-Type': 'application/json',
             'Authorization': `Basic ${btoa(`${this.env.GERRIT_USERNAME}:${this.env.GERRIT_PASSWORD}`)}`
           },
-          body: JSON.stringify(patchSetData)
+          body: JSON.stringify(changeData),
+          signal: createController.signal
+        })
+
+        clearTimeout(createTimeoutId)
+
+        if (!createResponse.ok) {
+          const errorText = await createResponse.text()
+          throw new Error(`创建Gerrit change失败: ${errorText}`)
         }
-      )
 
-      if (!uploadResponse.ok) {
-        const errorText = await uploadResponse.text()
-        throw new Error(`上传patch set失败: ${errorText}`)
-      }
+        const changeInfo = await createResponse.json() as { _number?: number; id?: string }
+        const changeId = (changeInfo._number ?? changeInfo.id ?? '').toString()
 
-      const changeUrl = `${this.env.GERRIT_BASE_URL}/#/c/${changeId}/`
+        // 上传patch set
+        const patchSetData = {
+          patch: patchContent,
+          message: `${subject}\n\n${description}`
+        }
 
-      return {
-        changeId: changeId.toString(),
-        changeUrl,
-        status: 'success'
+        // Create AbortController for patch upload timeout
+        const uploadController = new AbortController()
+        const uploadTimeoutId = setTimeout(() => {
+          uploadController.abort()
+        }, timeoutMs)
+
+        try {
+          const uploadResponse = await fetch(
+            `${this.env.GERRIT_BASE_URL}/a/changes/${changeId}/revisions/current/patch`,
+            {
+              method: 'PUT',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Basic ${btoa(`${this.env.GERRIT_USERNAME}:${this.env.GERRIT_PASSWORD}`)}`
+              },
+              body: JSON.stringify(patchSetData),
+              signal: uploadController.signal
+            }
+          )
+
+          clearTimeout(uploadTimeoutId)
+
+          if (!uploadResponse.ok) {
+            const errorText = await uploadResponse.text()
+            throw new Error(`上传patch set失败: ${errorText}`)
+          }
+
+          const changeUrl = `${this.env.GERRIT_BASE_URL}/#/c/${changeId}/`
+
+          return {
+            changeId: changeId.toString(),
+            changeUrl,
+            status: 'success'
+          }
+        } catch (uploadError) {
+          clearTimeout(uploadTimeoutId)
+          if (uploadError instanceof Error && uploadError.name === 'AbortError') {
+            throw new Error(`上传patch set超时: 操作在 ${timeoutMs}ms 后超时`)
+          }
+          throw uploadError
+        }
+      } catch (createError) {
+        clearTimeout(createTimeoutId)
+        if (createError instanceof Error && createError.name === 'AbortError') {
+          throw new Error(`创建Gerrit change超时: 操作在 ${timeoutMs}ms 后超时`)
+        }
+        throw createError
       }
     } catch (error) {
       console.error('Gerrit提交错误:', error)

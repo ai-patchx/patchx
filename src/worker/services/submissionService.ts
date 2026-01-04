@@ -287,15 +287,29 @@ export class SubmissionService {
       await this.addLog(submissionId, '[Info] Submitting patch to Gerrit...')
       await this.addLog(submissionId, `[Info] Project: ${submission.project}`)
       await this.addLog(submissionId, `[Info] Subject: ${submission.subject}`)
+      await this.addLog(submissionId, '[Info] This may take up to 3 minutes, please wait...')
 
-      const gerritResult = await this.gerritService.submitToGerrit(
+      // Add timeout wrapper for Gerrit submission (3 minutes total)
+      const gerritTimeoutMs = 180000 // 3 minutes
+      const gerritSubmissionPromise = this.gerritService.submitToGerrit(
         submission.uploadId,
         submission.subject,
         submission.description,
         submission.branch,
         submission.project,
-        upload.content
+        upload.content,
+        gerritTimeoutMs
       )
+
+      // Add timeout (3 minutes)
+      const gerritTimeoutPromise = new Promise<never>((_, reject) => {
+        setTimeout(() => {
+          reject(new Error(`Gerrit submission timed out after ${gerritTimeoutMs / 1000} seconds`))
+        }, gerritTimeoutMs)
+      })
+
+      // Race between submission and timeout
+      const gerritResult = await Promise.race([gerritSubmissionPromise, gerritTimeoutPromise])
 
       await this.addLog(submissionId, `[Success] Patch submitted to Gerrit successfully`)
       await this.addLog(submissionId, `[Success] Change ID: ${gerritResult.changeId}`)
