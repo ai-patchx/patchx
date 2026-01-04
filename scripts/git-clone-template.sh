@@ -76,37 +76,12 @@ fi
 # Full path to target directory
 FULL_TARGET_DIR="$WORKING_HOME/$TARGET_DIR"
 
-# Check if target directory already exists
+# Check if target directory already exists, then automatically remove and re-clone for consistency
 if [ -d "$FULL_TARGET_DIR" ]; then
     warn "Target directory already exists: $FULL_TARGET_DIR"
-    read -t 5 -p "Remove existing directory? (y/N): " -n 1 -r || REPLY="n"
-    echo
-    if [[ $REPLY =~ ^[Yy]$ ]]; then
-        info "Removing existing directory: $FULL_TARGET_DIR"
-        rm -rf "$FULL_TARGET_DIR" || error "Failed to remove existing directory"
-    else
-        # Try to update existing repository instead
-        info "Updating existing repository in: $FULL_TARGET_DIR"
-        cd "$FULL_TARGET_DIR" || error "Failed to change to directory: $FULL_TARGET_DIR"
-
-        # Check if it's a git repository
-        if [ -d .git ]; then
-            info "Fetching latest changes..."
-            git fetch origin || warn "Failed to fetch from origin"
-
-            info "Checking out branch: $TARGET_BRANCH"
-            git checkout "$TARGET_BRANCH" || warn "Failed to checkout branch: $TARGET_BRANCH"
-
-            info "Pulling latest changes..."
-            git pull origin "$TARGET_BRANCH" || warn "Failed to pull latest changes"
-
-            info "Repository updated successfully in: $FULL_TARGET_DIR"
-            echo "TARGET_DIR=$FULL_TARGET_DIR"
-            exit 0
-        else
-            error "Directory exists but is not a git repository: $FULL_TARGET_DIR"
-        fi
-    fi
+    info "Removing existing directory for clean clone..."
+    rm -rf "$FULL_TARGET_DIR" || error "Failed to remove existing directory: $FULL_TARGET_DIR"
+    info "Existing directory removed successfully"
 fi
 
 # Clone the repository

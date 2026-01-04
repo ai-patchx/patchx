@@ -139,15 +139,26 @@ export class SubmissionService {
           await this.addLog(submissionId, `[Info] Branch: ${submission.branch}`)
           await this.addLog(submissionId, `[Info] Remote Node ID: ${submission.remoteNodeId}`)
 
-          // Get remote node to retrieve workingHome
+          // Get remote node to retrieve workingHome (with timeout)
           let workingHome: string | undefined
           try {
+            await this.addLog(submissionId, '[Info] Retrieving remote node configuration...')
             const supabase = getSupabaseClient(this.env)
-            const { data: node, error: nodeError } = await supabase
+
+            // Add timeout to Supabase query (5 seconds)
+            const nodeQueryPromise = supabase
               .from('remote_nodes')
               .select('working_home')
               .eq('id', submission.remoteNodeId)
               .single()
+
+            const timeoutPromise = new Promise<never>((_, reject) => {
+              setTimeout(() => {
+                reject(new Error('Remote node query timeout after 5 seconds'))
+              }, 5000)
+            })
+
+            const { data: node, error: nodeError } = await Promise.race([nodeQueryPromise, timeoutPromise])
 
             if (!nodeError && node) {
               workingHome = node.working_home || undefined

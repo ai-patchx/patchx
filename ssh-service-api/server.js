@@ -196,30 +196,12 @@ fi
 FULL_TARGET_DIR="\$WORKING_HOME/\$TARGET_DIR"
 
 # Check if target directory already exists
+# In non-interactive mode, automatically remove and re-clone for consistency
 if [ -d "\$FULL_TARGET_DIR" ]; then
     log_warn "Target directory already exists: \$FULL_TARGET_DIR"
-    # Try to update existing repository instead (non-interactive: always update)
-    log_info "Updating existing repository in: \$FULL_TARGET_DIR"
-    cd "\$FULL_TARGET_DIR" || { log_error "Failed to change to directory: \$FULL_TARGET_DIR"; exit 1; }
-
-    # Check if it's a git repository
-    if [ -d .git ]; then
-        log_info "Fetching latest changes..."
-        git fetch origin || log_warn "Failed to fetch from origin"
-
-        log_info "Checking out branch: \$TARGET_BRANCH"
-        git checkout "\$TARGET_BRANCH" || log_warn "Failed to checkout branch: \$TARGET_BRANCH"
-
-        log_info "Pulling latest changes..."
-        git pull origin "\$TARGET_BRANCH" || log_warn "Failed to pull latest changes"
-
-        log_success "Repository updated successfully in: \$FULL_TARGET_DIR"
-        echo "TARGET_DIR=\$FULL_TARGET_DIR"
-        exit 0
-    else
-        log_error "Directory exists but is not a git repository: \$FULL_TARGET_DIR"
-        exit 1
-    fi
+    log_info "Removing existing directory for clean clone (non-interactive mode)..."
+    rm -rf "\$FULL_TARGET_DIR" || { log_error "Failed to remove existing directory: \$FULL_TARGET_DIR"; exit 1; }
+    log_info "Existing directory removed successfully"
 fi
 
 # Clone the repository
@@ -312,6 +294,9 @@ app.post('/git-clone', authenticate, async (req, res) => {
   const sshClient = new Client()
   let tempKeyFile = null
   let tempScriptFile = null
+  const timeout = req.body.timeout || DEFAULT_TIMEOUT // Use request timeout or default
+  let commandTimeoutId = null
+  let commandStream = null
 
   try {
     // If using SSH key, write it to a temporary file
@@ -320,28 +305,35 @@ app.post('/git-clone', authenticate, async (req, res) => {
       fs.writeFileSync(tempKeyFile, sshKey, { mode: 0o600 })
     }
 
-    // Connect to SSH server
-    await new Promise((resolve, reject) => {
-      const connectConfig = {
-        host,
-        port: targetPort,
-        username,
-        readyTimeout: 10000,
-        ...(authType === 'key' && sshKey
-          ? { privateKey: fs.readFileSync(tempKeyFile) }
-          : { password })
-      }
+    // Connect to SSH server with timeout
+    await Promise.race([
+      new Promise((resolve, reject) => {
+        const connectConfig = {
+          host,
+          port: targetPort,
+          username,
+          readyTimeout: 10000,
+          ...(authType === 'key' && sshKey
+            ? { privateKey: fs.readFileSync(tempKeyFile) }
+            : { password })
+        }
 
-      sshClient.on('ready', () => {
-        resolve()
+        sshClient.on('ready', () => {
+          resolve()
+        })
+
+        sshClient.on('error', (err) => {
+          reject(err)
+        })
+
+        sshClient.connect(connectConfig)
+      }),
+      new Promise((_, reject) => {
+        setTimeout(() => {
+          reject(new Error(`SSH connection timeout after 10 seconds`))
+        }, 10000)
       })
-
-      sshClient.on('error', (err) => {
-        reject(err)
-      })
-
-      sshClient.connect(connectConfig)
-    })
+    ])
 
     // Escape parameters for shell
     const escapeShell = (str) => {
@@ -361,56 +353,84 @@ ${scriptContent}
 SCRIPT_EOF
 bash /tmp/git-clone-*.sh '${escapedProject}' '${escapedBranch}' '${escapedGerritBaseUrl}' '${escapedWorkingHome}' '${escapedTargetDir}'; EXIT_CODE=$?; rm -f /tmp/git-clone-*.sh; exit $EXIT_CODE`
 
-    // Execute command
-    const result = await new Promise((resolve, reject) => {
-      sshClient.exec(scriptCommand, (err, stream) => {
-        if (err) {
-          reject(err)
-          return
-        }
-
-        let stdout = ''
-        let stderr = ''
-
-        stream.on('close', (code, signal) => {
-          sshClient.end()
-
-          // Combine stdout and stderr for full output
-          const fullOutput = stdout.trim()
-          const fullError = stderr.trim()
-          const combinedOutput = fullOutput + (fullError ? '\n' + fullError : '')
-
-          if (code === 0) {
-            resolve({
-              success: true,
-              output: fullOutput,
-              stdout: fullOutput,
-              stderr: fullError,
-              combined: combinedOutput,
-              exitCode: code
-            })
-          } else {
-            resolve({
-              success: false,
-              output: combinedOutput,
-              stdout: fullOutput,
-              stderr: fullError,
-              combined: combinedOutput,
-              error: fullError || `Command exited with code ${code}`,
-              exitCode: code
-            })
+    // Execute command with timeout
+    const result = await Promise.race([
+      new Promise((resolve, reject) => {
+        sshClient.exec(scriptCommand, (err, stream) => {
+          if (err) {
+            reject(err)
+            return
           }
-        })
 
-        stream.on('data', (data) => {
-          stdout += data.toString()
-        })
+          commandStream = stream
+          let stdout = ''
+          let stderr = ''
 
-        stream.stderr.on('data', (data) => {
-          stderr += data.toString()
+          stream.on('close', (code, signal) => {
+            if (commandTimeoutId) {
+              clearTimeout(commandTimeoutId)
+              commandTimeoutId = null
+            }
+            sshClient.end()
+
+            // Combine stdout and stderr for full output
+            const fullOutput = stdout.trim()
+            const fullError = stderr.trim()
+            const combinedOutput = fullOutput + (fullError ? '\n' + fullError : '')
+
+            if (code === 0) {
+              resolve({
+                success: true,
+                output: fullOutput,
+                stdout: fullOutput,
+                stderr: fullError,
+                combined: combinedOutput,
+                exitCode: code
+              })
+            } else {
+              resolve({
+                success: false,
+                output: combinedOutput,
+                stdout: fullOutput,
+                stderr: fullError,
+                combined: combinedOutput,
+                error: fullError || `Command exited with code ${code}`,
+                exitCode: code
+              })
+            }
+          })
+
+          stream.on('data', (data) => {
+            stdout += data.toString()
+          })
+
+          stream.stderr.on('data', (data) => {
+            stderr += data.toString()
+          })
         })
+      }),
+      new Promise((resolve) => {
+        commandTimeoutId = setTimeout(() => {
+          if (commandStream) {
+            try {
+              commandStream.destroy()
+            } catch (e) {
+              // Ignore destroy errors
+            }
+          }
+          sshClient.end()
+          resolve({
+            success: false,
+            output: '',
+            stdout: '',
+            stderr: '',
+            combined: '',
+            error: `Command execution timed out after ${timeout}ms`,
+            exitCode: -1
+          })
+        }, timeout)
       })
-    })
+    ])
 
     // Clean up temporary key file
     if (tempKeyFile && fs.existsSync(tempKeyFile)) {
@@ -420,6 +440,12 @@ bash /tmp/git-clone-*.sh '${escapedProject}' '${escapedBranch}' '${escapedGerrit
     res.json(result)
 
   } catch (error) {
+    // Clear timeout if it exists
+    if (commandTimeoutId) {
+      clearTimeout(commandTimeoutId)
+      commandTimeoutId = null
+    }
+
     // Clean up temporary files on error
     if (tempKeyFile && fs.existsSync(tempKeyFile)) {
       try {
