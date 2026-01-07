@@ -513,7 +513,18 @@ SUPABASE_ANON_KEY = "<your_anon_key>"
      - **端口配置**：使用提供的 nginx 反向代理配置（docker-compose.yml 和 nginx.conf）时，SSH 服务 API 使用端口 8080（HTTP）和 8443（HTTPS）。访问服务时请在 URL 中包含端口号。
    - **SSH Service API Key**: 用于认证的 API 密钥（可选，但如果您的 SSH 服务需要认证，则推荐配置）
 
-2. **SSH 服务 API 要求**:
+2. **Docker 部署配置**：如果您使用 Docker Compose 部署 SSH 服务 API，需要设置 `GIT_WORK_DIR` 环境变量以匹配为远程节点配置的"工作主目录"路径：
+   ```bash
+   # 设置 GIT_WORK_DIR 以匹配远程节点的"工作主目录"路径
+   export GIT_WORK_DIR=/home/your-user/git-work  # 替换为您的实际工作主目录路径
+   docker-compose up -d
+   ```
+   或在 `.env` 文件中：
+   ```bash
+   GIT_WORK_DIR=/home/your-user/git-work  # 必须与远程节点设置中的"工作主目录"匹配
+   ```
+
+3. **SSH 服务 API 要求**:
    - 端点: `POST /execute`
    - 请求体:
      ```json
@@ -537,12 +548,12 @@ SUPABASE_ANON_KEY = "<your_anon_key>"
      ```
    - 认证: 如果提供了 API 密钥，Worker 将发送 `Authorization: Bearer <api-key>` 请求头
 
-3. **每节点配置的优势**:
+4. **每节点配置的优势**:
    - 每个节点可以使用不同的 SSH 服务端点
    - API 密钥安全地存储在 Supabase 中，每个节点独立
    - 更好的组织性和灵活性
 
-4. **没有 SSH 服务 API**: 连接测试仍会验证 SSH 连接性，但工作主目录验证和 git 操作将被跳过。
+5. **没有 SSH 服务 API**: 连接测试仍会验证 SSH 连接性，但工作主目录验证和 git 操作将被跳过。
 
 #### 数据库设置
 

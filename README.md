@@ -497,7 +497,18 @@ For working home directory verification and executing git operations, you can co
      - **Port Configuration**: When using the provided nginx reverse proxy configuration (docker-compose.yml and nginx.conf), the SSH Service API uses ports 8080 (HTTP) and 8443 (HTTPS). Include the port number in the URL when accessing the service.
    - **SSH Service API Key**: The API key for authentication (optional, but recommended if your SSH service requires authentication)
 
-2. **SSH Service API Requirements**:
+2. **Docker Deployment Configuration**: If you deploy the SSH Service API using Docker Compose, you need to set the `GIT_WORK_DIR` environment variable to match the "Working Home" path configured for the remote node:
+   ```bash
+   # Set GIT_WORK_DIR to match the Remote Node's "Working Home" path
+   export GIT_WORK_DIR=/home/your-user/git-work  # Replace with your actual Working Home path
+   docker-compose up -d
+   ```
+   Or in a `.env` file:
+   ```bash
+   GIT_WORK_DIR=/home/your-user/git-work  # Must match "Working Home" in Remote Node settings
+   ```
+
+3. **SSH Service API Requirements**:
    - Endpoint: `POST /execute`
    - Request body:
      ```json
@@ -521,12 +532,12 @@ For working home directory verification and executing git operations, you can co
      ```
    - Authentication: If API key is provided, the Worker will send `Authorization: Bearer <api-key>` header
 
-3. **Benefits of Per-Node Configuration**:
+4. **Benefits of Per-Node Configuration**:
    - Each node can use a different SSH service endpoint
    - API keys are stored securely in Supabase per node
    - Better organization and flexibility
 
-4. **Without SSH Service API**: Connection test will still verify SSH connectivity, but working home verification and git operations will be skipped.
+5. **Without SSH Service API**: Connection test will still verify SSH connectivity, but working home verification and git operations will be skipped.
 
 #### Database Setup
 

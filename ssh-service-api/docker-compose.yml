@@ -11,6 +11,18 @@ services:
       - PORT=7000
       - API_KEY=${API_KEY}
       - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-*}
+    volumes:
+      # Mount the remote node's "Working Home" directory into the container (optional)
+      # IMPORTANT:
+      # - In the web UI Settings page, for each Remote Node you configure a "Working Home" path
+      #   that is used by git workflows on that node.
+      # - When you deploy this ssh-service-api on that same node, set GIT_WORK_DIR to the SAME path
+      #   as the node's "Working Home" so that:
+      #     * Git clones done via ssh-service-api (on the node) and
+      #     * Paths used by the web app (Working Home)
+      #   are consistent.
+      # - Default here uses $HOME/git-work; override via env GIT_WORK_DIR when running docker-compose.
+      - ${GIT_WORK_DIR:-${HOME}/git-work}:/home/git-work:rw
     restart: unless-stopped
     networks:
       - ssh-service-network

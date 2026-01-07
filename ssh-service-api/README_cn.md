@@ -141,6 +141,10 @@ pm2 startup  # 按照说明启用开机自启
 export API_KEY=your-secure-api-key-here
 export ALLOWED_ORIGINS=https://patchx.pages.dev,https://your-worker.workers.dev
 
+# 重要：设置 GIT_WORK_DIR 以匹配远程节点设置中配置的"工作主目录"路径
+# 这确保 git 操作在主机上使用相同的目录
+export GIT_WORK_DIR=/home/your-user/git-work  # 替换为您的实际工作主目录路径
+
 # 启动服务
 docker-compose up -d
 
@@ -157,6 +161,7 @@ docker-compose down
 # .env 文件
 API_KEY=your-secure-api-key-here
 ALLOWED_ORIGINS=https://patchx.pages.dev,https://your-worker.workers.dev
+GIT_WORK_DIR=/home/your-user/git-work  # 必须与远程节点设置中的"工作主目录"匹配
 ```
 
 然后运行：

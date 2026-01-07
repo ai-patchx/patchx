@@ -141,6 +141,10 @@ Using the provided `docker-compose.yml`:
 export API_KEY=your-secure-api-key-here
 export ALLOWED_ORIGINS=https://patchx.pages.dev,https://your-worker.workers.dev
 
+# IMPORTANT: Set GIT_WORK_DIR to match the "Working Home" path configured in Remote Node settings
+# This ensures git operations use the same directory on the host
+export GIT_WORK_DIR=/home/your-user/git-work  # Replace with your actual Working Home path
+
 # Start the service
 docker-compose up -d
 
@@ -157,6 +161,7 @@ Or create a `.env` file:
 # .env file
 API_KEY=your-secure-api-key-here
 ALLOWED_ORIGINS=https://patchx.pages.dev,https://your-worker.workers.dev
+GIT_WORK_DIR=/home/your-user/git-work  # Must match "Working Home" in Remote Node settings
 ```
 
 Then run:
