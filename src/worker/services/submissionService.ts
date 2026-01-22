@@ -145,20 +145,61 @@ export class SubmissionService {
             await this.addLog(submissionId, '[Info] Retrieving remote node configuration...')
             const supabase = getSupabaseClient(this.env)
 
-            // Add timeout to Supabase query (5 seconds)
-            const nodeQueryPromise = supabase
-              .from('remote_nodes')
-              .select('working_home')
-              .eq('id', submission.remoteNodeId)
-              .single()
+            // Add timeout to Supabase query (3 seconds - shorter timeout to fail fast)
+            const QUERY_TIMEOUT_MS = 3000
+            let timeoutId: ReturnType<typeof setTimeout> | null = null
+            let queryResolved = false
 
-            const timeoutPromise = new Promise<never>((_, reject) => {
-              setTimeout(() => {
-                reject(new Error('Remote node query timeout after 5 seconds'))
-              }, 5000)
+            // Wrap Supabase query in a Promise for proper timeout handling
+            const nodeQueryPromise = new Promise<{ data: any; error: any }>((resolve, reject) => {
+              const query = supabase
+                .from('remote_nodes')
+                .select('working_home')
+                .eq('id', submission.remoteNodeId)
+                .single()
+
+              // Supabase queries are Promise-like, so we can await them
+              Promise.resolve(query)
+                .then((result) => {
+                  if (!queryResolved) {
+                    queryResolved = true
+                    if (timeoutId) {
+                      clearTimeout(timeoutId)
+                      timeoutId = null
+                    }
+                    resolve(result)
+                  }
+                })
+                .catch((error) => {
+                  if (!queryResolved) {
+                    queryResolved = true
+                    if (timeoutId) {
+                      clearTimeout(timeoutId)
+                      timeoutId = null
+                    }
+                    reject(error)
+                  }
+                })
             })
 
-            const { data: node, error: nodeError } = await Promise.race([nodeQueryPromise, timeoutPromise])
+            const timeoutPromise = new Promise<{ data: null; error: { message: string } }>((resolve) => {
+              timeoutId = setTimeout(() => {
+                if (!queryResolved) {
+                  queryResolved = true
+                  resolve({ data: null, error: { message: `Remote node query timeout after ${QUERY_TIMEOUT_MS / 1000} seconds` } })
+                }
+              }, QUERY_TIMEOUT_MS)
+            })
+
+            const result = await Promise.race([nodeQueryPromise, timeoutPromise])
+
+            // Clean up timeout if query resolved first
+            if (timeoutId) {
+              clearTimeout(timeoutId)
+              timeoutId = null
+            }
+
+            const { data: node, error: nodeError } = result
 
             if (!nodeError && node) {
               workingHome = node.working_home || undefined
@@ -168,10 +209,17 @@ export class SubmissionService {
                 await this.addLog(submissionId, '[Info] No working home configured, using default: ~/git-work')
               }
             } else {
-              await this.addLog(submissionId, `[Warning] Could not retrieve remote node configuration: ${nodeError?.message || 'Node not found'}`)
+              const errorMsg = nodeError?.message || 'Node not found'
+              await this.addLog(submissionId, `[Warning] Could not retrieve remote node configuration: ${errorMsg}`)
+              // Log additional debug info if it's a timeout
+              if (errorMsg.includes('timeout')) {
+                await this.addLog(submissionId, `[Debug] This may indicate a database connection issue. Continuing with default working home.`)
+              }
             }
           } catch (nodeFetchError) {
-            await this.addLog(submissionId, `[Warning] Failed to get remote node configuration: ${nodeFetchError instanceof Error ? nodeFetchError.message : String(nodeFetchError)}`)
+            const errorMsg = nodeFetchError instanceof Error ? nodeFetchError.message : String(nodeFetchError)
+            await this.addLog(submissionId, `[Warning] Failed to get remote node configuration: ${errorMsg}`)
+            await this.addLog(submissionId, `[Info] Continuing with default working home: ~/git-work`)
           }
 
           await this.addLog(submissionId, '[Info] Step 1: Cloning repository...')

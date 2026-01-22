@@ -40,14 +40,69 @@ export class GitService {
   private async getRemoteNode(nodeId: string): Promise<RemoteNodeData | null> {
     try {
       const supabase = getSupabaseClient(this.env)
-      const { data: node, error } = await supabase
-        .from('remote_nodes')
-        .select('*')
-        .eq('id', nodeId)
-        .single()
+
+      // Add timeout to Supabase query (3 seconds - shorter timeout to fail fast)
+      const QUERY_TIMEOUT_MS = 3000
+      let timeoutId: ReturnType<typeof setTimeout> | null = null
+      let queryResolved = false
+
+      // Wrap Supabase query in a Promise for proper timeout handling
+      const nodeQueryPromise = new Promise<{ data: any; error: any }>((resolve, reject) => {
+        const query = supabase
+          .from('remote_nodes')
+          .select('*')
+          .eq('id', nodeId)
+          .single()
+
+        // Supabase queries are Promise-like, so we can await them
+        Promise.resolve(query)
+          .then((result) => {
+            if (!queryResolved) {
+              queryResolved = true
+              if (timeoutId) {
+                clearTimeout(timeoutId)
+                timeoutId = null
+              }
+              resolve(result)
+            }
+          })
+          .catch((error) => {
+            if (!queryResolved) {
+              queryResolved = true
+              if (timeoutId) {
+                clearTimeout(timeoutId)
+                timeoutId = null
+              }
+              reject(error)
+            }
+          })
+      })
+
+      const timeoutPromise = new Promise<{ data: null; error: { message: string } }>((resolve) => {
+        timeoutId = setTimeout(() => {
+          if (!queryResolved) {
+            queryResolved = true
+            resolve({ data: null, error: { message: `Remote node query timeout after ${QUERY_TIMEOUT_MS / 1000} seconds` } })
+          }
+        }, QUERY_TIMEOUT_MS)
+      })
+
+      const result = await Promise.race([nodeQueryPromise, timeoutPromise])
+
+      // Clean up timeout if query resolved first
+      if (timeoutId) {
+        clearTimeout(timeoutId)
+        timeoutId = null
+      }
+
+      const { data: node, error } = result
 
       if (error || !node) {
-        console.error(`[GitService] Failed to get remote node ${nodeId}:`, error)
+        const errorMsg = error?.message || 'Node not found'
+        console.error(`[GitService] Failed to get remote node ${nodeId}:`, errorMsg)
+        if (errorMsg.includes('timeout')) {
+          console.error(`[GitService] Database query timed out. This may indicate a connection issue.`)
+        }
         return null
       }
 

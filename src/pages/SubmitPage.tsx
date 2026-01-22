@@ -361,13 +361,27 @@ const SubmitPage: React.FC = () => {
   const pollSubmissionLogs = async (submissionId: string) => {
     let lastLogCount = 0
     let pollCount = 0
+    let lastLogUpdateTime = Date.now()
+    let consecutiveErrors = 0
     const maxPolls = 300 // Poll for up to 5 minutes (300 * 1 second)
+    const maxNoProgressTime = 120000 // 2 minutes without new logs = timeout
+    const maxConsecutiveErrors = 5 // Stop after 5 consecutive errors
+    const fetchTimeout = 10000 // 10 seconds timeout for each fetch
 
     const pollInterval = setInterval(async () => {
       pollCount++
 
       try {
-        const response = await fetch(`/api/status/${submissionId}`)
+        // Create AbortController for timeout
+        const controller = new AbortController()
+        const timeoutId = setTimeout(() => controller.abort(), fetchTimeout)
+
+        const response = await fetch(`/api/status/${submissionId}`, {
+          signal: controller.signal
+        })
+
+        clearTimeout(timeoutId)
+        consecutiveErrors = 0 // Reset error count on success
 
         if (!response.ok) {
           if (pollCount >= maxPolls) {
@@ -398,6 +412,7 @@ const SubmitPage: React.FC = () => {
               console.log(`[Polling] Adding ${newLogs.length} new logs (total: ${logs.length}, previous: ${lastLogCount})`)
               setConsoleOutput(prev => [...prev, ...newLogs])
               lastLogCount = logs.length
+              lastLogUpdateTime = Date.now() // Update timestamp when new logs arrive
             } else if (logs.length < lastLogCount) {
               // Log count decreased (shouldn't happen, but log it)
               console.warn(`[Polling] Log count decreased from ${lastLogCount} to ${logs.length}, resetting`)
@@ -410,8 +425,22 @@ const SubmitPage: React.FC = () => {
             }
           }
 
-          // Update current process based on status
+          // Check for stuck processing status (no new logs for too long)
           if (status === 'processing') {
+            const timeSinceLastLog = Date.now() - lastLogUpdateTime
+            if (timeSinceLastLog > maxNoProgressTime) {
+              clearInterval(pollInterval)
+              setPollingInterval(null)
+              addConsoleOutput(`Polling timeout: No progress detected for ${Math.round(timeSinceLastLog / 1000)} seconds. The submission may be stuck.`, 'warning')
+              setIsSubmitting(false)
+              setCurrentProcess('')
+              setCurrentSubmissionId(null)
+              // Clear saved submission state
+              localStorage.removeItem('activeSubmissionId')
+              localStorage.removeItem('activeSubmissionRemoteNode')
+              localStorage.removeItem('activeSubmissionCommandIds')
+              return
+            }
             setCurrentProcess('Processing')
           } else if (status === 'completed') {
             setCurrentProcess('Completed')
@@ -461,11 +490,32 @@ const SubmitPage: React.FC = () => {
           localStorage.removeItem('activeSubmissionCommandIds')
         }
       } catch (error) {
+        consecutiveErrors++
         console.error('Error polling submission status:', error)
-        if (pollCount >= maxPolls) {
+
+        // Handle abort/timeout errors
+        if (error instanceof Error && error.name === 'AbortError') {
+          addConsoleOutput(`Request timeout: Server did not respond within ${fetchTimeout / 1000} seconds`, 'warning')
+        } else {
+          addConsoleOutput(`Polling error: ${error instanceof Error ? error.message : 'Unknown error'}`, 'warning')
+        }
+
+        // Stop polling after too many consecutive errors
+        if (consecutiveErrors >= maxConsecutiveErrors) {
           clearInterval(pollInterval)
           setPollingInterval(null)
-          addConsoleOutput('Polling error: Could not retrieve submission status', 'error')
+          addConsoleOutput(`Polling stopped: ${consecutiveErrors} consecutive errors. The submission may be stuck or the server is unavailable.`, 'error')
+          setIsSubmitting(false)
+          setCurrentProcess('')
+          setCurrentSubmissionId(null)
+          // Clear saved submission state
+          localStorage.removeItem('activeSubmissionId')
+          localStorage.removeItem('activeSubmissionRemoteNode')
+          localStorage.removeItem('activeSubmissionCommandIds')
+        } else if (pollCount >= maxPolls) {
+          clearInterval(pollInterval)
+          setPollingInterval(null)
+          addConsoleOutput('Polling timeout: Maximum polling attempts reached', 'error')
           setIsSubmitting(false)
           setCurrentProcess('')
           setCurrentSubmissionId(null)
