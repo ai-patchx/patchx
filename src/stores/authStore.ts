@@ -1,6 +1,14 @@
 import { create } from 'zustand'
-import { getSupabaseClient } from '@/lib/supabase'
-import type { User } from '@supabase/supabase-js'
+import { getSupabaseClient } from '@/lib/d1'
+import type { AuthClient } from '@/lib/d1'
+
+// Stub User type (previously from @supabase/supabase-js)
+interface User {
+  id: string
+  email?: string
+  email_confirmed_at?: string
+  [key: string]: any
+}
 
 interface WorkerUser {
   id: string
@@ -31,41 +39,13 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   signUp: async (email: string, password: string) => {
     set({ loading: true, error: null })
     try {
-      const supabase = await getSupabaseClient()
-
-      // Use signInWithOtp to send OTP verification code via email
-      // Note: Supabase email template must be configured to use {{ .Token }} instead of {{ .ConfirmationURL }}
-      // Store the password temporarily to set it after email verification
-      const { data, error } = await supabase.auth.signInWithOtp({
-        email,
-        options: {
-          data: {
-            password: password, // Store password in metadata to set after verification
-          },
-          shouldCreateUser: true,
-        },
-      })
-      if (error) throw error
-
-      // Store password in sessionStorage temporarily for after verification
-      if (typeof window !== 'undefined') {
-        sessionStorage.setItem('pending_password', password)
-        sessionStorage.setItem('pending_email', email)
-      }
-
-      set({ loading: false })
+      // TODO: Reimplement authentication with D1 or alternative auth system
+      throw new Error(
+        'Email registration is not available. Authentication system needs to be reimplemented after D1 migration. ' +
+        'Please use Worker authentication (username/password) instead.'
+      )
     } catch (error) {
-      let message = error instanceof Error ? error.message : String(error)
-
-      // Provide more helpful error messages
-      if (message.includes('User already registered') || message.includes('already registered')) {
-        message = 'This email is already registered. Please try logging in instead.'
-      } else if (message.includes('Password')) {
-        message = 'Password must be at least 6 characters long.'
-      } else if (message.includes('Invalid email')) {
-        message = 'Please enter a valid email address.'
-      }
-
+      const message = error instanceof Error ? error.message : String(error)
       set({ error: message, loading: false })
     }
   },
@@ -73,46 +53,12 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   verifyEmailCode: async (email: string, token: string) => {
     set({ loading: true, error: null })
     try {
-      const supabase = await getSupabaseClient()
-
-      // Verify the OTP code
-      // When using signInWithOtp with shouldCreateUser: true, the type is 'email'
-      const { data, error } = await supabase.auth.verifyOtp({
-        email,
-        token,
-        type: 'email',
-      })
-      if (error) throw error
-
-      // If verification successful and we have a pending password, update it
-      if (data.user && typeof window !== 'undefined') {
-        const pendingPassword = sessionStorage.getItem('pending_password')
-        if (pendingPassword) {
-          // Update user password
-          const { error: updateError } = await supabase.auth.updateUser({
-            password: pendingPassword,
-          })
-          if (updateError) {
-            console.warn('Failed to set password after verification:', updateError)
-            // Don't throw - user is verified, password can be reset later
-          }
-          // Clean up
-          sessionStorage.removeItem('pending_password')
-          sessionStorage.removeItem('pending_email')
-        }
-      }
-
-      set({ user: data.user, loading: false })
+      // TODO: Reimplement email verification with D1 or alternative auth system
+      throw new Error(
+        'Email verification is not available. Authentication system needs to be reimplemented after D1 migration.'
+      )
     } catch (error) {
-      let message = error instanceof Error ? error.message : String(error)
-
-      // Provide more helpful error messages
-      if (message.includes('expired') || message.includes('invalid')) {
-        message = 'The verification code has expired or is invalid. Please register again.'
-      } else if (message.includes('Invalid')) {
-        message = 'Invalid verification code. Please check your email and try again.'
-      }
-
+      const message = error instanceof Error ? error.message : String(error)
       set({ error: message, loading: false })
       throw error
     }
@@ -121,27 +67,13 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   signIn: async (email: string, password: string) => {
     set({ loading: true, error: null })
     try {
-      const supabase = await getSupabaseClient()
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      })
-      if (error) throw error
-      set({ user: data.user, workerUser: null, loading: false })
+      // TODO: Reimplement email/password authentication with D1 or alternative auth system
+      throw new Error(
+        'Email/password login is not available. Authentication system needs to be reimplemented after D1 migration. ' +
+        'Please use Worker authentication (username/password) instead.'
+      )
     } catch (error) {
-      let message = error instanceof Error ? error.message : String(error)
-
-      // Provide more helpful error messages
-      if (message.includes('Invalid login credentials') || message.includes('Email not confirmed')) {
-        message = 'Invalid email or password. If you just registered, please verify your email with the code sent to your email first.'
-      } else if (message.includes('Email not confirmed')) {
-        message = 'Please check your email and verify your account with the code before logging in.'
-      } else if (message.includes('Invalid email')) {
-        message = 'Please enter a valid email address.'
-      } else if (message.includes('Password')) {
-        message = 'Invalid password. Please try again.'
-      }
-
+      const message = error instanceof Error ? error.message : String(error)
       set({ error: message, loading: false })
     }
   },
@@ -176,16 +108,11 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   signOut: async () => {
     set({ loading: true, error: null })
     try {
-      // Only call Supabase signOut if we have a regular user
-      // Worker users don't use Supabase, so skip it for them
-      const currentUser = get().user
-      if (currentUser) {
-        const supabase = await getSupabaseClient()
-        await supabase.auth.signOut().catch(() => undefined)
-      }
+      // Clear all authentication state
+      // Note: Supabase authentication is no longer available
     } catch (error) {
-      // Ignore Supabase errors during logout (e.g., if Supabase is not configured)
-      console.warn('Supabase signOut error (ignored):', error)
+      // Ignore errors during logout
+      console.warn('Sign out error (ignored):', error)
     }
     // Always clear localStorage and state regardless of user type
     localStorage.removeItem('px_token')
@@ -195,7 +122,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   checkUser: async () => {
     try {
-      // First check localStorage for worker user (faster and more reliable for worker auth)
+      // Check localStorage for worker user (only authentication method available)
       const token = localStorage.getItem('px_token')
       const userStr = localStorage.getItem('px_user')
       if (token && userStr) {
@@ -210,20 +137,11 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         }
       }
 
-      // Then check Supabase for regular user
-      const supabase = await getSupabaseClient()
-      const { data: { user }, error } = await supabase.auth.getUser()
-      if (user && !error) {
-        set({ user, workerUser: null })
-        return
-      }
-
-      // Only clear state if we've checked both and found nothing
-      if (!token && !user) {
-        set({ user: null, workerUser: null })
-      }
+      // No Supabase authentication available - only worker auth
+      // Clear state if no worker user found
+      set({ user: null, workerUser: null })
     } catch (error) {
-      // Only clear state on error if we don't have valid localStorage data
+      // Clear state on error if we don't have valid localStorage data
       const token = localStorage.getItem('px_token')
       const userStr = localStorage.getItem('px_user')
       if (!token || !userStr) {

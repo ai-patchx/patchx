@@ -1,6 +1,6 @@
 import { Env } from '../types'
 import { getKvNamespace, KVLike } from '../kv'
-import { getSupabaseClient } from '../supabase'
+import { getD1Database, queryD1First } from '../d1'
 
 interface RemoteNodeData {
   id: string
@@ -35,59 +35,68 @@ export class GitService {
   }
 
   /**
-   * Get remote node data from Supabase
+   * Get remote node data from D1
    */
   private async getRemoteNode(nodeId: string): Promise<RemoteNodeData | null> {
     try {
-      const supabase = getSupabaseClient(this.env)
+      const db = getD1Database(this.env)
 
-      // Add timeout to Supabase query (3 seconds - shorter timeout to fail fast)
+      // Add timeout to D1 query (3 seconds - shorter timeout to fail fast)
       const QUERY_TIMEOUT_MS = 3000
       let timeoutId: ReturnType<typeof setTimeout> | null = null
       let queryResolved = false
 
-      // Wrap Supabase query in a Promise for proper timeout handling
-      const nodeQueryPromise = new Promise<{ data: any; error: any }>((resolve, reject) => {
-        const query = supabase
-          .from('remote_nodes')
-          .select('*')
-          .eq('id', nodeId)
-          .single()
-
-        // Supabase queries are Promise-like, so we can await them
-        Promise.resolve(query)
-          .then((result) => {
-            if (!queryResolved) {
-              queryResolved = true
-              if (timeoutId) {
-                clearTimeout(timeoutId)
-                timeoutId = null
-              }
-              resolve(result)
-            }
-          })
-          .catch((error) => {
-            if (!queryResolved) {
-              queryResolved = true
-              if (timeoutId) {
-                clearTimeout(timeoutId)
-                timeoutId = null
-              }
-              reject(error)
-            }
-          })
+      // Wrap D1 query in a Promise for proper timeout handling
+      const nodeQueryPromise = queryD1First<{
+        id: string
+        name: string
+        host: string
+        port: number
+        username: string
+        auth_type: string
+        ssh_key: string | null
+        password: string | null
+        working_home: string | null
+        ssh_service_api_url: string | null
+        ssh_service_api_key: string | null
+        created_at: string
+        updated_at: string
+      }>(
+        db,
+        'SELECT * FROM remote_nodes WHERE id = ?',
+        [nodeId]
+      ).then((node) => {
+        if (!queryResolved) {
+          queryResolved = true
+          if (timeoutId) {
+            clearTimeout(timeoutId)
+            timeoutId = null
+          }
+          return node
+        }
+        return null
+      }).catch((error) => {
+        if (!queryResolved) {
+          queryResolved = true
+          if (timeoutId) {
+            clearTimeout(timeoutId)
+            timeoutId = null
+          }
+          throw error
+        }
+        return null
       })
 
-      const timeoutPromise = new Promise<{ data: null; error: { message: string } }>((resolve) => {
+      const timeoutPromise = new Promise<null>((resolve) => {
         timeoutId = setTimeout(() => {
           if (!queryResolved) {
             queryResolved = true
-            resolve({ data: null, error: { message: `Remote node query timeout after ${QUERY_TIMEOUT_MS / 1000} seconds` } })
+            resolve(null)
           }
         }, QUERY_TIMEOUT_MS)
       })
 
-      const result = await Promise.race([nodeQueryPromise, timeoutPromise])
+      const node = await Promise.race([nodeQueryPromise, timeoutPromise])
 
       // Clean up timeout if query resolved first
       if (timeoutId) {
@@ -95,25 +104,20 @@ export class GitService {
         timeoutId = null
       }
 
-      const { data: node, error } = result
-
-      if (error || !node) {
-        const errorMsg = error?.message || 'Node not found'
+      if (!node) {
+        const errorMsg = 'Node not found or query timeout'
         console.error(`[GitService] Failed to get remote node ${nodeId}:`, errorMsg)
-        if (errorMsg.includes('timeout')) {
-          console.error(`[GitService] Database query timed out. This may indicate a connection issue.`)
-        }
         return null
       }
 
-      // Map Supabase data to RemoteNodeData format
+      // Map D1 data to RemoteNodeData format
       const nodeData: RemoteNodeData = {
         id: node.id,
         name: node.name,
         host: node.host,
         port: node.port,
         username: node.username,
-        authType: node.auth_type,
+        authType: node.auth_type as 'key' | 'password',
         sshKey: node.ssh_key || undefined,
         password: node.password || undefined,
         workingHome: node.working_home || undefined,

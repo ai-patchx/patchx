@@ -13,7 +13,7 @@
 - 📊 **状态跟踪**: 实时显示提交进度和结果
 - 📱 **响应式设计**: 支持桌面和移动设备
 - 🔐 **用户登录与令牌鉴权**
-- 🧑‍💻 **用户注册**：仅支持邮箱注册（基于 Supabase）
+- 🧑‍💻 **用户注册**：邮箱注册
 - 📋 **动态项目列表**: 自动从 Gerrit 获取所有项目
 - 🌿 **动态分支列表**: 自动获取所选项目的所有分支
 - 🔍 **可搜索下拉框**: 支持实时搜索和过滤项目和分支
@@ -28,7 +28,7 @@
 - **前端**: React 18 + TypeScript + Tailwind CSS
 - **后端**: Cloudflare Workers + TypeScript
 - **AI集成**: 支持 OpenAI、Anthropic 等第三方大模型
-- **存储**: Supabase（用于用户数据和远程节点），Cloudflare KV（用于缓存）
+- **存储**: Cloudflare D1（用于远程节点和应用设置），Cloudflare KV（用于缓存）
 - **部署**: Cloudflare Workers + Pages
 
 ## 🤖 AI 冲突解决特性
@@ -71,31 +71,14 @@ wrangler secret put TEST_USER_PASSWORD
 
 ### 鉴权与注册（本地开发）
 
-- 首页提供登录/注册弹窗
-- 仅支持邮箱注册（基于 Supabase）
-- 注册后，用户会收到一封包含 8 位数字验证码的邮件
-- 在注册弹窗中输入验证码以完成账户设置
-
-**重要提示：** 要使用验证码而非确认链接，您必须配置 Supabase 邮件模板：
-1. 进入 Supabase 仪表板 → Authentication → Email Templates
-2. 编辑 "Confirm Signup" 模板
-3. 将 `{{ .ConfirmationURL }}` 替换为 `{{ .Token }}` 以显示验证码
-4. 详细说明请参阅 `SUPABASE_EMAIL_TEMPLATE_SETUP.md`
-
 复制 `.env.example` 为 `.env.local` 并配置以下变量：
 ```bash
-SUPABASE_URL=https://your-supabase-project.supabase.co
-SUPABASE_ANON_KEY=your_supabase_anon_key
 VITE_PUBLIC_SITE_URL=http://localhost:5173
 GERRIT_BASE_URL=https://android-review.googlesource.com
 GERRIT_USERNAME=your-gerrit-username
 GERRIT_PASSWORD=your-gerrit-password-or-token
 CACHE_VERSION=v1
 ```
-
-在 Supabase 中启用 GitHub OAuth：
-- 在 Auth 设置中开启 GitHub 提供商
-- 设置重定向地址：`http://localhost:5173/auth/callback`
 
 遗留的测试账号（仅用于 Worker API 测试）：
 - 默认测试账号：`用户名=patchx`，`密码=patchx`
@@ -177,6 +160,21 @@ wrangler login
 
 **注意：** 设置 `CLOUDFLARE_API_TOKEN` 后，wrangler 会自动使用该 token 进行认证。使用 API Token 方式时无需运行 `wrangler login`。
 
+**重要提示：** 如果您已设置 `CLOUDFLARE_API_TOKEN` 并尝试运行 `wrangler login`，您会收到错误："You are logged in with an API Token. Unset the CLOUDFLARE_API_TOKEN in the environment to log in via OAuth." 这是预期行为。要改用 OAuth 登录：
+```bash
+# 取消设置 API token
+unset CLOUDFLARE_API_TOKEN
+
+# 然后运行 OAuth 登录
+wrangler login
+```
+
+要切换回 API token 认证：
+```bash
+# 重新设置 token
+export CLOUDFLARE_API_TOKEN='your-api-token-here'
+```
+
 ```bash
 # 本地开发（API Worker）
 npm run build:worker
@@ -193,69 +191,94 @@ npm run deploy
 
 ### 数据库管理
 
-#### 重置数据库
+#### D1 数据库设置
 
-数据库重置功能作为可选脚本提供，在 `wrangler deploy` 过程中**永远不会**执行。
+PatchX 使用 Cloudflare D1 (SQLite) 存储远程节点配置和应用设置。
+
+**初始设置：**
+
+1. **创建 D1 数据库：**
+   ```bash
+   # 创建生产数据库
+   wrangler d1 create patchx-db
+
+   # 创建 staging 数据库（可选）
+   wrangler d1 create patchx-db-staging
+   ```
+
+2. **更新 wrangler.toml：**
+   - 从命令输出中复制 `database_id`
+   - 在 `wrangler.toml` 中更新实际的数据库 ID：
+     ```toml
+     [env.production]
+     d1_databases = [
+       { binding = "PATCHX_D1", database_name = "patchx-db", database_id = "your-actual-database-id" }
+     ]
+     ```
+
+3. **初始化数据库：**
+   ```bash
+   # 初始化本地数据库（如果表不存在则创建，保留现有数据）
+   npm run db:init:confirm
+
+   # 初始化远程生产数据库
+   bash scripts/reset-db.sh --init --env production --remote --confirm
+
+   # 或重置数据库（删除并重新创建所有表）
+   npm run db:reset:confirm
+
+   # 重置远程生产数据库
+   bash scripts/reset-db.sh --env production --remote --confirm
+   ```
 
 **使用 npm 脚本：**
 ```bash
-# 使用 Supabase 进行身份验证
-npx supabase login
+# 带确认提示的初始化数据库
+npm run db:init
+
+# 无需确认的初始化数据库
+npm run db:init:confirm
+
+# 初始化远程数据库（不使用 --env，使用 patchx-db）
+npm run db:init:remote
 
 # 带确认提示的重置数据库
 npm run db:reset
 
 # 无需确认的重置数据库（请谨慎使用）
 npm run db:reset:confirm
+
+# 重置远程数据库（不使用 --env，使用 patchx-db）
+npm run db:reset:remote
 ```
 
-**环境变量：**
-
-根据 `.env.example` 创建/更新 `.env.local` 并配置：
+**环境特定的操作：**
 ```bash
-SUPABASE_URL=https://your-project.supabase.co
-SUPABASE_ANON_KEY=your_supabase_anon_key
-VITE_PUBLIC_SITE_URL=https://patchx.pages.dev
+# 初始化生产数据库（本地）
+bash scripts/reset-db.sh --init --env production --confirm
+
+# 初始化生产数据库（远程）
+bash scripts/reset-db.sh --init --env production --remote --confirm
+
+# 重置 staging 数据库（本地）
+bash scripts/reset-db.sh --env staging --confirm
+
+# 重置 staging 数据库（远程）
+bash scripts/reset-db.sh --env staging --remote --confirm
 ```
 
-脚本会自动从 `SUPABASE_URL` 中提取项目引用，因此您无需单独设置 `SUPABASE_PROJECT_REF`。
-
-**替代方案：直接数据库连接**
-
-如果您不想进行身份验证，可以通过在 `.env.local` 中添加 `DATABASE_URL` 来使用直接数据库连接：
-
-```bash
-DATABASE_URL=postgresql://postgres:[PASSWORD]@db.[PROJECT_REF].supabase.co:5432/postgres
-```
-
-您可以在 Supabase 仪表板的 **设置** → **数据库** → **连接字符串** 中找到数据库密码。
+**本地 vs 远程数据库：**
+- **本地数据库**：存储在 `.wrangler/state/v3/d1` 目录中，用于本地开发
+- **远程数据库**：Cloudflare 账户中的 D1 数据库，用于生产/staging 部署
+- 使用 `--remote` 标志操作远程数据库
+- 使用 `--env production` 或 `--env staging` 时，脚本使用 `wrangler.toml` 中的 `DB` 绑定
+- 不使用 `--env` 时，脚本直接使用数据库名称（例如：`patchx-db`）
 
 **重要提示：**
-- 数据库重置在 `wrangler deploy` 或 Cloudflare Pages 部署过程中**永远不会**执行
+- 数据库操作在 `wrangler deploy` 或 Cloudflare Pages 部署过程中**永远不会**执行
 - 重置前请务必备份数据
 - 除非使用 `--confirm`，否则重置脚本需要明确确认
-- 对于远程项目，需要通过 `npx supabase login` 进行身份验证（除非使用 `DATABASE_URL`）
-
-**故障排除：重新部署后无法登录？**
-
-如果用户在重新部署到 Cloudflare 后无法登录，请检查：
-
-1. **Cloudflare Pages 中的环境变量：**
-   - 进入 Cloudflare Pages 仪表板 → 您的项目 → 设置 → 环境变量
-   - 验证 `SUPABASE_URL` 和 `SUPABASE_ANON_KEY` 是否已为生产环境设置
-   - 确保它们指向用户注册的**同一个** Supabase 项目
-
-2. **Supabase 项目：**
-   - 检查 Supabase 项目是否在 Supabase 仪表板中被手动重置
-   - 验证项目 URL 和密钥是否已更改
-   - 确认用户账户存在于 Supabase Auth 用户表中
-
-3. **环境变量不匹配：**
-   - 本地开发使用 `.env.local` 文件
-   - Cloudflare Pages 使用仪表板中设置的环境变量
-   - 这些必须指向同一个 Supabase 项目
-
-**注意：** 数据库重置脚本（`scripts/reset-db.sh`）在部署过程中**永远不会**自动调用。如果登录失败，几乎总是环境变量配置问题。
+- D1 数据库绑定到您的 Cloudflare 账户，通过 Worker 中的 `DB` 绑定访问
 
 ## 🔄 开发服务器说明
 
@@ -314,9 +337,8 @@ CUSTOM_AI_TEMPERATURE=0.1
 # 鉴权相关
 TEST_USER_PASSWORD=your-secure-password
 
-# Supabase（前端）
-SUPABASE_URL=https://your-supabase-project.supabase.co
-SUPABASE_ANON_KEY=your_supabase_anon_key
+# 注意：D1 数据库通过 wrangler.toml 中的 d1_databases 绑定配置
+# 环境变量中不需要数据库连接字符串
 ```
 
 ### 邮件通知配置
@@ -427,13 +449,13 @@ VITE_WORKER_BASE_URL=https://patchx-service.angersax.workers.dev
 
 登录页面将调用 `${VITE_WORKER_BASE_URL}/api/auth/login`，可在不同环境设置不同值（如 staging/production）。
 
-#### Cloudflare Pages：Supabase 环境变量配置
+#### Cloudflare Pages：环境变量配置
 
 **推荐方式：使用 Worker 配置端点（自动）**
 
-最简单的方式是让 Worker 通过 `/api/config/public` 端点提供 Supabase 配置：
+Worker 通过 `/api/config/public` 端点提供配置，前端会自动使用：
 
-1. 确保 `.env.local` 包含 `SUPABASE_URL`、`SUPABASE_ANON_KEY`
+1. 确保 `.env.local` 包含所需变量（见 `.env.example`）
 2. 运行同步脚本将环境变量同步到 `wrangler.toml`：
    ```bash
    npm run sync:env
@@ -446,31 +468,29 @@ VITE_WORKER_BASE_URL=https://patchx-service.angersax.workers.dev
 
 1. 进入 Cloudflare Pages → 选择项目 → Settings → Environment variables
 2. 在 "Production" 与 "Preview"（按需）添加以下变量：
-   - `SUPABASE_URL` → `https://<your-project>.supabase.co`
-   - `SUPABASE_ANON_KEY` → `<your_anon_key>`
    - `VITE_PUBLIC_SITE_URL` → 对外访问地址（如 `https://patchx.pages.dev`）
 3. 重新部署 Pages 项目使新的环境变量生效。
 
-说明：
-- Vite 仅会将以 `VITE_` 开头的变量暴露到前端代码；Supabase 的 anon key 设计为公开可在前端使用。请勿在前端使用 service role key。
-- 如果未在 Cloudflare Pages 中设置环境变量，前端会自动回退到 Worker 的 `/api/config/public` 端点。
+**注意：** LiteLLM 配置现在通过设置页面（仅管理员）管理，并存储在 D1 数据库中，不再使用环境变量。请参阅下面的 LiteLLM 配置部分。
 
-#### Cloudflare Workers：通过 `wrangler.toml` 配置 Supabase
+#### Cloudflare Workers：通过 `wrangler.toml` 配置
 
-在 Workers 端配置 Supabase，并由前端在运行时拉取：
+在 Workers 端配置环境变量，并由前端在运行时拉取：
 
-1. 在 `wrangler.toml` 增加变量（或使用 `npm run sync:env` 自动同步）：
-```toml
-[env.production.vars]
-SUPABASE_URL = "https://<your-project>.supabase.co"
-SUPABASE_ANON_KEY = "<your_anon_key>"
+1. 从 `.env.local` 同步环境变量到 `wrangler.toml`：
+   ```bash
+   npm run sync:env
+   ```
 
-[env.staging.vars]
-SUPABASE_URL = "https://<your-project>.supabase.co"
-SUPABASE_ANON_KEY = "<your_anon_key>"
-```
-2. Worker 提供公共配置端点 `/api/config/public`，返回 `{ supabaseUrl, supabaseAnonKey }`。
-3. 前端采用惰性初始化 Supabase，当未设置 `SUPABASE_*` 时将回退到该端点。
+2. Worker 提供公共配置端点 `/api/config/public`，返回 `{ publicSiteUrl }`。
+
+3. D1 数据库通过 `wrangler.toml` 中的 `d1_databases` 绑定配置：
+   ```toml
+   [env.production]
+   d1_databases = [
+     { binding = "PATCHX_D1", database_name = "patchx-db", database_id = "your-database-id" }
+   ]
+   ```
 
 ### 远程节点配置
 
@@ -482,7 +502,7 @@ SUPABASE_ANON_KEY = "<your_anon_key>"
 - **身份认证**: 支持 SSH 密钥和密码两种认证方式
 - **工作主目录**: 为 git 操作指定工作目录路径
 - **连接测试**: 测试 SSH 连接并验证工作主目录
-- **Supabase 存储**: 远程节点配置存储在 Supabase 数据库中
+- **D1 数据库存储**: 远程节点配置存储在 Cloudflare D1 数据库中
 
 #### 设置远程节点
 
@@ -550,17 +570,21 @@ SUPABASE_ANON_KEY = "<your_anon_key>"
 
 4. **每节点配置的优势**:
    - 每个节点可以使用不同的 SSH 服务端点
-   - API 密钥安全地存储在 Supabase 中，每个节点独立
+   - API 密钥安全地存储在 D1 数据库中，每个节点独立
    - 更好的组织性和灵活性
 
 5. **没有 SSH 服务 API**: 连接测试仍会验证 SSH 连接性，但工作主目录验证和 git 操作将被跳过。
 
 #### 数据库设置
 
-运行数据库重置脚本时会自动创建 `remote_nodes` 和 `app_settings` 表：
+初始化或重置 D1 数据库时会自动创建 `remote_nodes` 和 `app_settings` 表：
 
 ```bash
-./scripts/reset-db.sh --confirm
+# 初始化数据库（安全，保留现有数据）
+npm run db:init:confirm
+
+# 或重置数据库（删除并重新创建所有表）
+npm run db:reset:confirm
 ```
 
 **remote_nodes 表**包括：
@@ -574,7 +598,14 @@ SUPABASE_ANON_KEY = "<your_anon_key>"
 - 应用程序设置的键值对
 - LiteLLM 配置（基础 URL、API 密钥、模型名称）
 - 时间戳（created_at, updated_at）
-- 启用了行级安全（RLS）以确保安全访问
+
+**数据库架构：**
+
+数据库架构定义在 `schema.sql` 中。表使用与 Cloudflare D1 兼容的 SQLite 语法：
+
+- UUID 存储为 TEXT（SQLite 没有原生 UUID 类型）
+- 时间戳使用 ISO 8601 格式（TEXT 类型，默认值为 `datetime('now')`）
+- 在经常查询的字段（host、username、key）上创建索引
 
 #### 使用远程节点
 
@@ -658,7 +689,10 @@ wrangler secret put CUSTOM_AI_API_KEY
 ```toml
 [env.production]
 kv_namespaces = [
-  { binding = "AOSP_PATCH_KV", id = "<your_kv_id>" }
+  { binding = "PATCHX_KV", id = "<your_kv_id>" }
+]
+d1_databases = [
+  { binding = "PATCHX_D1", database_name = "patchx-db", database_id = "<your_database_id>" }
 ]
 ```
 
@@ -997,6 +1031,10 @@ Response:
 npm run build:worker
 
 # 部署到 Cloudflare Workers
+npm run deploy
+# 这会运行：npm run build:worker && npx wrangler deploy
+
+# 或手动部署
 wrangler deploy
 ```
 
@@ -1011,14 +1049,87 @@ wrangler pages deploy dist --project-name=patchx
 
 **重要提示：部署时的环境变量配置**
 
-您有**两种选择**来配置 Supabase 环境变量：
+### D1 数据库配置
 
-#### 选项 1：使用 Worker 的配置端点（推荐 - 自动）
+1. **创建 D1 数据库：**
+   ```bash
+   # 创建生产数据库
+   wrangler d1 create patchx-db
 
-Worker 可以通过 `/api/config/public` 暴露 Supabase 配置，前端会自动将其作为后备方案使用。这意味着您无需在 Cloudflare Pages 仪表板中设置环境变量。
+   # 创建 staging 数据库（可选）
+   wrangler d1 create patchx-db-staging
+   ```
+
+2. **更新 wrangler.toml：**
+   - 从命令输出中复制 `database_id`
+   - 在 `wrangler.toml` 中更新 `d1_databases` 部分，使用实际的数据库 ID
+   - **重要提示：** 确保 `database_id` 与创建的数据库完全匹配
+
+3. **验证数据库绑定：**
+   ```bash
+   # 列出所有 D1 数据库以验证数据库是否存在
+   wrangler d1 list
+
+   # 验证 wrangler.toml 中的 database_id 是否匹配
+   # 输出应显示您的数据库及其相同的 ID
+   ```
+
+4. **初始化数据库：**
+   ```bash
+   # 本地开发：初始化本地数据库
+   npm run db:init:confirm
+
+   # 生产环境部署：初始化远程生产数据库
+   bash scripts/reset-db.sh --init --env production --remote --confirm
+
+   # 预发布环境部署：初始化远程 staging 数据库
+   bash scripts/reset-db.sh --init --env staging --remote --confirm
+   ```
+
+5. **故障排除 "D1 database binding (PATCHX_D1) is not configured" 错误：**
+
+   如果您在生产环境中看到此错误，请检查：
+
+   a. **验证数据库是否存在：**
+      ```bash
+      wrangler d1 list
+      ```
+      确保 `patchx-db` 存在并记下其 `database_id`
+
+   b. **验证 wrangler.toml 配置：**
+      - 检查 `[env.production]` 部分是否配置了 `d1_databases`
+      - 验证 `database_id` 与 `wrangler d1 list` 中的 ID 匹配
+      - 确保 `binding` 设置为 `"PATCHX_D1"`（区分大小写）
+
+   c. **修复配置后重新部署：**
+      ```bash
+      npm run deploy
+      ```
+
+   d. **在 Cloudflare 仪表板中验证绑定：**
+      - 转到 Cloudflare 仪表板 → Workers & Pages → 您的 Worker
+      - 检查 Settings → Variables → D1 Database Bindings
+      - 确保 `PATCHX_D1` 绑定已配置并指向正确的数据库
+
+   e. **如果数据库不存在，请创建它：**
+      ```bash
+      wrangler d1 create patchx-db
+      # 从输出中复制 database_id
+      # 使用新的 database_id 更新 wrangler.toml
+      # 重新部署：npm run deploy
+      ```
+
+### 环境变量同步
+
+从 `.env.local` 同步环境变量到 `wrangler.toml`：
 
 **步骤：**
-1. 确保您的 `.env.local` 包含 `SUPABASE_URL`、`SUPABASE_ANON_KEY`，可选的 `GERRIT_USERNAME` 和 `GERRIT_PASSWORD`，以及可选的 `CACHE_VERSION`（默认为 `v1`）
+1. 确保您的 `.env.local` 包含所需变量（见 `.env.example`）：
+   - `VITE_PUBLIC_SITE_URL`
+   - `GERRIT_BASE_URL`、`GERRIT_USERNAME`、`GERRIT_PASSWORD`
+   - `RESEND_API_KEY`（可选，用于邮件）
+   - `ADMIN_USER_PASSWORD`、`TEST_USER_PASSWORD`
+   - `CACHE_VERSION`（默认为 `v1`）
 2. 将它们同步到 `wrangler.toml`：
    ```bash
    npm run sync:env
@@ -1027,27 +1138,19 @@ Worker 可以通过 `/api/config/public` 暴露 Supabase 配置，前端会自�
    ```bash
    npm run deploy
    ```
-4. 前端将自动从 Worker 的 `/api/config/public` 端点获取配置
 
 **注意：** 要在部署时清除服务端缓存，请在 `.env.local` 中更新 `CACHE_VERSION`（例如改为 `v2`），运行 `npm run sync:env`，然后重新部署。
 
-#### 选项 2：在 Cloudflare Pages 仪表板中设置（手动）
+### Cloudflare Pages 环境变量（可选）
 
-或者，您可以在 Cloudflare Pages 中设置环境变量：
+您也可以在 Cloudflare Pages 仪表板中设置环境变量：
 
 1. 进入您的 Cloudflare Pages 项目仪表板
 2. 导航到 **设置** → **环境变量**
 3. 为 **生产环境**（以及 **预览环境**，如需要）添加以下变量：
-   - `SUPABASE_URL` - 您的 Supabase 项目 URL（例如：`https://your-project.supabase.co`）
-   - `SUPABASE_ANON_KEY` - 您的 Supabase 匿名密钥
    - `VITE_PUBLIC_SITE_URL` - 您的站点公网地址（例如：`https://patchx.pages.dev`）
 
-**⚠️ 关键提示：** 如果这些环境变量缺失或指向不同的 Supabase 项目，用户在重新部署后将无法登录。数据库重置脚本在部署过程中**永远不会**被调用，因此如果登录失败，请检查：
-
-1. 环境变量设置正确（通过 Worker 的 `wrangler.toml` 或在 Cloudflare Pages 仪表板中）
-2. 环境变量指向正确的 Supabase 项目
-3. Supabase 项目未通过 Supabase 仪表板手动重置
-4. Supabase 项目 URL 和密钥未更改
+**重要提示：** D1 数据库通过 `wrangler.toml` 配置并绑定到 Worker。环境变量中不需要数据库连接字符串或凭据。
 
 ### 部署后的服务地址
 - **前端（Cloudflare Pages）**: `https://patchx.pages.dev`

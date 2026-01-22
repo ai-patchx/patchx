@@ -13,7 +13,7 @@ A web service that streamlines contributing code to the Android Open Source Proj
 - 📊 Status tracking: real‑time submission progress and results
 - 📱 Responsive design: desktop and mobile support
 - 🔐 User login and token‑based authentication
-- 🧑‍💻 User registration: Email only (Supabase)
+- 🧑‍💻 User registration: Email-based authentication
 - 📋 Dynamic project listing: automatically fetch all projects from Gerrit
 - 🌿 Dynamic branch listing: automatically fetch branches for selected project
 - 🔍 Searchable dropdowns: search and filter projects and branches with real-time filtering
@@ -28,7 +28,7 @@ A web service that streamlines contributing code to the Android Open Source Proj
 - Frontend: React 18 + TypeScript + Tailwind CSS
 - Backend: Cloudflare Workers + TypeScript
 - AI integration: OpenAI, Anthropic, and any OpenAI‑compatible providers
-- Storage: Supabase (for user data and remote nodes), Cloudflare KV (for caching)
+- Storage: Cloudflare D1 (for remote nodes and app settings), Cloudflare KV (for caching)
 - Deployment: Cloudflare Workers + Pages
 
 ## 🤖 AI Conflict Resolution
@@ -71,21 +71,8 @@ wrangler secret put TEST_USER_PASSWORD
 
 ### Authentication & Registration (Local dev)
 
-- Homepage provides Login/Registration modal
-- Email registration only via Supabase
-- After registration, users receive an 8-digit verification code via email
-- Enter the verification code in the registration modal to complete account setup
-
-**Important:** To use verification codes instead of confirmation links, you must configure your Supabase email templates:
-1. Go to Supabase Dashboard → Authentication → Email Templates
-2. Edit the "Confirm Signup" template
-3. Replace `{{ .ConfirmationURL }}` with `{{ .Token }}` to display the verification code
-4. See `SUPABASE_EMAIL_TEMPLATE_SETUP.md` for detailed instructions
-
 Copy `.env.example` to `.env.local` and set:
 ```bash
-SUPABASE_URL=https://your-supabase-project.supabase.co
-SUPABASE_ANON_KEY=your_supabase_anon_key
 VITE_PUBLIC_SITE_URL=http://localhost:5173
 GERRIT_BASE_URL=https://android-review.googlesource.com
 GERRIT_USERNAME=your-gerrit-username
@@ -173,6 +160,21 @@ For Ubuntu/WSL users, using an API token is recommended (avoids browser interact
 
 **Note:** Once `CLOUDFLARE_API_TOKEN` is set, wrangler will automatically use it for authentication. You don't need to run `wrangler login` when using the API token method.
 
+**Important:** If you have `CLOUDFLARE_API_TOKEN` set and try to run `wrangler login`, you'll get an error: "You are logged in with an API Token. Unset the CLOUDFLARE_API_TOKEN in the environment to log in via OAuth." This is expected behavior. To use OAuth login instead:
+```bash
+# Unset the API token
+unset CLOUDFLARE_API_TOKEN
+
+# Then run OAuth login
+wrangler login
+```
+
+To switch back to API token authentication:
+```bash
+# Set the token again
+export CLOUDFLARE_API_TOKEN='your-api-token-here'
+```
+
 ```bash
 # Local development (API Worker)
 npm run build:worker
@@ -189,69 +191,94 @@ npm run deploy
 
 ### Database Management
 
-#### Reset Database
+#### D1 Database Setup
 
-The database reset functionality is available as an optional script and is **never** executed during `wrangler deploy`.
+PatchX uses Cloudflare D1 (SQLite) for storing remote node configurations and application settings.
+
+**Initial Setup:**
+
+1. **Create D1 Database:**
+   ```bash
+   # Create production database
+   wrangler d1 create patchx-db
+
+   # Create staging database (optional)
+   wrangler d1 create patchx-db-staging
+   ```
+
+2. **Update wrangler.toml:**
+   - Copy the `database_id` from the command output
+   - Update `wrangler.toml` with the actual database IDs:
+     ```toml
+     [env.production]
+     d1_databases = [
+       { binding = "PATCHX_D1", database_name = "patchx-db", database_id = "your-actual-database-id" }
+     ]
+     ```
+
+3. **Initialize Database:**
+   ```bash
+   # Initialize local database (creates tables if they don't exist)
+   npm run db:init:confirm
+
+   # Initialize remote production database
+   bash scripts/reset-db.sh --init --env production --remote --confirm
+
+   # Or reset database (drops and recreates all tables)
+   npm run db:reset:confirm
+
+   # Reset remote production database
+   bash scripts/reset-db.sh --env production --remote --confirm
+   ```
 
 **Using npm scripts:**
 ```bash
-# Authenticate with Supabase
-npx supabase login
+# Initialize database with confirmation prompt
+npm run db:init
+
+# Initialize database without confirmation
+npm run db:init:confirm
+
+# Initialize remote database (without --env, uses patchx-db)
+npm run db:init:remote
 
 # Reset database with confirmation prompt
 npm run db:reset
 
 # Reset database without confirmation (use with caution)
 npm run db:reset:confirm
+
+# Reset remote database (without --env, uses patchx-db)
+npm run db:reset:remote
 ```
 
-**Environment Variables:**
-
-Create (or update) `.env.local` using `.env.example` as a template and include:
+**Environment-specific operations:**
 ```bash
-SUPABASE_URL=https://your-project.supabase.co
-SUPABASE_ANON_KEY=your_supabase_anon_key
-VITE_PUBLIC_SITE_URL=https://patchx.pages.dev
+# Initialize production database (local)
+bash scripts/reset-db.sh --init --env production --confirm
+
+# Initialize production database (remote)
+bash scripts/reset-db.sh --init --env production --remote --confirm
+
+# Reset staging database (local)
+bash scripts/reset-db.sh --env staging --confirm
+
+# Reset staging database (remote)
+bash scripts/reset-db.sh --env staging --remote --confirm
 ```
 
-The script automatically extracts the project reference from `SUPABASE_URL`, so you don't need to set `SUPABASE_PROJECT_REF` separately.
-
-**Alternative: Direct Database Connection**
-
-If you prefer not to authenticate, you can use a direct database connection by adding `DATABASE_URL` to `.env.local`:
-
-```bash
-DATABASE_URL=postgresql://postgres:[PASSWORD]@db.[PROJECT_REF].supabase.co:5432/postgres
-```
-
-You can find your database password in the Supabase Dashboard under **Settings** → **Database** → **Connection string**.
+**Local vs Remote Database:**
+- **Local database**: Stored in `.wrangler/state/v3/d1` directory, used for local development
+- **Remote database**: Cloudflare D1 database in your account, used for production/staging deployments
+- Use `--remote` flag to operate on remote databases
+- When using `--env production` or `--env staging`, the script uses the `DB` binding from `wrangler.toml`
+- Without `--env`, the script uses the database name directly (e.g., `patchx-db`)
 
 **Important:**
-- Database reset is **never** executed during `wrangler deploy` or Cloudflare Pages deployment
+- Database operations are **never** executed during `wrangler deploy` or Cloudflare Pages deployment
 - Always backup your data before resetting
 - The reset script requires explicit confirmation unless `--confirm` is used
-- For remote projects, authentication via `npx supabase login` is required (unless using `DATABASE_URL`)
-
-**Troubleshooting: Can't login after redeploy?**
-
-If users can't login after redeploying to Cloudflare, check:
-
-1. **Environment Variables in Cloudflare Pages:**
-   - Go to Cloudflare Pages dashboard → Your project → Settings → Environment Variables
-   - Verify `SUPABASE_URL` and `SUPABASE_ANON_KEY` are set for Production environment
-   - Ensure they point to the **same** Supabase project where users registered
-
-2. **Supabase Project:**
-   - Check if the Supabase project was reset manually in Supabase dashboard
-   - Verify the project URL and keys haven't changed
-   - Confirm the user account exists in the Supabase Auth users table
-
-3. **Environment Variable Mismatch:**
-   - Local development uses `.env.local` file
-   - Cloudflare Pages uses environment variables set in the dashboard
-   - These must match the same Supabase project
-
-**Note:** The database reset script (`scripts/reset-db.sh`) is **never** automatically called during deployment. If login fails, it's almost always an environment variable configuration issue.
+- D1 databases are bound to your Cloudflare account and accessible via the `DB` binding in your Worker
 
 ## 🔄 Dev Servers
 
@@ -310,9 +337,8 @@ CUSTOM_AI_TEMPERATURE=0.1
 # Authentication
 TEST_USER_PASSWORD=your-secure-password
 
-# Supabase (frontend)
-SUPABASE_URL=https://your-supabase-project.supabase.co
-SUPABASE_ANON_KEY=your_supabase_anon_key
+# Note: D1 database is configured in wrangler.toml via d1_databases binding
+# No database connection strings needed in environment variables
 ```
 
 ### Email notification setup
@@ -423,38 +449,35 @@ VITE_WORKER_BASE_URL=https://patchx-service.angersax.workers.dev
 
 The login page calls `${VITE_WORKER_BASE_URL}/api/auth/login`. Provide different values for staging/production as needed.
 
-#### Cloudflare Pages: Supabase environment configuration
+#### Cloudflare Pages: Environment configuration
 
-Configure Supabase environment variables for the frontend build in your Cloudflare Pages project settings:
+Configure environment variables for the frontend build in your Cloudflare Pages project settings:
 
 1. Go to Cloudflare Pages → your project → Settings → Environment variables
 2. Add the following variables under both "Production" and "Preview" (as needed):
-   - `SUPABASE_URL` → `https://<your-project>.supabase.co`
-   - `SUPABASE_ANON_KEY` → `<your_anon_key>`
    - `VITE_PUBLIC_SITE_URL` → public URL of your site (e.g. `https://patchx.pages.dev`)
 3. Redeploy the Pages project so the new variables are applied to the build.
 
-**Note:** LiteLLM configuration is now managed through the Settings page (admin only), not via environment variables. See the LiteLLM Configuration section below.
+**Note:** LiteLLM configuration is now managed through the Settings page (admin only) and stored in D1 database, not via environment variables. See the LiteLLM Configuration section below.
 
-Notes:
-- Vite exposes variables that begin with `VITE_` to client code; the Supabase anon key is designed to be public and safe for client-side use. Do NOT use service role keys in the frontend.
+#### Cloudflare Workers: Configure via `wrangler.toml`
 
-#### Cloudflare Workers: Configure Supabase via `wrangler.toml`
+You can configure environment values on the Worker side and have the frontend fetch them at runtime.
 
-You can configure Supabase values on the Worker side and have the frontend fetch them at runtime.
+1. Sync environment variables from `.env.local` to `wrangler.toml`:
+   ```bash
+   npm run sync:env
+   ```
 
-1. Add vars in `wrangler.toml`:
-```toml
-[env.production.vars]
-SUPABASE_URL = "https://<your-project>.supabase.co"
-SUPABASE_ANON_KEY = "<your_anon_key>"
+2. The Worker exposes a public config endpoint at `/api/config/public` returning `{ publicSiteUrl }`.
 
-[env.staging.vars]
-SUPABASE_URL = "https://<your-project>.supabase.co"
-SUPABASE_ANON_KEY = "<your_anon_key>"
-```
-2. The Worker exposes a public config endpoint at `/api/config/public` returning `{ supabaseUrl, supabaseAnonKey }`.
-3. The frontend lazily initializes Supabase and falls back to this endpoint if `SUPABASE_*` are not set.
+3. D1 database is configured via `d1_databases` binding in `wrangler.toml`:
+   ```toml
+   [env.production]
+   d1_databases = [
+     { binding = "PATCHX_D1", database_name = "patchx-db", database_id = "your-database-id" }
+   ]
+   ```
 
 ### Remote Node Configuration
 
@@ -466,7 +489,7 @@ Remote nodes allow you to execute git operations on remote servers via SSH. This
 - **Authentication**: Support for both SSH key and password authentication
 - **Working Home Directory**: Specify a working directory path for git operations
 - **Connection Testing**: Test SSH connectivity and verify working home directory
-- **Supabase Storage**: Remote node configurations are stored in Supabase database
+- **D1 Database Storage**: Remote node configurations are stored in Cloudflare D1 database
 
 #### Setting Up Remote Nodes
 
@@ -534,17 +557,21 @@ For working home directory verification and executing git operations, you can co
 
 4. **Benefits of Per-Node Configuration**:
    - Each node can use a different SSH service endpoint
-   - API keys are stored securely in Supabase per node
+   - API keys are stored securely in D1 database per node
    - Better organization and flexibility
 
 5. **Without SSH Service API**: Connection test will still verify SSH connectivity, but working home verification and git operations will be skipped.
 
 #### Database Setup
 
-The `remote_nodes` and `app_settings` tables are automatically created when you run the database reset script:
+The `remote_nodes` and `app_settings` tables are automatically created when you initialize or reset the D1 database:
 
 ```bash
-./scripts/reset-db.sh --confirm
+# Initialize database (safe, preserves existing data)
+npm run db:init:confirm
+
+# Or reset database (drops and recreates all tables)
+npm run db:reset:confirm
 ```
 
 **remote_nodes table** includes:
@@ -558,7 +585,14 @@ The `remote_nodes` and `app_settings` tables are automatically created when you 
 - Key-value pairs for application settings
 - LiteLLM configuration (base URL, API key, model name)
 - Timestamps (created_at, updated_at)
-- Row Level Security (RLS) enabled for secure access
+
+**Database Schema:**
+
+The database schema is defined in `schema.sql`. The tables use SQLite syntax compatible with Cloudflare D1:
+
+- UUIDs are stored as TEXT (SQLite doesn't have native UUID type)
+- Timestamps use ISO 8601 format (TEXT type with `datetime('now')` default)
+- Indexes are created on frequently queried fields (host, username, key)
 
 #### Using Remote Nodes
 
@@ -642,7 +676,10 @@ Bind KV namespaces in `wrangler.toml`:
 ```toml
 [env.production]
 kv_namespaces = [
-  { binding = "AOSP_PATCH_KV", id = "<your_kv_id>" }
+  { binding = "PATCHX_KV", id = "<your_kv_id>" }
+]
+d1_databases = [
+  { binding = "PATCHX_D1", database_name = "patchx-db", database_id = "<your_database_id>" }
 ]
 ```
 
@@ -981,6 +1018,10 @@ Add all required environment variables in the Cloudflare Workers settings.
 npm run build:worker
 
 # Deploy to Cloudflare Workers
+npm run deploy
+# This runs: npm run build:worker && npx wrangler deploy
+
+# Or deploy manually
 wrangler deploy
 ```
 
@@ -995,14 +1036,87 @@ wrangler pages deploy dist --project-name=patchx
 
 **IMPORTANT: Environment Variables for Deployment**
 
-You have **two options** for configuring Supabase environment variables:
+### D1 Database Configuration
 
-### Option 1: Use Worker's Config Endpoint (Recommended - Automatic)
+1. **Create D1 Databases:**
+   ```bash
+   # Create production database
+   wrangler d1 create patchx-db
 
-The Worker can expose Supabase config via `/api/config/public`, and the frontend will automatically use it as a fallback. This means you don't need to set environment variables in Cloudflare Pages dashboard.
+   # Create staging database (optional)
+   wrangler d1 create patchx-db-staging
+   ```
+
+2. **Update wrangler.toml:**
+   - Copy the `database_id` from the command output
+   - Update the `d1_databases` sections in `wrangler.toml` with actual database IDs
+   - **Important:** Make sure the `database_id` matches exactly what was created
+
+3. **Verify Database Binding:**
+   ```bash
+   # List all D1 databases to verify the database exists
+   wrangler d1 list
+
+   # Verify the database_id in wrangler.toml matches
+   # The output should show your database with the same ID
+   ```
+
+4. **Initialize Database:**
+   ```bash
+   # For local development: Initialize local database
+   npm run db:init:confirm
+
+   # For production deployment: Initialize remote production database
+   bash scripts/reset-db.sh --init --env production --remote --confirm
+
+   # For staging deployment: Initialize remote staging database
+   bash scripts/reset-db.sh --init --env staging --remote --confirm
+   ```
+
+5. **Troubleshooting "D1 database binding (PATCHX_D1) is not configured" error:**
+
+   If you see this error in production, check:
+
+   a. **Verify database exists:**
+      ```bash
+      wrangler d1 list
+      ```
+      Make sure `patchx-db` exists and note its `database_id`
+
+   b. **Verify wrangler.toml configuration:**
+      - Check that `[env.production]` section has `d1_databases` configured
+      - Verify the `database_id` matches the one from `wrangler d1 list`
+      - Ensure the `binding` is set to `"PATCHX_D1"` (case-sensitive)
+
+   c. **Redeploy after fixing configuration:**
+      ```bash
+      npm run deploy
+      ```
+
+   d. **Verify binding in Cloudflare Dashboard:**
+      - Go to Cloudflare Dashboard → Workers & Pages → Your Worker
+      - Check Settings → Variables → D1 Database Bindings
+      - Ensure `PATCHX_D1` binding is configured and points to the correct database
+
+   e. **If database doesn't exist, create it:**
+      ```bash
+      wrangler d1 create patchx-db
+      # Copy the database_id from output
+      # Update wrangler.toml with the new database_id
+      # Redeploy: npm run deploy
+      ```
+
+### Environment Variables Sync
+
+Sync environment variables from `.env.local` to `wrangler.toml`:
 
 **Steps:**
-1. Ensure your `.env.local` has `SUPABASE_URL`, `SUPABASE_ANON_KEY`, optionally `GERRIT_USERNAME` and `GERRIT_PASSWORD`, and optionally `CACHE_VERSION` (defaults to `v1`)
+1. Ensure your `.env.local` has the required variables (see `.env.example`):
+   - `VITE_PUBLIC_SITE_URL`
+   - `GERRIT_BASE_URL`, `GERRIT_USERNAME`, `GERRIT_PASSWORD`
+   - `RESEND_API_KEY` (optional, for email)
+   - `ADMIN_USER_PASSWORD`, `TEST_USER_PASSWORD`
+   - `CACHE_VERSION` (defaults to `v1`)
 2. Sync them to `wrangler.toml`:
    ```bash
    npm run sync:env
@@ -1011,27 +1125,19 @@ The Worker can expose Supabase config via `/api/config/public`, and the frontend
    ```bash
    npm run deploy
    ```
-4. The frontend will automatically fetch config from the Worker's `/api/config/public` endpoint
 
 **Note:** To invalidate server-side caches on deploy, update `CACHE_VERSION` in `.env.local` (e.g., change to `v2`), run `npm run sync:env`, and redeploy.
 
-### Option 2: Set in Cloudflare Pages Dashboard (Manual)
+### Cloudflare Pages Environment Variables (Optional)
 
-Alternatively, you can set environment variables in Cloudflare Pages:
+You can also set environment variables in Cloudflare Pages dashboard:
 
 1. Go to your Cloudflare Pages project dashboard
 2. Navigate to **Settings** → **Environment Variables**
 3. Add the following variables for **Production** (and **Preview** if needed):
-   - `SUPABASE_URL` - Your Supabase project URL (e.g., `https://your-project.supabase.co`)
-   - `SUPABASE_ANON_KEY` - Your Supabase anonymous key
    - `VITE_PUBLIC_SITE_URL` - Public URL of your site (e.g., `https://patchx.pages.dev`)
 
-**⚠️ Critical:** If these environment variables are missing or point to a different Supabase project, users will not be able to login after redeployment. The database reset script is **never** called during deployment, so if login fails, check:
-
-1. Environment variables are set correctly (either in Worker via `wrangler.toml` or in Cloudflare Pages dashboard)
-2. Environment variables point to the correct Supabase project
-3. The Supabase project hasn't been reset manually through Supabase dashboard
-4. The Supabase project URL and keys haven't changed
+**Important:** D1 database is configured via `wrangler.toml` and bound to the Worker. No database connection strings or credentials are needed in environment variables.
 
 ### Post‑deployment URLs
 - Frontend (Cloudflare Pages): `https://patchx.pages.dev`

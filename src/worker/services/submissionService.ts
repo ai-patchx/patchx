@@ -5,7 +5,7 @@ import { UploadService } from './uploadService'
 import { GerritService } from './gerritService'
 import { EmailService } from './emailService'
 import { GitService } from './gitService'
-import { getSupabaseClient } from '../supabase'
+import { getD1Database, queryD1First } from '../d1'
 
 export class SubmissionService {
   private env: Env
@@ -143,55 +143,50 @@ export class SubmissionService {
           let workingHome: string | undefined
           try {
             await this.addLog(submissionId, '[Info] Retrieving remote node configuration...')
-            const supabase = getSupabaseClient(this.env)
+            const db = getD1Database(this.env)
 
-            // Add timeout to Supabase query (3 seconds - shorter timeout to fail fast)
+            // Add timeout to D1 query (3 seconds - shorter timeout to fail fast)
             const QUERY_TIMEOUT_MS = 3000
             let timeoutId: ReturnType<typeof setTimeout> | null = null
             let queryResolved = false
 
-            // Wrap Supabase query in a Promise for proper timeout handling
-            const nodeQueryPromise = new Promise<{ data: any; error: any }>((resolve, reject) => {
-              const query = supabase
-                .from('remote_nodes')
-                .select('working_home')
-                .eq('id', submission.remoteNodeId)
-                .single()
-
-              // Supabase queries are Promise-like, so we can await them
-              Promise.resolve(query)
-                .then((result) => {
-                  if (!queryResolved) {
-                    queryResolved = true
-                    if (timeoutId) {
-                      clearTimeout(timeoutId)
-                      timeoutId = null
-                    }
-                    resolve(result)
-                  }
-                })
-                .catch((error) => {
-                  if (!queryResolved) {
-                    queryResolved = true
-                    if (timeoutId) {
-                      clearTimeout(timeoutId)
-                      timeoutId = null
-                    }
-                    reject(error)
-                  }
-                })
+            // Wrap D1 query in a Promise for proper timeout handling
+            const nodeQueryPromise = queryD1First<{ working_home: string | null }>(
+              db,
+              'SELECT working_home FROM remote_nodes WHERE id = ?',
+              [submission.remoteNodeId]
+            ).then((node) => {
+              if (!queryResolved) {
+                queryResolved = true
+                if (timeoutId) {
+                  clearTimeout(timeoutId)
+                  timeoutId = null
+                }
+                return node
+              }
+              return null
+            }).catch((error) => {
+              if (!queryResolved) {
+                queryResolved = true
+                if (timeoutId) {
+                  clearTimeout(timeoutId)
+                  timeoutId = null
+                }
+                throw error
+              }
+              return null
             })
 
-            const timeoutPromise = new Promise<{ data: null; error: { message: string } }>((resolve) => {
+            const timeoutPromise = new Promise<null>((resolve) => {
               timeoutId = setTimeout(() => {
                 if (!queryResolved) {
                   queryResolved = true
-                  resolve({ data: null, error: { message: `Remote node query timeout after ${QUERY_TIMEOUT_MS / 1000} seconds` } })
+                  resolve(null)
                 }
               }, QUERY_TIMEOUT_MS)
             })
 
-            const result = await Promise.race([nodeQueryPromise, timeoutPromise])
+            const node = await Promise.race([nodeQueryPromise, timeoutPromise])
 
             // Clean up timeout if query resolved first
             if (timeoutId) {
@@ -199,9 +194,7 @@ export class SubmissionService {
               timeoutId = null
             }
 
-            const { data: node, error: nodeError } = result
-
-            if (!nodeError && node) {
+            if (node) {
               workingHome = node.working_home || undefined
               if (workingHome) {
                 await this.addLog(submissionId, `[Info] Using working home from remote node: ${workingHome}`)
@@ -209,7 +202,7 @@ export class SubmissionService {
                 await this.addLog(submissionId, '[Info] No working home configured, using default: ~/git-work')
               }
             } else {
-              const errorMsg = nodeError?.message || 'Node not found'
+              const errorMsg = 'Node not found or query timeout'
               await this.addLog(submissionId, `[Warning] Could not retrieve remote node configuration: ${errorMsg}`)
               // Log additional debug info if it's a timeout
               if (errorMsg.includes('timeout')) {

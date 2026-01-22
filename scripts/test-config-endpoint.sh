@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Test script to verify Worker's /api/config/public endpoint
-# This helps verify that Supabase config is accessible via the Worker
+# This helps verify that configuration is accessible via the Worker
 
 echo "Testing Worker config endpoint..."
 echo ""
@@ -23,28 +23,16 @@ if [ $? -eq 0 ]; then
   echo "$response" | jq '.' 2>/dev/null || echo "$response"
   echo ""
 
-  # Check if Supabase URL is present
-  if echo "$response" | grep -q "supabaseUrl"; then
-    supabase_url=$(echo "$response" | jq -r '.data.supabaseUrl' 2>/dev/null)
-    if [ -n "$supabase_url" ] && [ "$supabase_url" != "null" ] && [ "$supabase_url" != "" ]; then
-      echo "✅ Supabase URL is configured: $supabase_url"
+  # Check if publicSiteUrl is present
+  if echo "$response" | grep -q "publicSiteUrl"; then
+    site_url=$(echo "$response" | jq -r '.data.publicSiteUrl' 2>/dev/null)
+    if [ -n "$site_url" ] && [ "$site_url" != "null" ] && [ "$site_url" != "" ]; then
+      echo "✅ Public site URL is configured: $site_url"
     else
-      echo "❌ Supabase URL is missing or empty"
+      echo "⚠️  Public site URL is missing or empty"
     fi
   else
-    echo "❌ Response doesn't contain supabaseUrl"
-  fi
-
-  # Check if Supabase key is present
-  if echo "$response" | grep -q "supabaseAnonKey"; then
-    supabase_key=$(echo "$response" | jq -r '.data.supabaseAnonKey' 2>/dev/null)
-    if [ -n "$supabase_key" ] && [ "$supabase_key" != "null" ] && [ "$supabase_key" != "" ]; then
-      echo "✅ Supabase Anon Key is configured (length: ${#supabase_key})"
-    else
-      echo "❌ Supabase Anon Key is missing or empty"
-    fi
-  else
-    echo "❌ Response doesn't contain supabaseAnonKey"
+    echo "⚠️  Response doesn't contain publicSiteUrl"
   fi
 else
   echo "❌ Failed to access endpoint"

@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { getSupabaseClient } from '@/lib/supabase'
 import { useAuthStore } from '@/stores/authStore'
 import { CheckCircle, XCircle, Loader2 } from 'lucide-react'
 
@@ -14,114 +13,18 @@ export default function EmailConfirmationPage() {
   useEffect(() => {
     const handleConfirmation = async () => {
       try {
-        const supabase = await getSupabaseClient()
-
-        // First, check URL hash for Supabase callback (most common format)
-        const hashParams = new URLSearchParams(window.location.hash.substring(1))
-        const hashError = hashParams.get('error')
-        const hashErrorCode = hashParams.get('error_code')
-        const hashErrorDescription = hashParams.get('error_description')
-        const accessToken = hashParams.get('access_token')
-        const refreshToken = hashParams.get('refresh_token')
-        const hashType = hashParams.get('type')
-
-        // Check query parameters for errors
-        const queryError = searchParams.get('error')
-        const queryErrorCode = searchParams.get('error_code')
-        const queryErrorDescription = searchParams.get('error_description')
-
-        // Handle errors (check hash first, then query params)
-        const error = hashError || queryError
-        const errorCode = hashErrorCode || queryErrorCode
-        const errorDescription = hashErrorDescription || queryErrorDescription
-
-        if (error) {
-          // Handle error cases
-          if (errorCode === 'otp_expired') {
-            setStatus('error')
-            setMessage('The confirmation link has expired. Please register again or request a new confirmation email.')
-          } else if (errorCode === 'token_not_found') {
-            setStatus('error')
-            setMessage('Invalid confirmation link. Please check your email and try again.')
-          } else {
-            setStatus('error')
-            setMessage(errorDescription
-              ? decodeURIComponent(errorDescription.replace(/\+/g, ' '))
-              : 'Email confirmation failed. Please try again.')
-          }
-          return
-        }
-
-        // If we have tokens in the hash, set the session (Supabase's standard flow)
-        if (accessToken && refreshToken) {
-          const { data, error: sessionError } = await supabase.auth.setSession({
-            access_token: accessToken,
-            refresh_token: refreshToken
-          })
-
-          if (sessionError) {
-            throw sessionError
-          }
-
-          if (data.user) {
-            setStatus('success')
-            setMessage('Email confirmed successfully! Redirecting...')
-            await checkUser()
-            setTimeout(() => {
-              navigate('/submit')
-            }, 2000)
-            return
-          }
-        }
-
-        // Check for token and type in query parameters (alternative flow)
-        const token = searchParams.get('token')
-        const type = searchParams.get('type') || hashType
-
-        if (token && type === 'signup') {
-          // Verify the email with the token
-          const { data, error: verifyError } = await supabase.auth.verifyOtp({
-            token_hash: token,
-            type: 'signup'
-          })
-
-          if (verifyError) {
-            throw verifyError
-          }
-
-          if (data.user) {
-            setStatus('success')
-            setMessage('Email confirmed successfully! Redirecting...')
-            await checkUser()
-            setTimeout(() => {
-              navigate('/submit')
-            }, 2000)
-            return
-          }
-        }
-
-        // If no tokens found, check if user is already confirmed
-        const { data: { user } } = await supabase.auth.getUser()
-        if (user && user.email_confirmed_at) {
-          setStatus('success')
-          setMessage('Your email is already confirmed. Redirecting...')
-          await checkUser()
-          setTimeout(() => {
-            navigate('/submit')
-          }, 2000)
-        } else {
-          setStatus('error')
-          setMessage('Invalid confirmation link. Please check your email for the correct link.')
-        }
+        // NOTE: Email confirmation is not available after migrating from Supabase to D1.
+        // Authentication system needs to be reimplemented.
+        setStatus('error')
+        setMessage(
+          'Email confirmation is not available. Authentication system needs to be reimplemented after D1 migration. ' +
+          'Please use Worker authentication (username/password) instead.'
+        )
       } catch (error) {
         console.error('Email confirmation error:', error)
         setStatus('error')
         const errorMessage = error instanceof Error ? error.message : 'Failed to confirm email'
-        if (errorMessage.includes('expired') || errorMessage.includes('invalid')) {
-          setMessage('The confirmation link has expired or is invalid. Please register again.')
-        } else {
-          setMessage(`Email confirmation failed: ${errorMessage}`)
-        }
+        setMessage(`Email confirmation failed: ${errorMessage}`)
       }
     }
 

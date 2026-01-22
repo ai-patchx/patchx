@@ -7,7 +7,7 @@ import { GerritService } from './services/gerritService'
 import { GitService } from './services/gitService'
 import { getKvNamespace } from './kv'
 import { executeSSHCommandDirect } from './ssh-client'
-import { getSupabaseClient } from './supabase'
+import { getD1Database, queryD1, queryD1First, executeD1, generateUUID } from './d1'
 
 interface RemoteNodeData {
   id: string
@@ -726,8 +726,6 @@ async function handleStatus(path: string, env: Env, corsHeaders: Record<string, 
 }
 async function handlePublicConfig(env: Env, corsHeaders: Record<string, string>): Promise<Response> {
   const data = {
-    supabaseUrl: env.SUPABASE_URL || '',
-    supabaseAnonKey: env.SUPABASE_ANON_KEY || '',
     publicSiteUrl: env.VITE_PUBLIC_SITE_URL || ''
   }
 
@@ -745,14 +743,15 @@ async function handlePublicConfig(env: Env, corsHeaders: Record<string, string>)
 async function handleModels(env: Env, corsHeaders: Record<string, string>): Promise<Response> {
   try {
     // Get LiteLLM configuration from database
-    const supabase = getSupabaseClient(env)
-    const { data: settings, error: settingsError } = await supabase
-      .from('app_settings')
-      .select('key, value')
-      .in('key', ['litellm_base_url', 'litellm_api_key'])
+    const db = getD1Database(env)
+    const settings = await queryD1<{ key: string; value: string | null }>(
+      db,
+      'SELECT key, value FROM app_settings WHERE key IN (?, ?)',
+      ['litellm_base_url', 'litellm_api_key']
+    )
 
-    if (settingsError) {
-      console.error('Error fetching LiteLLM settings:', settingsError)
+    if (!settings.success) {
+      console.error('Error fetching LiteLLM settings')
       return new Response(
         JSON.stringify({
           success: false,
@@ -770,8 +769,8 @@ async function handleModels(env: Env, corsHeaders: Record<string, string>): Prom
 
     // Convert settings array to object
     const settingsMap: Record<string, string> = {}
-    if (settings) {
-      for (const setting of settings) {
+    if (settings.results) {
+      for (const setting of settings.results) {
         settingsMap[setting.key] = setting.value || ''
       }
     }
@@ -1071,11 +1070,11 @@ async function handleProjects(
     let cacheSource = 'worker'
 
     // If not in Worker cache, try KV cache (for longer persistence)
-    if (!cachedResponse && env.AOSP_PATCH_KV) {
+    if (!cachedResponse && env.PATCHX_KV) {
       const url = new URL(request.url)
       const kvKey = getCacheKeyString(url.pathname, url.search, env)
       try {
-        const kvData = await env.AOSP_PATCH_KV.get(kvKey, 'json')
+        const kvData = await env.PATCHX_KV.get(kvKey, 'json')
         if (kvData && typeof kvData === 'object' && 'data' in kvData && 'timestamp' in kvData) {
           const kvCache = kvData as { data: any; timestamp: number }
           const age = Date.now() - kvCache.timestamp
@@ -1159,10 +1158,10 @@ async function handleProjects(
     })
 
     // Also store in KV for longer persistence
-    if (env.AOSP_PATCH_KV) {
+    if (env.PATCHX_KV) {
       const url = new URL(request.url)
       const kvKey = getCacheKeyString(url.pathname, url.search, env)
-      env.AOSP_PATCH_KV.put(kvKey, JSON.stringify({
+      env.PATCHX_KV.put(kvKey, JSON.stringify({
         data: responseData,
         timestamp: Date.now()
       })).catch(err => {
@@ -1242,11 +1241,11 @@ async function handleProjectBranches(
       let cacheSource = 'worker'
 
       // If not in Worker cache, try KV cache
-      if (!cachedResponse && env.AOSP_PATCH_KV) {
+      if (!cachedResponse && env.PATCHX_KV) {
         const url = new URL(request.url)
         const kvKey = getCacheKeyString(url.pathname, url.search, env)
         try {
-          const kvData = await env.AOSP_PATCH_KV.get(kvKey, 'json')
+          const kvData = await env.PATCHX_KV.get(kvKey, 'json')
           if (kvData && typeof kvData === 'object' && 'data' in kvData && 'timestamp' in kvData) {
             const kvCache = kvData as { data: any; timestamp: number }
             const age = Date.now() - kvCache.timestamp
@@ -1312,10 +1311,10 @@ async function handleProjectBranches(
       })
 
       // Also store in KV for longer persistence
-      if (env.AOSP_PATCH_KV) {
+      if (env.PATCHX_KV) {
         const url = new URL(request.url)
         const kvKey = getCacheKeyString(url.pathname, url.search, env)
-        env.AOSP_PATCH_KV.put(kvKey, JSON.stringify({
+        env.PATCHX_KV.put(kvKey, JSON.stringify({
           data: responseData,
           timestamp: Date.now()
         })).catch(err => {
@@ -1346,47 +1345,52 @@ async function handleProjectBranches(
 // Remote Node Management Handlers
 async function handleGetNodes(env: Env, corsHeaders: Record<string, string>): Promise<Response> {
   try {
-    const supabase = getSupabaseClient(env)
+    const db = getD1Database(env)
 
-    // Get all nodes from Supabase
-    const { data: nodes, error } = await supabase
-      .from('remote_nodes')
-      .select('id, name, host, port, username, auth_type, working_home, ssh_service_api_url, ssh_service_api_key, created_at, updated_at')
-      .order('created_at', { ascending: false })
+    // Get all nodes from D1
+    const result = await queryD1<{
+      id: string
+      name: string
+      host: string
+      port: number
+      username: string
+      auth_type: string
+      working_home: string | null
+      ssh_service_api_url: string | null
+      ssh_service_api_key: string | null
+      created_at: string
+      updated_at: string
+    }>(
+      db,
+      'SELECT id, name, host, port, username, auth_type, working_home, ssh_service_api_url, ssh_service_api_key, created_at, updated_at FROM remote_nodes ORDER BY created_at DESC'
+    )
 
-    if (error) {
-      // Check if table doesn't exist
-      if (error.message.includes('Could not find the table') ||
-          error.message.includes('relation') ||
-          error.message.includes('does not exist') ||
-          error.code === '42P01') {
-        console.error('[GetNodes] Table does not exist')
-        return new Response(
-          JSON.stringify({
-            success: false,
-            error: 'Database table \'remote_nodes\' does not exist. Please run \'./scripts/reset-db.sh --confirm\' to create it.',
-            data: []
-          }),
-          {
-            status: 200, // Return 200 with empty data so UI doesn't break
-            headers: {
-              'Content-Type': 'application/json',
-              ...corsHeaders
-            }
+    if (!result.success) {
+      console.error('[GetNodes] Database query failed')
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: 'Database query failed. Please ensure the database is initialized.',
+          data: []
+        }),
+        {
+          status: 200, // Return 200 with empty data so UI doesn't break
+          headers: {
+            'Content-Type': 'application/json',
+            ...corsHeaders
           }
-        )
-      }
-      throw new Error(`Failed to fetch nodes from Supabase: ${error.message}`)
+        }
+      )
     }
 
-    // Map Supabase data to RemoteNode format
-    const nodesList = (nodes || []).map((node: any) => ({
+    // Map D1 data to RemoteNode format
+    const nodesList = (result.results || []).map((node) => ({
       id: node.id,
       name: node.name,
       host: node.host,
       port: node.port,
       username: node.username,
-      authType: node.auth_type,
+      authType: node.auth_type as 'key' | 'password',
       workingHome: node.working_home,
       sshServiceApiUrl: node.ssh_service_api_url,
       sshServiceApiKey: node.ssh_service_api_key,
@@ -1428,8 +1432,7 @@ async function handleGetNodes(env: Env, corsHeaders: Record<string, string>): Pr
 async function handleCreateNode(request: Request, env: Env, corsHeaders: Record<string, string>): Promise<Response> {
   try {
     console.log('[CreateNode] Starting node creation')
-    console.log('[CreateNode] SUPABASE_SERVICE_ROLE_KEY available:', !!env.SUPABASE_SERVICE_ROLE_KEY)
-    const supabase = getSupabaseClient(env)
+    const db = getD1Database(env)
 
     const body = await request.json() as {
       name: string
@@ -1493,72 +1496,71 @@ async function handleCreateNode(request: Request, env: Env, corsHeaders: Record<
       )
     }
 
-    // Insert node into Supabase
-    const { data: node, error } = await supabase
-      .from('remote_nodes')
-      .insert({
-        name: body.name,
-        host: body.host,
-        port: body.port || 22,
-        username: body.username,
-        auth_type: body.authType,
-        ssh_key: body.authType === 'key' ? body.sshKey : null,
-        password: body.authType === 'password' ? body.password : null, // In production, encrypt this
-        working_home: body.workingHome ? body.workingHome.trim() : null,
-        ssh_service_api_url: body.sshServiceApiUrl ? body.sshServiceApiUrl.trim() : null,
-        ssh_service_api_key: body.sshServiceApiKey ? body.sshServiceApiKey.trim() : null
-      })
-      .select('id, name, host, port, username, auth_type, working_home, ssh_service_api_url, ssh_service_api_key, created_at, updated_at')
-      .single()
+    // Generate UUID for the node
+    const nodeId = generateUUID()
+    const now = new Date().toISOString()
 
-    if (error) {
-      console.error('Supabase insert error:', error)
-      console.error('Error code:', error.code)
-      console.error('Error details:', error.details)
-      console.error('Error hint:', error.hint)
-      console.error('Using key type:', env.SUPABASE_SERVICE_ROLE_KEY ? 'SERVICE_ROLE' : 'ANON')
+    // Insert node into D1
+    const insertResult = await executeD1(
+      db,
+      `INSERT INTO remote_nodes (
+        id, name, host, port, username, auth_type, ssh_key, password,
+        working_home, ssh_service_api_url, ssh_service_api_key, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        nodeId,
+        body.name,
+        body.host,
+        body.port || 22,
+        body.username,
+        body.authType,
+        body.authType === 'key' ? body.sshKey : null,
+        body.authType === 'password' ? body.password : null,
+        body.workingHome ? body.workingHome.trim() : null,
+        body.sshServiceApiUrl ? body.sshServiceApiUrl.trim() : null,
+        body.sshServiceApiKey ? body.sshServiceApiKey.trim() : null,
+        now,
+        now
+      ]
+    )
 
-      // Provide helpful error message if table doesn't exist
-      if (error.message.includes('Could not find the table') ||
-          error.message.includes('relation') ||
-          error.message.includes('does not exist') ||
-          error.code === '42P01') {
-        const keyType = env.SUPABASE_SERVICE_ROLE_KEY ? 'SERVICE_ROLE' : 'ANON'
-        throw new Error(
-          `Database table 'remote_nodes' does not exist. ` +
-          `Please run './scripts/reset-db.sh --confirm' to create it. ` +
-          `Current Supabase key: ${keyType}. ` +
-          `See README.md for instructions.`
-        )
-      }
-
-      // Check for RLS/permission issues
-      if (error.message.includes('permission denied') ||
-          error.message.includes('policy') ||
-          error.code === '42501') {
-        throw new Error(
-          `Permission denied. The table exists but RLS policies may be blocking access. ` +
-          `Please run './scripts/reset-db.sh --confirm' again to update RLS policies, ` +
-          `or ensure SUPABASE_SERVICE_ROLE_KEY is set in your environment.`
-        )
-      }
-
-      throw new Error(`Failed to create node in Supabase: ${error.message}`)
+    if (!insertResult.success) {
+      console.error('D1 insert error:', insertResult)
+      throw new Error('Failed to create node in database')
     }
 
+    // Fetch the created node
+    const node = await queryD1First<{
+      id: string
+      name: string
+      host: string
+      port: number
+      username: string
+      auth_type: string
+      working_home: string | null
+      ssh_service_api_url: string | null
+      ssh_service_api_key: string | null
+      created_at: string
+      updated_at: string
+    }>(
+      db,
+      'SELECT id, name, host, port, username, auth_type, working_home, ssh_service_api_url, ssh_service_api_key, created_at, updated_at FROM remote_nodes WHERE id = ?',
+      [nodeId]
+    )
+
     if (!node) {
-      console.error('No node data returned from Supabase insert')
+      console.error('No node data returned from D1 insert')
       throw new Error('Failed to create node: No data returned from database')
     }
 
-    // Map Supabase data to RemoteNode format
+    // Map D1 data to RemoteNode format
     const safeNode = {
       id: node.id,
       name: node.name,
       host: node.host,
       port: node.port,
       username: node.username,
-      authType: node.auth_type,
+      authType: node.auth_type as 'key' | 'password',
       workingHome: node.working_home,
       sshServiceApiUrl: node.ssh_service_api_url,
       sshServiceApiKey: node.ssh_service_api_key,
@@ -1599,7 +1601,7 @@ async function handleCreateNode(request: Request, env: Env, corsHeaders: Record<
 
 async function handleUpdateNode(path: string, request: Request, env: Env, corsHeaders: Record<string, string>): Promise<Response> {
   try {
-    const supabase = getSupabaseClient(env)
+    const db = getD1Database(env)
 
     const nodeId = path.split('/')[3] // /api/nodes/{id}
     if (!nodeId) {
@@ -1619,13 +1621,27 @@ async function handleUpdateNode(path: string, request: Request, env: Env, corsHe
     }
 
     // Check if node exists
-    const { data: existingNode, error: fetchError } = await supabase
-      .from('remote_nodes')
-      .select('*')
-      .eq('id', nodeId)
-      .single()
+    const existingNode = await queryD1First<{
+      id: string
+      name: string
+      host: string
+      port: number
+      username: string
+      auth_type: string
+      ssh_key: string | null
+      password: string | null
+      working_home: string | null
+      ssh_service_api_url: string | null
+      ssh_service_api_key: string | null
+      created_at: string
+      updated_at: string
+    }>(
+      db,
+      'SELECT * FROM remote_nodes WHERE id = ?',
+      [nodeId]
+    )
 
-    if (fetchError || !existingNode) {
+    if (!existingNode) {
       return new Response(
         JSON.stringify({
           success: false,
@@ -1654,50 +1670,110 @@ async function handleUpdateNode(path: string, request: Request, env: Env, corsHe
       sshServiceApiKey?: string
     }
 
-    // Build update object
-    const updateData: any = {}
-    if (body.name !== undefined) updateData.name = body.name
-    if (body.host !== undefined) updateData.host = body.host
-    if (body.port !== undefined) updateData.port = body.port
-    if (body.username !== undefined) updateData.username = body.username
-    if (body.authType !== undefined) updateData.auth_type = body.authType
-    if (body.workingHome !== undefined) updateData.working_home = body.workingHome ? body.workingHome.trim() : null
-    if (body.sshServiceApiUrl !== undefined) updateData.ssh_service_api_url = body.sshServiceApiUrl ? body.sshServiceApiUrl.trim() : null
-    if (body.sshServiceApiKey !== undefined) updateData.ssh_service_api_key = body.sshServiceApiKey ? body.sshServiceApiKey.trim() : null
+    // Build update SQL and parameters
+    const updateFields: string[] = []
+    const updateParams: any[] = []
+
+    if (body.name !== undefined) {
+      updateFields.push('name = ?')
+      updateParams.push(body.name)
+    }
+    if (body.host !== undefined) {
+      updateFields.push('host = ?')
+      updateParams.push(body.host)
+    }
+    if (body.port !== undefined) {
+      updateFields.push('port = ?')
+      updateParams.push(body.port)
+    }
+    if (body.username !== undefined) {
+      updateFields.push('username = ?')
+      updateParams.push(body.username)
+    }
+    if (body.authType !== undefined) {
+      updateFields.push('auth_type = ?')
+      updateParams.push(body.authType)
+    }
+    if (body.workingHome !== undefined) {
+      updateFields.push('working_home = ?')
+      updateParams.push(body.workingHome ? body.workingHome.trim() : null)
+    }
+    if (body.sshServiceApiUrl !== undefined) {
+      updateFields.push('ssh_service_api_url = ?')
+      updateParams.push(body.sshServiceApiUrl ? body.sshServiceApiUrl.trim() : null)
+    }
+    if (body.sshServiceApiKey !== undefined) {
+      updateFields.push('ssh_service_api_key = ?')
+      updateParams.push(body.sshServiceApiKey ? body.sshServiceApiKey.trim() : null)
+    }
 
     // Handle authentication credentials
     if (body.authType === 'key') {
       if (body.sshKey !== undefined) {
-        updateData.ssh_key = body.sshKey
+        updateFields.push('ssh_key = ?')
+        updateParams.push(body.sshKey)
       }
-      updateData.password = null // Clear password when switching to key auth
+      updateFields.push('password = ?')
+      updateParams.push(null) // Clear password when switching to key auth
     } else if (body.authType === 'password') {
       if (body.password !== undefined && body.password !== '') {
-        updateData.password = body.password
+        updateFields.push('password = ?')
+        updateParams.push(body.password)
       } else if (body.password === '' && existingNode.password) {
         // Keep existing password if empty string provided
-        updateData.password = existingNode.password
+        updateFields.push('password = ?')
+        updateParams.push(existingNode.password)
       }
-      updateData.ssh_key = null // Clear SSH key when switching to password auth
+      updateFields.push('ssh_key = ?')
+      updateParams.push(null) // Clear SSH key when switching to password auth
     } else if (body.sshKey !== undefined) {
-      updateData.ssh_key = body.sshKey
+      updateFields.push('ssh_key = ?')
+      updateParams.push(body.sshKey)
     } else if (body.password !== undefined && body.password !== '') {
-      updateData.password = body.password
+      updateFields.push('password = ?')
+      updateParams.push(body.password)
     }
 
-    // Update node in Supabase
-    const { data: updatedNode, error: updateError } = await supabase
-      .from('remote_nodes')
-      .update(updateData)
-      .eq('id', nodeId)
-      .select('id, name, host, port, username, auth_type, working_home, ssh_service_api_url, ssh_service_api_key, created_at, updated_at')
-      .single()
+    // Always update updated_at
+    updateFields.push('updated_at = ?')
+    updateParams.push(new Date().toISOString())
+    updateParams.push(nodeId) // For WHERE clause
 
-    if (updateError) {
-      throw new Error(`Failed to update node in Supabase: ${updateError.message}`)
+    // Update node in D1
+    const updateResult = await executeD1(
+      db,
+      `UPDATE remote_nodes SET ${updateFields.join(', ')} WHERE id = ?`,
+      updateParams
+    )
+
+    if (!updateResult.success) {
+      throw new Error('Failed to update node in database')
     }
 
-    // Map Supabase data to RemoteNode format
+    // Fetch the updated node
+    const updatedNode = await queryD1First<{
+      id: string
+      name: string
+      host: string
+      port: number
+      username: string
+      auth_type: string
+      working_home: string | null
+      ssh_service_api_url: string | null
+      ssh_service_api_key: string | null
+      created_at: string
+      updated_at: string
+    }>(
+      db,
+      'SELECT id, name, host, port, username, auth_type, working_home, ssh_service_api_url, ssh_service_api_key, created_at, updated_at FROM remote_nodes WHERE id = ?',
+      [nodeId]
+    )
+
+    if (!updatedNode) {
+      throw new Error('Failed to fetch updated node')
+    }
+
+    // Map D1 data to RemoteNode format
     const safeNode = {
       id: updatedNode.id,
       name: updatedNode.name,
@@ -1745,7 +1821,7 @@ async function handleUpdateNode(path: string, request: Request, env: Env, corsHe
 
 async function handleDeleteNode(path: string, env: Env, corsHeaders: Record<string, string>): Promise<Response> {
   try {
-    const supabase = getSupabaseClient(env)
+    const db = getD1Database(env)
 
     const nodeId = path.split('/')[3] // /api/nodes/{id}
     if (!nodeId) {
@@ -1764,14 +1840,15 @@ async function handleDeleteNode(path: string, env: Env, corsHeaders: Record<stri
       )
     }
 
-    // Delete node from Supabase
-    const { error } = await supabase
-      .from('remote_nodes')
-      .delete()
-      .eq('id', nodeId)
+    // Delete node from D1
+    const deleteResult = await executeD1(
+      db,
+      'DELETE FROM remote_nodes WHERE id = ?',
+      [nodeId]
+    )
 
-    if (error) {
-      throw new Error(`Failed to delete node from Supabase: ${error.message}`)
+    if (!deleteResult.success) {
+      throw new Error('Failed to delete node from database')
     }
 
     return new Response(
@@ -2116,7 +2193,7 @@ async function verifyWorkingHomeDirectory(
 
 async function handleTestNode(path: string, env: Env, corsHeaders: Record<string, string>): Promise<Response> {
   try {
-    const supabase = getSupabaseClient(env)
+    const db = getD1Database(env)
 
     const nodeId = path.split('/')[3] // /api/nodes/{id}/test
     if (!nodeId) {
@@ -2135,14 +2212,28 @@ async function handleTestNode(path: string, env: Env, corsHeaders: Record<string
       )
     }
 
-    // Fetch node from Supabase (including sensitive data for testing)
-    const { data: node, error: fetchError } = await supabase
-      .from('remote_nodes')
-      .select('*')
-      .eq('id', nodeId)
-      .single()
+    // Fetch node from D1 (including sensitive data for testing)
+    const node = await queryD1First<{
+      id: string
+      name: string
+      host: string
+      port: number
+      username: string
+      auth_type: string
+      ssh_key: string | null
+      password: string | null
+      working_home: string | null
+      ssh_service_api_url: string | null
+      ssh_service_api_key: string | null
+      created_at: string
+      updated_at: string
+    }>(
+      db,
+      'SELECT * FROM remote_nodes WHERE id = ?',
+      [nodeId]
+    )
 
-    if (fetchError || !node) {
+    if (!node) {
       return new Response(
         JSON.stringify({
           success: false,
@@ -2158,14 +2249,14 @@ async function handleTestNode(path: string, env: Env, corsHeaders: Record<string
       )
     }
 
-    // Map Supabase data to RemoteNodeData format
+    // Map D1 data to RemoteNodeData format
     const nodeData: RemoteNodeData = {
       id: node.id,
       name: node.name,
       host: node.host,
       port: node.port,
       username: node.username,
-      authType: node.auth_type,
+      authType: node.auth_type as 'key' | 'password',
       sshKey: node.ssh_key || undefined,
       password: node.password || undefined,
       workingHome: node.working_home || undefined,
@@ -2885,40 +2976,23 @@ async function handleGitClone(
 
 async function handleGetSettings(env: Env, corsHeaders: Record<string, string>): Promise<Response> {
   try {
-    const supabase = getSupabaseClient(env)
+    const db = getD1Database(env)
 
     // Get all settings from database
-    const { data: settings, error } = await supabase
-      .from('app_settings')
-      .select('key, value')
+    const result = await queryD1<{ key: string; value: string | null }>(
+      db,
+      'SELECT key, value FROM app_settings'
+    )
 
-    // Handle case where table doesn't exist yet (code 42P01 or similar)
-    if (error) {
-      // Check if it's a "relation does not exist" error (table not created yet)
-      if (error.code === '42P01' || error.message?.includes('does not exist') || error.message?.includes('relation')) {
-        console.log('app_settings table does not exist yet, returning empty settings')
-        return new Response(
-          JSON.stringify({
-            success: true,
-            data: {}
-          }),
-          {
-            headers: {
-              'Content-Type': 'application/json',
-              ...corsHeaders
-            }
-          }
-        )
-      }
-
-      console.error('Error fetching settings:', error)
+    // Handle case where table doesn't exist yet
+    if (!result.success) {
+      console.log('app_settings table does not exist yet, returning empty settings')
       return new Response(
         JSON.stringify({
-          success: false,
-          error: 'Failed to fetch settings from database.'
+          success: true,
+          data: {}
         }),
         {
-          status: 500,
           headers: {
             'Content-Type': 'application/json',
             ...corsHeaders
@@ -2930,8 +3004,8 @@ async function handleGetSettings(env: Env, corsHeaders: Record<string, string>):
     // Convert settings array to object
     // Always return an object, even if empty (no settings configured yet)
     const settingsMap: Record<string, string> = {}
-    if (settings && Array.isArray(settings)) {
-      for (const setting of settings) {
+    if (result.results && Array.isArray(result.results)) {
+      for (const setting of result.results) {
         settingsMap[setting.key] = setting.value || ''
       }
     }
@@ -2970,7 +3044,7 @@ async function handleGetSettings(env: Env, corsHeaders: Record<string, string>):
 async function handleUpdateSettings(request: Request, env: Env, corsHeaders: Record<string, string>): Promise<Response> {
   try {
     console.log('handleUpdateSettings called')
-    const supabase = getSupabaseClient(env)
+    const db = getD1Database(env)
 
     // Parse request body with better error handling
     let body: Record<string, string>
@@ -3096,66 +3170,41 @@ async function handleUpdateSettings(request: Request, env: Env, corsHeaders: Rec
       console.log(`Upserting setting: key=${key}, value=${trimmedValue.substring(0, 20)}...`)
 
       // Check if setting already exists
-      const { data: existingSetting, error: fetchError } = await supabase
-        .from('app_settings')
-        .select('key, value')
-        .eq('key', key)
-        .single()
-
-      let error
-      if (fetchError && fetchError.code !== 'PGRST116') { // PGRST116 = no rows returned
-        console.error(`Error checking existing setting ${key}:`, fetchError)
-        // If it's not a "not found" error, throw it
-        if (fetchError.message?.includes('Could not find the table') ||
-            fetchError.message?.includes('relation') ||
-            fetchError.message?.includes('does not exist') ||
-            fetchError.code === '42P01') {
-          throw new Error(
-            `The app_settings table does not exist. Please run the database reset script to create it:\n\n` +
-            `  ./scripts/reset-db.sh --confirm\n\n` +
-            `This will create the app_settings table along with other required database tables.`
-          )
-        }
-        throw new Error(`Failed to check setting ${key}: ${fetchError.message}`)
-      }
+      const existingSetting = await queryD1First<{ key: string; value: string | null }>(
+        db,
+        'SELECT key, value FROM app_settings WHERE key = ?',
+        [key]
+      )
 
       if (existingSetting) {
         // Update existing setting
         console.log(`Updating existing setting: ${key}`)
-        const { error: updateError } = await supabase
-          .from('app_settings')
-          .update({ value: trimmedValue })
-          .eq('key', key)
+        const updateResult = await executeD1(
+          db,
+          'UPDATE app_settings SET value = ?, updated_at = ? WHERE key = ?',
+          [trimmedValue, new Date().toISOString(), key]
+        )
 
-        if (updateError) {
-          console.error(`Error updating setting ${key}:`, updateError)
-          throw new Error(`Failed to update setting ${key}: ${updateError.message}`)
+        if (!updateResult.success) {
+          console.error(`Error updating setting ${key}`)
+          throw new Error(`Failed to update setting ${key}`)
         } else {
           console.log(`Successfully updated setting: ${key}`)
         }
       } else {
         // Insert new setting
         console.log(`Inserting new setting: ${key}`)
-        const { error: insertError } = await supabase
-          .from('app_settings')
-          .insert({ key, value: trimmedValue })
+        const settingId = generateUUID()
+        const now = new Date().toISOString()
+        const insertResult = await executeD1(
+          db,
+          'INSERT INTO app_settings (id, key, value, created_at, updated_at) VALUES (?, ?, ?, ?, ?)',
+          [settingId, key, trimmedValue, now, now]
+        )
 
-        if (insertError) {
-          console.error(`Error inserting setting ${key}:`, insertError)
-
-          // Check if table doesn't exist
-          if (insertError.message?.includes('Could not find the table') ||
-              insertError.message?.includes('relation') ||
-              insertError.message?.includes('does not exist') ||
-              insertError.code === '42P01') {
-            throw new Error(
-              `The app_settings table does not exist. Please run the database reset script to create it:\n\n` +
-              `  ./scripts/reset-db.sh --confirm\n\n` +
-              `This will create the app_settings table along with other required database tables.`
-            )
-          }
-
-          throw new Error(`Failed to insert setting ${key}: ${insertError.message}`)
+        if (!insertResult.success) {
+          console.error(`Error inserting setting ${key}`)
+          throw new Error(`Failed to insert setting ${key}`)
         } else {
           console.log(`Successfully inserted setting: ${key}`)
         }

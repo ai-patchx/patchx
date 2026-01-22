@@ -1,14 +1,13 @@
 #!/usr/bin/env node
 
 /**
- * Sync Supabase, Resend, MailChannels, and Gerrit environment variables from .env.local to wrangler.toml
- * This allows the Worker to expose Supabase config via /api/config/public
- * so the frontend can use it even if Cloudflare Pages env vars aren't set.
+ * Sync Resend, MailChannels, and Gerrit environment variables from .env.local to wrangler.toml
  *
- * Note: SSH Service API configuration (SSH_SERVICE_API_URL and SSH_SERVICE_API_KEY) is now stored
- * per-node in Supabase instead of as environment variables.
- * Note: LiteLLM configuration (LITELLM_BASE_URL, LITELLM_API_KEY, and LITELLM_MODEL) is now stored
- * in the app_settings table in Supabase instead of as environment variables.
+ * Note: D1 database is configured in wrangler.toml via d1_databases binding.
+ * Note: SSH Service API configuration (SSH_SERVICE_API_URL and SSH_SERVICE_API_KEY) is stored
+ * per-node in D1 database instead of as environment variables.
+ * Note: LiteLLM configuration (LITELLM_BASE_URL, LITELLM_API_KEY, and LITELLM_MODEL) is stored
+ * in the app_settings table in D1 database instead of as environment variables.
  */
 
 import { readFileSync, writeFileSync } from 'fs'
@@ -20,9 +19,6 @@ const __dirname = dirname(__filename)
 const rootDir = join(__dirname, '..')
 
 // Read .env.local
-let supabaseUrl = ''
-let supabaseAnonKey = ''
-let supabaseServiceRoleKey = ''
 let publicSiteUrl = ''
 let resendApiKey = ''
 let resendFromEmail = ''
@@ -41,65 +37,87 @@ let adminUserPassword = ''
 
 try {
   const envLocalPath = join(rootDir, '.env.local')
+  // Read with utf-8 encoding, handles both Unix (\n) and Windows (\r\n) line endings
   const envContent = readFileSync(envLocalPath, 'utf-8')
 
-  for (const line of envContent.split('\n')) {
+  // Split by both \r\n and \n to handle Windows and Unix line endings
+  const lines = envContent.split(/\r?\n/)
+
+  for (const line of lines) {
     const trimmed = line.trim()
-    if (trimmed.startsWith('SUPABASE_URL=')) {
-      supabaseUrl = trimmed.split('=')[1].trim().replace(/^["']|["']$/g, '')
-    } else if (trimmed.startsWith('SUPABASE_ANON_KEY=')) {
-      supabaseAnonKey = trimmed.split('=')[1].trim().replace(/^["']|["']$/g, '')
-    } else if (trimmed.startsWith('SUPABASE_SERVICE_ROLE_KEY=')) {
-      supabaseServiceRoleKey = trimmed.split('=')[1].trim().replace(/^["']|["']$/g, '')
-    } else if (trimmed.startsWith('VITE_PUBLIC_SITE_URL=')) {
-      publicSiteUrl = trimmed.split('=')[1]?.trim().replace(/^["']|["']$/g, '') || ''
-    } else if (trimmed.startsWith('RESEND_API_KEY=')) {
-      resendApiKey = trimmed.split('=')[1]?.trim().replace(/^["']|["']$/g, '') || ''
-    } else if (trimmed.startsWith('RESEND_FROM_EMAIL=')) {
-      resendFromEmail = trimmed.split('=')[1]?.trim().replace(/^["']|["']$/g, '') || ''
-    } else if (trimmed.startsWith('RESEND_FROM_NAME=')) {
-      resendFromName = trimmed.split('=')[1]?.trim().replace(/^["']|["']$/g, '') || ''
-    } else if (trimmed.startsWith('RESEND_REPLY_TO_EMAIL=')) {
-      resendReplyTo = trimmed.split('=')[1]?.trim().replace(/^["']|["']$/g, '') || ''
-    } else if (trimmed.startsWith('MAILCHANNELS_FROM_EMAIL=')) {
-      mailFromEmail = trimmed.split('=')[1]?.trim().replace(/^["']|["']$/g, '') || ''
-    } else if (trimmed.startsWith('MAILCHANNELS_FROM_NAME=')) {
-      mailFromName = trimmed.split('=')[1]?.trim().replace(/^["']|["']$/g, '') || ''
-    } else if (trimmed.startsWith('MAILCHANNELS_REPLY_TO_EMAIL=')) {
-      mailReplyTo = trimmed.split('=')[1]?.trim().replace(/^["']|["']$/g, '') || ''
-    } else if (trimmed.startsWith('MAILCHANNELS_API_ENDPOINT=')) {
-      mailApiEndpoint = trimmed.split('=')[1]?.trim().replace(/^["']|["']$/g, '') || ''
-    } else if (trimmed.startsWith('GERRIT_BASE_URL=')) {
-      gerritBaseUrl = trimmed.split('=')[1]?.trim().replace(/^["']|["']$/g, '') || ''
-    } else if (trimmed.startsWith('GERRIT_USERNAME=')) {
-      gerritUsername = trimmed.split('=')[1]?.trim().replace(/^["']|["']$/g, '') || ''
-    } else if (trimmed.startsWith('GERRIT_PASSWORD=')) {
-      gerritPassword = trimmed.split('=')[1]?.trim().replace(/^["']|["']$/g, '') || ''
-    } else if (trimmed.startsWith('CACHE_VERSION=')) {
-      cacheVersion = trimmed.split('=')[1]?.trim().replace(/^["']|["']$/g, '') || 'v1'
-    } else if (trimmed.startsWith('TEST_USER_PASSWORD=')) {
-      testUserPassword = trimmed.split('=')[1]?.trim().replace(/^["']|["']$/g, '') || ''
-    } else if (trimmed.startsWith('ADMIN_USER_PASSWORD=')) {
-      adminUserPassword = trimmed.split('=')[1]?.trim().replace(/^["']|["']$/g, '') || ''
+    // Skip empty lines and comments
+    if (!trimmed || trimmed.startsWith('#')) {
+      continue
+    }
+
+    // Handle key=value format, supporting values with = signs (like tokens)
+    const equalIndex = trimmed.indexOf('=')
+    if (equalIndex === -1) {
+      continue
+    }
+
+    const key = trimmed.substring(0, equalIndex).trim()
+    let value = trimmed.substring(equalIndex + 1).trim()
+    // Remove surrounding quotes if present
+    value = value.replace(/^["']|["']$/g, '')
+
+    // Map keys to variables
+    switch (key) {
+      case 'VITE_PUBLIC_SITE_URL':
+        publicSiteUrl = value
+        break
+      case 'RESEND_API_KEY':
+        resendApiKey = value
+        break
+      case 'RESEND_FROM_EMAIL':
+        resendFromEmail = value
+        break
+      case 'RESEND_FROM_NAME':
+        resendFromName = value
+        break
+      case 'RESEND_REPLY_TO_EMAIL':
+        resendReplyTo = value
+        break
+      case 'MAILCHANNELS_FROM_EMAIL':
+        mailFromEmail = value
+        break
+      case 'MAILCHANNELS_FROM_NAME':
+        mailFromName = value
+        break
+      case 'MAILCHANNELS_REPLY_TO_EMAIL':
+        mailReplyTo = value
+        break
+      case 'MAILCHANNELS_API_ENDPOINT':
+        mailApiEndpoint = value
+        break
+      case 'GERRIT_BASE_URL':
+        gerritBaseUrl = value
+        break
+      case 'GERRIT_USERNAME':
+        gerritUsername = value
+        break
+      case 'GERRIT_PASSWORD':
+        gerritPassword = value
+        break
+      case 'CACHE_VERSION':
+        cacheVersion = value || 'v1'
+        break
+      case 'TEST_USER_PASSWORD':
+        testUserPassword = value
+        break
+      case 'ADMIN_USER_PASSWORD':
+        adminUserPassword = value
+        break
     }
   }
 } catch (error) {
   console.error('Error reading .env.local:', error.message)
-  console.log('\nMake sure .env.local exists with SUPABASE_URL and SUPABASE_ANON_KEY')
-  process.exit(1)
-}
-
-if (!supabaseUrl || !supabaseAnonKey) {
-  console.error('Error: SUPABASE_URL and SUPABASE_ANON_KEY not found in .env.local')
+  console.log('\nMake sure .env.local exists')
   process.exit(1)
 }
 
 if (!publicSiteUrl) {
   console.warn('⚠️  Warning: VITE_PUBLIC_SITE_URL not found in .env.local. Using existing value in wrangler.toml.')
-}
-
-if (!supabaseServiceRoleKey) {
-  console.warn('⚠️  Warning: SUPABASE_SERVICE_ROLE_KEY not found in .env.local. Using anon key for backend operations (RLS policies may restrict access).')
 }
 
 if (!resendApiKey) {
@@ -151,106 +169,37 @@ if (!adminUserPassword) {
 
 // Read wrangler.toml
 const wranglerPath = join(rootDir, 'wrangler.toml')
+// Read with utf-8 encoding, handles both Unix (\n) and Windows (\r\n) line endings
 let wranglerContent = readFileSync(wranglerPath, 'utf-8')
 
-// Update all environments (default, production, staging)
-wranglerContent = wranglerContent.replace(
-  /SUPABASE_URL = ".*"/g,
-  `SUPABASE_URL = "${supabaseUrl}"`
-)
-wranglerContent = wranglerContent.replace(
-  /SUPABASE_ANON_KEY = ".*"/g,
-  `SUPABASE_ANON_KEY = "${supabaseAnonKey}"`
-)
+// Remove any remaining Supabase references (cleanup from migration)
+wranglerContent = wranglerContent.replace(/^SUPABASE_URL\s*=.*$/gm, '')
+wranglerContent = wranglerContent.replace(/^SUPABASE_ANON_KEY\s*=.*$/gm, '')
+wranglerContent = wranglerContent.replace(/^SUPABASE_SERVICE_ROLE_KEY\s*=.*$/gm, '')
+// Clean up multiple consecutive empty lines
+wranglerContent = wranglerContent.replace(/\n\n\n+/g, '\n\n')
 
-// Update SUPABASE_SERVICE_ROLE_KEY if it exists in .env.local
-if (supabaseServiceRoleKey) {
-  // First, remove all existing SUPABASE_SERVICE_ROLE_KEY entries to avoid duplicates
-  wranglerContent = wranglerContent.replace(/^SUPABASE_SERVICE_ROLE_KEY\s*=.*$/gm, '')
-  // Clean up multiple consecutive empty lines
-  wranglerContent = wranglerContent.replace(/\n\n\n+/g, '\n\n')
+// Helper function to escape special characters in TOML string values
+const escapeTomlString = (str) => {
+  // Escape backslashes and quotes
+  return str.replace(/\\/g, '\\\\').replace(/"/g, '\\"')
+}
 
-  // Add to default [vars] section after SUPABASE_ANON_KEY
-  const lines = wranglerContent.split('\n')
-  let inVarsSection = false
-  let varsAnonKeyIndex = -1
-
-  for (let i = 0; i < lines.length; i++) {
-    if (lines[i].trim() === '[vars]') {
-      inVarsSection = true
-    } else if (lines[i].trim().startsWith('[') && lines[i].trim() !== '[vars]') {
-      if (inVarsSection) {
-        break
-      }
-    }
-    if (inVarsSection && lines[i].includes('SUPABASE_ANON_KEY =')) {
-      varsAnonKeyIndex = i
-    }
+// Helper function to safely update a variable in wrangler.toml
+const updateVar = (key, value) => {
+  if (!value) {
+    return
   }
-
-  if (varsAnonKeyIndex >= 0) {
-    lines.splice(varsAnonKeyIndex + 1, 0, `SUPABASE_SERVICE_ROLE_KEY = "${supabaseServiceRoleKey}"`)
-    wranglerContent = lines.join('\n')
-  }
-
-  // Add to [env.production.vars] after SUPABASE_ANON_KEY
-  const lines2 = wranglerContent.split('\n')
-  let inProductionSection = false
-  let productionAnonKeyIndex = -1
-
-  for (let i = 0; i < lines2.length; i++) {
-    if (lines2[i].trim() === '[env.production.vars]') {
-      inProductionSection = true
-    } else if (lines2[i].trim().startsWith('[') && lines2[i].trim() !== '[env.production.vars]') {
-      if (inProductionSection && lines2[i].trim() === '[env.staging.vars]') {
-        break
-      }
-    }
-    if (inProductionSection && lines2[i].includes('SUPABASE_ANON_KEY =')) {
-      productionAnonKeyIndex = i
-    }
-  }
-
-  if (productionAnonKeyIndex >= 0) {
-    lines2.splice(productionAnonKeyIndex + 1, 0, `SUPABASE_SERVICE_ROLE_KEY = "${supabaseServiceRoleKey}"`)
-    wranglerContent = lines2.join('\n')
-  }
-
-  // Add to [env.staging.vars] after SUPABASE_ANON_KEY
-  const lines3 = wranglerContent.split('\n')
-  let inStagingSection = false
-  let stagingAnonKeyIndex = -1
-
-  for (let i = 0; i < lines3.length; i++) {
-    if (lines3[i].trim() === '[env.staging.vars]') {
-      inStagingSection = true
-    }
-    if (inStagingSection && lines3[i].includes('SUPABASE_ANON_KEY =')) {
-      stagingAnonKeyIndex = i
-      break
-    }
-  }
-
-  if (stagingAnonKeyIndex >= 0) {
-    lines3.splice(stagingAnonKeyIndex + 1, 0, `SUPABASE_SERVICE_ROLE_KEY = "${supabaseServiceRoleKey}"`)
-    wranglerContent = lines3.join('\n')
+  const escapedValue = escapeTomlString(value)
+  const regex = new RegExp(`${key}\\s*=\\s*"[^"]*"`, 'g')
+  if (regex.test(wranglerContent)) {
+    wranglerContent = wranglerContent.replace(regex, `${key} = "${escapedValue}"`)
   }
 }
 
 // Update Gerrit variables
-if (gerritBaseUrl) {
-  wranglerContent = wranglerContent.replace(
-    /GERRIT_BASE_URL = ".*"/g,
-    `GERRIT_BASE_URL = "${gerritBaseUrl}"`
-  )
-}
-
-if (publicSiteUrl) {
-  wranglerContent = wranglerContent.replace(
-    /VITE_PUBLIC_SITE_URL = ".*"/g,
-    `VITE_PUBLIC_SITE_URL = "${publicSiteUrl}"`
-  )
-}
+updateVar('GERRIT_BASE_URL', gerritBaseUrl)
+updateVar('VITE_PUBLIC_SITE_URL', publicSiteUrl)
 
 // Remove all existing Resend entries to avoid duplicates
 wranglerContent = wranglerContent.replace(/^RESEND_API_KEY\s*=.*$/gm, '')
@@ -264,9 +213,11 @@ const updateMailVar = (key, value) => {
   if (!value) {
     return
   }
+  // Escape the value for TOML
+  const escapedValue = escapeTomlString(value)
   const regex = new RegExp(`${key}\\s*=\\s*(?:"[^"]*"|[^\\s]+)`, 'g')
   if (regex.test(wranglerContent)) {
-    wranglerContent = wranglerContent.replace(regex, `${key} = "${value}"`)
+    wranglerContent = wranglerContent.replace(regex, `${key} = "${escapedValue}"`)
   }
 }
 
@@ -309,7 +260,7 @@ if (gerritUsername) {
   }
 
   if (varsGerritBaseUrlIndex >= 0) {
-    lines.splice(varsGerritBaseUrlIndex + 1, 0, `GERRIT_USERNAME = "${gerritUsername}"`)
+    lines.splice(varsGerritBaseUrlIndex + 1, 0, `GERRIT_USERNAME = "${escapeTomlString(gerritUsername)}"`)
     wranglerContent = lines.join('\n')
   }
 
@@ -382,7 +333,7 @@ if (gerritPassword) {
   }
 
   if (insertIndex >= 0) {
-    lines.splice(insertIndex + 1, 0, `GERRIT_PASSWORD = "${gerritPassword}"`)
+    lines.splice(insertIndex + 1, 0, `GERRIT_PASSWORD = "${escapeTomlString(gerritPassword)}"`)
     wranglerContent = lines.join('\n')
   }
 
@@ -464,10 +415,10 @@ if (resendApiKey && resendFromEmail) {
 
   if (insertIndex >= 0) {
     const resendVars = []
-    if (resendApiKey) resendVars.push(`RESEND_API_KEY = "${resendApiKey}"`)
-    if (resendFromEmail) resendVars.push(`RESEND_FROM_EMAIL = "${resendFromEmail}"`)
-    if (resendFromName) resendVars.push(`RESEND_FROM_NAME = "${resendFromName}"`)
-    if (resendReplyTo) resendVars.push(`RESEND_REPLY_TO_EMAIL = "${resendReplyTo}"`)
+    if (resendApiKey) resendVars.push(`RESEND_API_KEY = "${escapeTomlString(resendApiKey)}"`)
+    if (resendFromEmail) resendVars.push(`RESEND_FROM_EMAIL = "${escapeTomlString(resendFromEmail)}"`)
+    if (resendFromName) resendVars.push(`RESEND_FROM_NAME = "${escapeTomlString(resendFromName)}"`)
+    if (resendReplyTo) resendVars.push(`RESEND_REPLY_TO_EMAIL = "${escapeTomlString(resendReplyTo)}"`)
     lines.splice(insertIndex + 1, 0, '', ...resendVars)
     wranglerContent = lines.join('\n')
   }
@@ -536,7 +487,7 @@ if (testUserPassword) {
   // Update TEST_USER_PASSWORD using regex replacement (works for all sections)
   wranglerContent = wranglerContent.replace(
     /TEST_USER_PASSWORD\s*=\s*"[^"]*"/g,
-    `TEST_USER_PASSWORD = "${testUserPassword}"`
+    `TEST_USER_PASSWORD = "${escapeTomlString(testUserPassword)}"`
   )
 }
 
@@ -545,7 +496,7 @@ if (adminUserPassword) {
   // Update ADMIN_USER_PASSWORD using regex replacement (works for all sections)
   wranglerContent = wranglerContent.replace(
     /ADMIN_USER_PASSWORD\s*=\s*"[^"]*"/g,
-    `ADMIN_USER_PASSWORD = "${adminUserPassword}"`
+    `ADMIN_USER_PASSWORD = "${escapeTomlString(adminUserPassword)}"`
   )
 }
 
@@ -554,7 +505,7 @@ if (cacheVersion) {
   // Update CACHE_VERSION using regex replacement (works for all sections)
   wranglerContent = wranglerContent.replace(
     /CACHE_VERSION\s*=\s*"[^"]*"/g,
-    `CACHE_VERSION = "${cacheVersion}"`
+    `CACHE_VERSION = "${escapeTomlString(cacheVersion)}"`
   )
 
   // If CACHE_VERSION doesn't exist yet, add it after MAILCHANNELS_API_ENDPOINT in all sections
@@ -578,7 +529,7 @@ if (cacheVersion) {
     }
 
     if (varsMailEndpointIndex >= 0) {
-      lines.splice(varsMailEndpointIndex + 1, 0, '', `# Cache version - update this to invalidate all caches on deploy`, `CACHE_VERSION = "${cacheVersion}"`)
+      lines.splice(varsMailEndpointIndex + 1, 0, '', `# Cache version - update this to invalidate all caches on deploy`, `CACHE_VERSION = "${escapeTomlString(cacheVersion)}"`)
       wranglerContent = lines.join('\n')
     }
 
@@ -628,11 +579,14 @@ if (cacheVersion) {
 }
 
 
-// Write back
+// Write back with Unix line endings (LF) for consistency across platforms
+// Node.js writeFileSync with 'utf-8' will use the system default, but we normalize to LF
+wranglerContent = wranglerContent.replace(/\r\n/g, '\n')
 writeFileSync(wranglerPath, wranglerContent, 'utf-8')
 
 console.log('✅ Successfully synced environment variables to wrangler.toml')
 console.log('\n📝 Next steps:')
 console.log('   1. Review wrangler.toml to ensure values are correct')
-console.log('   2. Deploy Worker: npm run deploy')
-console.log('   3. The frontend will automatically use /api/config/public if Cloudflare Pages env vars are not set')
+console.log('   2. Ensure D1 database is configured in wrangler.toml (d1_databases section)')
+console.log('   3. Initialize D1 database if needed: npm run db:init:confirm')
+console.log('   4. Deploy Worker: npm run deploy')

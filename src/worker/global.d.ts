@@ -1,7 +1,8 @@
 /// <reference types="@cloudflare/workers-types" />
 
 interface Env {
-  AOSP_PATCH_KV?: KVNamespace
+  PATCHX_KV?: KVNamespace
+  PATCHX_D1?: D1Database
   GERRIT_BASE_URL: string
   GERRIT_USERNAME: string
   GERRIT_PASSWORD: string

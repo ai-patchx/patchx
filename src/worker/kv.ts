@@ -17,8 +17,8 @@ const GLOBAL_KV_KEY = '__PATCHX_IN_MEMORY_KV__'
 const GLOBAL_WARN_KEY = '__PATCHX_IN_MEMORY_KV_WARNED__'
 
 export const getKvNamespace = (env: Env): KVLike => {
-  if (env.AOSP_PATCH_KV) {
-    const kv = env.AOSP_PATCH_KV
+  if (env.PATCHX_KV) {
+    const kv = env.PATCHX_KV
     // Adapter to align KVNamespace overloads with our simplified KVLike signature
     return {
       async get(key: string, type?: 'text' | 'json' | 'arrayBuffer') {
@@ -72,7 +72,7 @@ export const getKvNamespace = (env: Env): KVLike => {
   }
 
   if (!globalScope[GLOBAL_WARN_KEY]) {
-    console.warn('AOSP_PATCH_KV binding missing; using in-memory KV fallback (non-persistent).')
+    console.warn('PATCHX_KV binding missing; using in-memory KV fallback (non-persistent).')
     globalScope[GLOBAL_WARN_KEY] = true
   }
 
