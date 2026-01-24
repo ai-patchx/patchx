@@ -8,13 +8,13 @@ export default withAuth(async (req: AuthenticatedRequest, res: VercelResponse) =
   }
 
   try {
-    // 返回当前用户信息
+    // Return current user information
     res.status(200).json({
       user: req.user,
-      message: '获取用户信息成功'
+      message: 'User information retrieved successfully'
     })
   } catch (error) {
     console.error('Get current user error:', error)
-    res.status(500).json({ message: '服务器内部错误' })
+    res.status(500).json({ message: 'Internal server error' })
   }
 })

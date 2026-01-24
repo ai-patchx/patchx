@@ -14,53 +14,53 @@ export class AIService {
       const response = await this.callAIProvider(prompt)
       return this.parseAIResponse(response)
     } catch (error) {
-      console.error('AI冲突解决失败:', error)
-      throw new Error(`AI冲突解决失败: ${error instanceof Error ? error.message : '未知错误'}`)
+      console.error('AI conflict resolution failed:', error)
+      throw new Error(`AI conflict resolution failed: ${error instanceof Error ? error.message : 'Unknown error'}`)
     }
   }
 
   private generateConflictResolutionPrompt(request: ConflictResolutionRequest): string {
-    return `你是一个专业的代码冲突解决专家。请分析以下代码冲突并提供解决方案。
+    return `You are a professional code conflict resolution expert. Please analyze the following code conflicts and provide solutions.
 
-文件路径: ${request.filePath}
+File path: ${request.filePath}
 
-当前代码:
+Current code:
 \`\`\`
 ${request.currentCode}
 \`\`\`
 
-原始代码 (来自目标分支):
+Original code (from target branch):
 \`\`\`
 ${request.originalCode}
 \`\`\`
 
-传入代码 (来自patch):
+Incoming code (from patch):
 \`\`\`
 ${request.incomingCode}
 \`\`\`
 
-    冲突位置:
+    Conflict locations:
     ${request.conflictMarkers.map((marker: ConflictResolutionRequest['conflictMarkers'][number], index: number) =>
-      `冲突 ${index + 1}: 行 ${marker.start}-${marker.end}\n原始: ${marker.original}\n传入: ${marker.incoming}`
+      `Conflict ${index + 1}: Lines ${marker.start}-${marker.end}\nOriginal: ${marker.original}\nIncoming: ${marker.incoming}`
     ).join('\n')}
 
-请提供:
-1. 解决后的代码
-2. 解决策略的解释
-3. 对代码功能的评估
-4. 是否需要人工审查的建议
+Please provide:
+1. Resolved code
+2. Explanation of resolution strategy
+3. Assessment of code functionality
+4. Recommendation on whether manual review is needed
 
-请确保解决方案:
-- 保持代码功能完整性
-- 遵循最佳实践
-- 添加必要的注释说明冲突解决
-- 如果无法自动解决，明确说明原因
+Please ensure the solution:
+- Maintains code functionality integrity
+- Follows best practices
+- Adds necessary comments explaining conflict resolution
+- Clearly states the reason if automatic resolution is not possible
 
-请以JSON格式返回结果:
-{\n  "resolvedCode": "解决后的代码",
-  "explanation": "解决策略解释",
+Please return results in JSON format:
+{\n  "resolvedCode": "resolved code",
+  "explanation": "resolution strategy explanation",
   "confidence": 0.8,
-  "suggestions": ["建议1", "建议2"],
+  "suggestions": ["suggestion1", "suggestion2"],
   "requiresManualReview": false
 }`
   }
@@ -77,7 +77,7 @@ ${request.incomingCode}
         messages: [
           {
             role: 'system',
-            content: '你是一个专业的代码冲突解决专家，擅长分析代码冲突并提供最佳解决方案。'
+            content: 'You are a professional code conflict resolution expert, skilled at analyzing code conflicts and providing optimal solutions.'
           },
           {
             role: 'user',
@@ -91,7 +91,7 @@ ${request.incomingCode}
 
     if (!response.ok) {
       const errorText = await response.text()
-      throw new Error(`AI服务调用失败: ${response.status} ${errorText}`)
+      throw new Error(`AI service call failed: ${response.status} ${errorText}`)
     }
 
     const data = await response.json() as {
@@ -102,33 +102,33 @@ ${request.incomingCode}
 
   private parseAIResponse(response: string): ConflictResolutionResponse {
     try {
-      // 尝试解析JSON响应
+      // Try to parse JSON response
       const jsonMatch = response.match(/\{[\s\S]*\}/)
       if (jsonMatch) {
         const parsed = JSON.parse(jsonMatch[0])
         return {
           resolvedCode: parsed.resolvedCode || '',
-          explanation: parsed.explanation || 'AI提供了解决方案',
+          explanation: parsed.explanation || 'AI provided a solution',
           confidence: parsed.confidence || 0.5,
           suggestions: parsed.suggestions || [],
           requiresManualReview: parsed.requiresManualReview || false
         }
       }
 
-      // 如果无法解析JSON，返回默认响应
+      // If JSON cannot be parsed, return default response
       return {
         resolvedCode: response,
-        explanation: 'AI提供了解决方案，但格式需要手动处理',
+        explanation: 'AI provided a solution, but format needs manual processing',
         confidence: 0.3,
-        suggestions: ['请手动验证AI提供的解决方案'],
+        suggestions: ['Please manually verify the AI-provided solution'],
         requiresManualReview: true
       }
     } catch (_error) {
       return {
         resolvedCode: response,
-        explanation: `解析AI响应失败: ${_error instanceof Error ? _error.message : '未知错误'}`,
+        explanation: `Failed to parse AI response: ${_error instanceof Error ? _error.message : 'Unknown error'}`,
         confidence: 0.1,
-        suggestions: ['AI响应格式异常，需要人工审查'],
+        suggestions: ['AI response format is abnormal, requires manual review'],
         requiresManualReview: true
       }
     }
@@ -137,18 +137,18 @@ ${request.incomingCode}
   async analyzePatchConflicts(patchContent: string, targetContent: string): Promise<PatchConflict[]> {
     const conflicts: PatchConflict[] = []
 
-    // 简单的冲突检测逻辑
+    // Simple conflict detection logic
     const patchLines = patchContent.split('\n')
     const targetLines = targetContent.split('\n')
 
-    // 这里可以实现更复杂的冲突检测算法
-    // 目前实现基本的文本冲突检测
+    // More complex conflict detection algorithms can be implemented here
+    // Currently implements basic text conflict detection
 
     for (let i = 0; i < Math.min(patchLines.length, targetLines.length); i++) {
       const patchLine = patchLines[i]
       const targetLine = targetLines[i]
 
-      // 检测明显的冲突
+      // Detect obvious conflicts
       if (patchLine.startsWith('+') && targetLine.startsWith('+')) {
         if (patchLine !== targetLine) {
           conflicts.push({

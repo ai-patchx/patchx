@@ -27,7 +27,7 @@ export default async function handler(req: Request, env: Env) {
 
     switch (body.action) {
       case 'analyze': {
-        // 执行三向差异分析
+        // Perform three-way diff analysis
         const threeWayDiff = service.performThreeWayDiff(
           body.originalCode,
           body.incomingCode,
@@ -48,7 +48,7 @@ export default async function handler(req: Request, env: Env) {
       }
 
       case 'resolve': {
-        // 应用冲突解决
+        // Apply conflict resolution
         if (!body.resolutions) {
           return new Response(JSON.stringify({
             error: 'Resolutions are required for resolve action'
@@ -66,14 +66,14 @@ export default async function handler(req: Request, env: Env) {
 
         const resolvedCode = service.applyConflictResolution(threeWayDiff, body.resolutions)
 
-        // 验证解决结果
+        // Validate resolution result
         const validation = service.validateResolution(
           resolvedCode,
           body.originalCode,
           body.incomingCode
         )
 
-        // 生成报告
+        // Generate report
         const report = service.generateResolutionReport(
           threeWayDiff,
           body.resolutions,
@@ -96,8 +96,8 @@ export default async function handler(req: Request, env: Env) {
       }
 
       case 'validate': {
-        // 验证解决结果
-        const resolvedCode = body.currentCode // 假设当前代码是已解决的
+        // Validate resolution result
+        const resolvedCode = body.currentCode // Assume current code is resolved
         const validation = service.validateResolution(
           resolvedCode,
           body.originalCode,
@@ -120,7 +120,7 @@ export default async function handler(req: Request, env: Env) {
       }
 
       case 'auto-resolve': {
-        // 自动解决简单冲突
+        // Auto-resolve simple conflicts
         const threeWayDiff = service.performThreeWayDiff(
           body.originalCode,
           body.incomingCode,
@@ -160,7 +160,7 @@ export default async function handler(req: Request, env: Env) {
             success: true,
             data: {
               autoResolved: false,
-              message: '没有可以自动解决的简单冲突',
+              message: 'No simple conflicts can be auto-resolved',
               explanation: autoResolution.explanation
             }
           }), {

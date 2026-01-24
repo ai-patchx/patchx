@@ -25,18 +25,18 @@ export class EnhancedPatchService {
     suggestions: string[]
   }> {
 
-    // 首先验证patch格式
+    // First validate patch format
     const validation = this.validatePatchFormat(upload.content)
     if (!validation.valid) {
       return {
         success: false,
         resolvedContent: targetContent,
         manualResolutionRequired: true,
-        suggestions: [`Patch格式验证失败: ${validation.error}`]
+        suggestions: [`Patch format validation failed: ${validation.error}`]
       }
     }
 
-    // 尝试应用patch并检测冲突
+    // Try to apply patch and detect conflicts
     return await this.conflictResolver.resolvePatchConflicts(
       upload.content,
       targetContent,
@@ -51,13 +51,13 @@ export class EnhancedPatchService {
 
   private validatePatchFormat(content: string): { valid: boolean; error?: string } {
     try {
-      // 检查基本的patch格式
+      // Check basic patch format
       if (!content.includes('---') || !content.includes('+++')) {
-        return { valid: false, error: '缺少patch文件头信息' }
+        return { valid: false, error: 'Missing patch file header information' }
       }
 
       if (!content.includes('@@')) {
-        return { valid: false, error: '缺少diff块标记' }
+        return { valid: false, error: 'Missing diff block markers' }
       }
 
       const lines = content.split('\n')
@@ -68,24 +68,24 @@ export class EnhancedPatchService {
           hasValidDiff = true
         }
 
-        // 检查行格式
+        // Check line format
         if (line.length > 0 && !line.startsWith('---') && !line.startsWith('+++')) {
           const firstChar = line[0]
           if (firstChar !== '@' && firstChar !== '+' && firstChar !== '-' && firstChar !== ' ') {
-            return { valid: false, error: `无效的行格式: ${line}` }
+            return { valid: false, error: `Invalid line format: ${line}` }
           }
         }
       }
 
       if (!hasValidDiff) {
-        return { valid: false, error: '未找到有效的diff块' }
+        return { valid: false, error: 'No valid diff blocks found' }
       }
 
       return { valid: true }
     } catch (error) {
       return {
         valid: false,
-        error: `Patch格式验证错误: ${error instanceof Error ? error.message : '未知错误'}`
+        error: `Patch format validation error: ${error instanceof Error ? error.message : 'Unknown error'}`
       }
     }
   }

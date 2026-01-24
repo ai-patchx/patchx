@@ -6,6 +6,7 @@ import { GerritService } from './gerritService'
 import { EmailService } from './emailService'
 import { GitService } from './gitService'
 import { getD1Database, queryD1First } from '../d1'
+import type { D1Database } from '@cloudflare/workers-types'
 
 export class SubmissionService {
   private env: Env
@@ -35,14 +36,14 @@ export class SubmissionService {
     remoteNodeId?: string,
     gitRepository?: string
   ): Promise<Submission> {
-    // 获取上传的文件
+    // Get uploaded file
     const upload = await this.uploadService.getUpload(uploadId)
     if (!upload) {
-      throw new Error('上传文件不存在')
+      throw new Error('Upload file does not exist')
     }
 
     if (upload.validationStatus === 'invalid') {
-      throw new Error(`文件验证失败: ${upload.validationError}`)
+      throw new Error(`File validation failed: ${upload.validationError}`)
     }
 
     const id = generateId()
@@ -65,47 +66,86 @@ export class SubmissionService {
       updatedAt: new Date().toISOString()
     }
 
-    // 存储到KV
+    // Store to KV
     await this.kv.put(`submissions:${id}`, JSON.stringify(submission))
 
     return submission
   }
 
   private async addLog(submissionId: string, message: string): Promise<void> {
-    const submission = await this.getSubmission(submissionId)
-    if (!submission) {
-      return
+    try {
+      const submission = await this.getSubmission(submissionId)
+      if (!submission) {
+        console.warn(`[SubmissionService] Cannot add log to non-existent submission ${submissionId}: ${message}`)
+        return
+      }
+
+      if (!submission.logs) {
+        submission.logs = []
+      }
+
+      const timestamp = new Date().toLocaleTimeString('en-US')
+      submission.logs.push(`[${timestamp}] ${message}`)
+      submission.updatedAt = new Date().toISOString()
+
+      await this.kv.put(`submissions:${submissionId}`, JSON.stringify(submission))
+    } catch (error) {
+      // Log error but don't throw - we don't want log failures to break the submission
+      console.error(`[SubmissionService] Failed to add log to submission ${submissionId}:`, error)
+      console.error(`[SubmissionService] Log message that failed: ${message}`)
     }
-
-    if (!submission.logs) {
-      submission.logs = []
-    }
-
-    const timestamp = new Date().toLocaleTimeString('en-US')
-    submission.logs.push(`[${timestamp}] ${message}`)
-    submission.updatedAt = new Date().toISOString()
-
-    await this.kv.put(`submissions:${submissionId}`, JSON.stringify(submission))
   }
 
   async submitToGerrit(submissionId: string): Promise<Submission> {
-    const submission = await this.getSubmission(submissionId)
-    if (!submission) {
-      throw new Error('提交记录不存在')
-    }
+    let submission: Submission | null = null
 
     try {
-      // 更新状态为处理中
+      submission = await this.getSubmission(submissionId)
+      if (!submission) {
+        throw new Error('Submission record does not exist')
+      }
+
+      // Update status to processing
       submission.status = 'processing'
       submission.updatedAt = new Date().toISOString()
       if (!submission.logs) {
         submission.logs = []
       }
+      // Save initial status immediately so frontend can see it's processing
       await this.kv.put(`submissions:${submissionId}`, JSON.stringify(submission))
-      await this.addLog(submissionId, '[Info] Starting submission process...')
-      await this.addLog(submissionId, '[Info] Submission service initialized')
-      await this.addLog(submissionId, `[Info] Submission ID: ${submissionId}`)
-      await this.addLog(submissionId, `[Info] Upload ID: ${submission.uploadId}`)
+      console.log(`[SubmissionService] Saved initial processing status for ${submissionId}`)
+
+      // Add initial logs with error handling - don't throw on log failures
+      // Add logs directly to submission object first, then save
+      const timestamp = new Date().toLocaleTimeString('en-US')
+      submission.logs.push(`[${timestamp}] [Info] Starting submission process...`)
+      submission.logs.push(`[${timestamp}] [Info] Submission service initialized`)
+      submission.logs.push(`[${timestamp}] [Info] Submission ID: ${submissionId}`)
+      submission.logs.push(`[${timestamp}] [Info] Upload ID: ${submission.uploadId}`)
+      submission.updatedAt = new Date().toISOString()
+
+      // Save with initial logs immediately
+      await this.kv.put(`submissions:${submissionId}`, JSON.stringify(submission))
+      console.log(`[SubmissionService] Saved initial logs for ${submissionId}, log count: ${submission.logs.length}`)
+
+      // Now try to add logs using addLog (which will save again, but that's okay)
+      // This ensures logs are visible even if addLog has issues
+      try {
+        await this.addLog(submissionId, '[Info] Logging system initialized')
+      } catch (logError) {
+        console.error(`[SubmissionService] addLog failed for ${submissionId}, but initial logs are already saved:`, logError)
+        // Don't throw - we've already saved the initial logs
+      }
+
+      // Log D1 database availability check
+      try {
+        const db = getD1Database(this.env)
+        await this.addLog(submissionId, '[Info] D1 database connection available')
+      } catch (dbCheckError) {
+        const dbErrorMsg = dbCheckError instanceof Error ? dbCheckError.message : String(dbCheckError)
+        await this.addLog(submissionId, `[Warning] D1 database not available: ${dbErrorMsg}`)
+        await this.addLog(submissionId, '[Info] Remote node features may be limited')
+      }
 
       try {
         await this.addLog(submissionId, '[Info] Sending notification...')
@@ -116,7 +156,7 @@ export class SubmissionService {
         await this.addLog(submissionId, `[Warning] Failed to send notification: ${notifError instanceof Error ? notifError.message : String(notifError)}`)
       }
 
-      // 获取上传的文件内容
+      // Get uploaded file content
       await this.addLog(submissionId, `[Info] Retrieving upload with ID: ${submission.uploadId}`)
       const uploadStartTime = Date.now()
       const upload = await this.uploadService.getUpload(submission.uploadId)
@@ -124,7 +164,7 @@ export class SubmissionService {
       await this.addLog(submissionId, `[Info] Upload retrieval completed in ${uploadDuration}ms`)
       if (!upload) {
         await this.addLog(submissionId, `[Error] Upload not found for ID: ${submission.uploadId}`)
-        throw new Error('上传文件不存在')
+        throw new Error('Upload file does not exist')
       }
 
       await this.addLog(submissionId, `[Success] File uploaded: ${upload.filename}`)
@@ -133,20 +173,35 @@ export class SubmissionService {
       // If remote node and git repository are specified, execute git commands first
       if (submission.remoteNodeId && submission.gitRepository) {
         await this.addLog(submissionId, '[Info] Remote node and git repository configured - executing git workflow')
+
+        // Check if D1 database is available before proceeding with remote node workflow
+        let canUseRemoteNode = false
         try {
-          await this.addLog(submissionId, '[Info] Starting git workflow on remote node...')
-          await this.addLog(submissionId, `[Info] Repository: ${submission.gitRepository}`)
-          await this.addLog(submissionId, `[Info] Branch: ${submission.branch}`)
-          await this.addLog(submissionId, `[Info] Remote Node ID: ${submission.remoteNodeId}`)
+          const db = getD1Database(this.env)
+          canUseRemoteNode = true
+          await this.addLog(submissionId, '[Info] D1 database available for remote node configuration')
+        } catch (dbError) {
+          const dbErrorMsg = dbError instanceof Error ? dbError.message : String(dbError)
+          await this.addLog(submissionId, `[Error] Cannot use remote node: D1 database not available: ${dbErrorMsg}`)
+          await this.addLog(submissionId, '[Warning] Skipping git workflow. Will submit directly to Gerrit.')
+          canUseRemoteNode = false
+        }
 
-          // Get remote node to retrieve workingHome (with timeout)
-          let workingHome: string | undefined
+        if (canUseRemoteNode) {
           try {
-            await this.addLog(submissionId, '[Info] Retrieving remote node configuration...')
-            const db = getD1Database(this.env)
+            await this.addLog(submissionId, '[Info] Starting git workflow on remote node...')
+            await this.addLog(submissionId, `[Info] Repository: ${submission.gitRepository}`)
+            await this.addLog(submissionId, `[Info] Branch: ${submission.branch}`)
+            await this.addLog(submissionId, `[Info] Remote Node ID: ${submission.remoteNodeId}`)
 
-            // Add timeout to D1 query (3 seconds - shorter timeout to fail fast)
-            const QUERY_TIMEOUT_MS = 3000
+            // Get remote node to retrieve workingHome (with timeout)
+            let workingHome: string | undefined
+            try {
+              await this.addLog(submissionId, '[Info] Retrieving remote node configuration...')
+              const db = getD1Database(this.env)
+
+            // Add timeout to D1 query (2 seconds - shorter timeout to fail fast)
+            const QUERY_TIMEOUT_MS = 2000
             let timeoutId: ReturnType<typeof setTimeout> | null = null
             let queryResolved = false
 
@@ -204,15 +259,13 @@ export class SubmissionService {
             } else {
               const errorMsg = 'Node not found or query timeout'
               await this.addLog(submissionId, `[Warning] Could not retrieve remote node configuration: ${errorMsg}`)
-              // Log additional debug info if it's a timeout
-              if (errorMsg.includes('timeout')) {
-                await this.addLog(submissionId, `[Debug] This may indicate a database connection issue. Continuing with default working home.`)
-              }
+              await this.addLog(submissionId, `[Debug] This may indicate a database connection issue. Continuing with default working home.`)
             }
           } catch (nodeFetchError) {
             const errorMsg = nodeFetchError instanceof Error ? nodeFetchError.message : String(nodeFetchError)
             await this.addLog(submissionId, `[Warning] Failed to get remote node configuration: ${errorMsg}`)
             await this.addLog(submissionId, `[Info] Continuing with default working home: ~/git-work`)
+            // Don't throw - continue with default working home
           }
 
           await this.addLog(submissionId, '[Info] Step 1: Cloning repository...')
@@ -319,6 +372,10 @@ export class SubmissionService {
           // Don't throw - continue to Gerrit submission even if git workflow fails
           // The user might still want to submit the patch directly
           await this.addLog(submissionId, '[Warning] Continuing to Gerrit submission despite git workflow failure')
+          }
+        } else {
+          // D1 database not available, skip git workflow
+          await this.addLog(submissionId, '[Info] Skipping git workflow due to D1 database unavailability')
         }
       } else {
         // Log if git workflow is not being executed
@@ -334,7 +391,7 @@ export class SubmissionService {
         }
       }
 
-      // 提交到Gerrit (always submit to Gerrit, unless only remote node workflow is desired)
+      // Submit to Gerrit (always submit to Gerrit, unless only remote node workflow is desired)
       // For now, we'll submit to Gerrit in all cases
       await this.addLog(submissionId, '[Info] Submitting patch to Gerrit...')
       await this.addLog(submissionId, `[Info] Project: ${submission.project}`)
@@ -367,7 +424,7 @@ export class SubmissionService {
       await this.addLog(submissionId, `[Success] Change ID: ${gerritResult.changeId}`)
       await this.addLog(submissionId, `[Success] Change URL: ${gerritResult.changeUrl}`)
 
-      // 更新提交记录
+      // Update submission record
       submission.status = 'completed'
       submission.changeId = gerritResult.changeId
       submission.changeUrl = gerritResult.changeUrl
@@ -378,16 +435,40 @@ export class SubmissionService {
 
       return submission
     } catch (error) {
-      const errorMsg = error instanceof Error ? error.message : '提交失败'
-      await this.addLog(submissionId, `[Error] Submission failed: ${errorMsg}`)
+      const errorMsg = error instanceof Error ? error.message : 'Submission failed'
+      const errorStack = error instanceof Error ? error.stack : undefined
 
-      // 更新错误状态
-      submission.status = 'failed'
-      submission.error = errorMsg
-      submission.updatedAt = new Date().toISOString()
+      console.error(`[SubmissionService] Error processing submission ${submissionId}:`, errorMsg, errorStack)
 
-      await this.kv.put(`submissions:${submissionId}`, JSON.stringify(submission))
-      await this.sendNotification(submission, 'failed')
+      // Try to update submission with error, even if addLog fails
+      try {
+        // Get fresh submission state
+        const failedSubmission = await this.getSubmission(submissionId)
+        if (failedSubmission) {
+          failedSubmission.status = 'failed'
+          failedSubmission.error = errorMsg
+          failedSubmission.updatedAt = new Date().toISOString()
+          if (!failedSubmission.logs) {
+            failedSubmission.logs = []
+          }
+          failedSubmission.logs.push(`[${new Date().toLocaleTimeString('en-US')}] [Error] Submission failed: ${errorMsg}`)
+          if (errorStack) {
+            failedSubmission.logs.push(`[${new Date().toLocaleTimeString('en-US')}] [Error] Stack: ${errorStack.substring(0, 500)}`)
+          }
+          await this.kv.put(`submissions:${submissionId}`, JSON.stringify(failedSubmission))
+
+          // Try to send notification (non-blocking)
+          try {
+            await this.sendNotification(failedSubmission, 'failed')
+          } catch (notifError) {
+            console.error(`[SubmissionService] Failed to send failure notification for ${submissionId}:`, notifError)
+          }
+        } else {
+          console.error(`[SubmissionService] Could not retrieve submission ${submissionId} to update error status`)
+        }
+      } catch (updateError) {
+        console.error(`[SubmissionService] Failed to update error status for submission ${submissionId}:`, updateError)
+      }
 
       throw error
     }
@@ -408,7 +489,7 @@ export class SubmissionService {
   }> {
     const submission = await this.getSubmission(id)
     if (!submission) {
-      throw new Error('提交记录不存在')
+      throw new Error('Submission record does not exist')
     }
 
     // Ensure logs array exists

@@ -4,7 +4,7 @@ import EnhancedConflictResolutionModal from './EnhancedConflictResolutionModal'
 import { ConflictData } from '../types/ui'
 import { ConflictResolutionResponse } from '../types/ai'
 
-// 模拟冲突数据
+// Mock conflict data
 const mockConflictData: ConflictData = {
   filePath: 'src/components/ExampleComponent.tsx',
   originalCode: `function ExampleComponent() {
@@ -95,7 +95,7 @@ const ConflictResolutionDemo: React.FC = () => {
   const handleTestConflictResolution = async () => {
     setIsLoading(true)
     try {
-      // 测试冲突分析
+      // Test conflict analysis
       const analyzeResponse = await fetch('/api/conflict-resolution', {
         method: 'POST',
         headers: {
@@ -115,7 +115,7 @@ const ConflictResolutionDemo: React.FC = () => {
       console.log('Conflict analysis result:', analyzeResult)
 
       if (analyzeResult.success) {
-        // 自动解决简单冲突
+        // Auto-resolve simple conflicts
         const autoResolveResponse = await fetch('/api/conflict-resolution', {
           method: 'POST',
           headers: {
@@ -137,7 +137,7 @@ const ConflictResolutionDemo: React.FC = () => {
         if (autoResolveResult.success && autoResolveResult.data.autoResolved) {
           setResolutionResult(autoResolveResult.data.resolvedCode)
         } else {
-          // 如果自动解决失败，打开模态框进行手动解决
+          // If auto-resolve fails, open modal for manual resolution
           setIsModalOpen(true)
         }
       }
@@ -309,7 +309,7 @@ const ConflictResolutionDemo: React.FC = () => {
         </div>
       </div>
 
-      {/* 冲突解决模态框 */}
+      {/* Conflict resolution modal */}
       <EnhancedConflictResolutionModal
         isOpen={isModalOpen}
         conflictData={mockConflictData}

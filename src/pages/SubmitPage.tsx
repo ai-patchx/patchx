@@ -427,11 +427,17 @@ const SubmitPage: React.FC = () => {
 
           // Check for stuck processing status (no new logs for too long)
           if (status === 'processing') {
+            // Update lastLogUpdateTime if we have logs (even if count hasn't changed)
+            if (logs && logs.length > 0) {
+              lastLogUpdateTime = Date.now()
+            }
+
             const timeSinceLastLog = Date.now() - lastLogUpdateTime
             if (timeSinceLastLog > maxNoProgressTime) {
               clearInterval(pollInterval)
               setPollingInterval(null)
               addConsoleOutput(`Polling timeout: No progress detected for ${Math.round(timeSinceLastLog / 1000)} seconds. The submission may be stuck.`, 'warning')
+              addConsoleOutput('This may indicate a server-side issue. Please check the Worker logs or try submitting again.', 'warning')
               setIsSubmitting(false)
               setCurrentProcess('')
               setCurrentSubmissionId(null)
@@ -678,7 +684,7 @@ const SubmitPage: React.FC = () => {
       setCurrentProcess('File Upload')
       addConsoleOutput('Uploading file to server...', 'info')
 
-      // 1. 上传文件
+      // 1. Upload file
       const formData = new FormData()
       formData.append('file', file)
       formData.append('project', selectedProject)
@@ -1153,7 +1159,7 @@ const SubmitPage: React.FC = () => {
               </div>
             )}
 
-            {/* 提交按钮 */}
+            {/* Submit button */}
             <div className="flex justify-end space-x-3">
               <button
                 type="button"

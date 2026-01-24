@@ -34,7 +34,7 @@ const EnhancedConflictResolutionModal: React.FC<EnhancedConflictResolutionModalP
 
   useEffect(() => {
     if (isOpen) {
-      // 重置状态
+      // Reset state
       setResolutions({})
       setAiResolution(null)
       setResolutionHistory([])
@@ -44,7 +44,7 @@ const EnhancedConflictResolutionModal: React.FC<EnhancedConflictResolutionModalP
   if (!isOpen) return null
 
   const handleResolveConflict = (lineNumber: number, type: 'original' | 'incoming' | 'custom', content?: string) => {
-    // 保存历史记录
+    // Save history
     setResolutionHistory(prev => [...prev, { ...resolutions }])
 
     setResolutions(prev => ({
@@ -85,15 +85,15 @@ const EnhancedConflictResolutionModal: React.FC<EnhancedConflictResolutionModalP
       })
 
       if (!response.ok) {
-        throw new Error('AI冲突解决失败')
+        throw new Error('AI conflict resolution failed')
       }
 
       const result: { data: ConflictResolutionResponse } = await response.json()
       setAiResolution(result.data)
 
-      // 如果AI解决成功，自动填充到resolutions中
+      // If AI resolution succeeds, automatically populate resolutions
       if (result.data.confidence > 0.7 && !result.data.requiresManualReview) {
-        // 解析AI解决结果并更新resolutions
+        // Parse AI resolution result and update resolutions
         const lines = result.data.resolvedCode.split('\n')
         const newResolutions: typeof resolutions = {}
 
@@ -108,12 +108,12 @@ const EnhancedConflictResolutionModal: React.FC<EnhancedConflictResolutionModalP
         setResolutions(newResolutions)
       }
     } catch (error) {
-      console.error('AI冲突解决错误:', error)
+      console.error('AI conflict resolution error:', error)
       setAiResolution({
         resolvedCode: conflictData.currentCode,
-        explanation: `AI冲突解决失败: ${error instanceof Error ? error.message : '未知错误'}`,
+        explanation: `AI conflict resolution failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
         confidence: 0,
-        suggestions: ['请尝试其他AI提供商或手动解决冲突'],
+        suggestions: ['Please try another AI provider or resolve conflicts manually'],
         requiresManualReview: true
       })
     } finally {
@@ -139,9 +139,9 @@ const EnhancedConflictResolutionModal: React.FC<EnhancedConflictResolutionModalP
     const resolvedCode = generateResolvedCode()
     const resolution: ConflictResolutionResponse = {
       resolvedCode,
-      explanation: aiResolution?.explanation || '手动解决冲突',
+      explanation: aiResolution?.explanation || 'Manual conflict resolution',
       confidence: aiResolution?.confidence || 0.8,
-      suggestions: aiResolution?.suggestions || ['手动解决完成'],
+      suggestions: aiResolution?.suggestions || ['Manual resolution completed'],
       requiresManualReview: Object.keys(resolutions).length < conflictData.conflicts.length
     }
 
@@ -164,9 +164,9 @@ const EnhancedConflictResolutionModal: React.FC<EnhancedConflictResolutionModalP
           <div className="flex items-center space-x-3">
             <AlertTriangle className="w-6 h-6 text-orange-500" />
             <div>
-              <h2 className="text-xl font-semibold text-gray-900">补丁冲突解决</h2>
+              <h2 className="text-xl font-semibold text-gray-900">Patch Conflict Resolution</h2>
               <p className="text-sm text-gray-600">
-                文件: {conflictData.filePath} | {conflictData.conflicts.length} 个冲突需要解决
+                File: {conflictData.filePath} | {conflictData.conflicts.length} conflicts need resolution
               </p>
             </div>
           </div>
@@ -190,7 +190,7 @@ const EnhancedConflictResolutionModal: React.FC<EnhancedConflictResolutionModalP
               }`}
             >
               <GitMerge className="w-4 h-4 mr-2" />
-              可视化解决
+              Visual Resolution
             </button>
             <button
               onClick={() => setActiveTab('text')}
@@ -201,7 +201,7 @@ const EnhancedConflictResolutionModal: React.FC<EnhancedConflictResolutionModalP
               }`}
             >
               <Save className="w-4 h-4 mr-2" />
-              文本编辑
+              Text Edit
             </button>
             {isAIEnabled && (
               <button
@@ -213,7 +213,7 @@ const EnhancedConflictResolutionModal: React.FC<EnhancedConflictResolutionModalP
                 }`}
               >
                 <Bot className="w-4 h-4 mr-2" />
-                AI解决
+                AI Resolution
               </button>
             )}
           </div>
@@ -237,7 +237,7 @@ const EnhancedConflictResolutionModal: React.FC<EnhancedConflictResolutionModalP
             <div className="h-full p-4">
               <div className="h-full flex flex-col">
                 <div className="flex items-center justify-between mb-3">
-                  <h3 className="text-lg font-medium text-gray-900">手动编辑解决</h3>
+                  <h3 className="text-lg font-medium text-gray-900">Manual Edit Resolution</h3>
                   <div className="flex space-x-2">
                     <button
                       onClick={handleUndo}
@@ -245,13 +245,13 @@ const EnhancedConflictResolutionModal: React.FC<EnhancedConflictResolutionModalP
                       className="px-3 py-1 text-sm text-gray-700 bg-gray-200 rounded hover:bg-gray-300 disabled:opacity-50 flex items-center"
                     >
                       <RotateCcw className="w-4 h-4 mr-1" />
-                      撤销
+                      Undo
                     </button>
                     <button
                       onClick={() => setShowPreview(!showPreview)}
                       className="px-3 py-1 text-sm text-blue-700 bg-blue-100 rounded hover:bg-blue-200"
                     >
-                      {showPreview ? '隐藏预览' : '显示预览'}
+                      {showPreview ? 'Hide Preview' : 'Show Preview'}
                     </button>
                   </div>
                 </div>
@@ -259,12 +259,12 @@ const EnhancedConflictResolutionModal: React.FC<EnhancedConflictResolutionModalP
                 <div className="flex-1 flex space-x-4">
                   <div className="flex-1">
                     <label className="block text-sm font-medium text-gray-700 mb-2">
-                      编辑解决后的代码
+                      Edit Resolved Code
                     </label>
                     <textarea
                       value={generateResolvedCode()}
                       onChange={(e) => {
-                        // 这里可以添加更复杂的文本编辑逻辑
+                        // More complex text editing logic can be added here
                         const lines = e.target.value.split('\n')
                         const newResolutions: typeof resolutions = {}
                         conflictData.conflicts.forEach(conflict => {
@@ -284,7 +284,7 @@ const EnhancedConflictResolutionModal: React.FC<EnhancedConflictResolutionModalP
                   {showPreview && (
                     <div className="flex-1">
                       <label className="block text-sm font-medium text-gray-700 mb-2">
-                        预览原始代码
+                        Preview Original Code
                       </label>
                       <pre className="w-full h-full p-3 bg-gray-50 border border-gray-300 rounded-md overflow-auto text-sm">
                         <code>{conflictData.originalCode}</code>
@@ -302,7 +302,7 @@ const EnhancedConflictResolutionModal: React.FC<EnhancedConflictResolutionModalP
                 {/* AI Provider Selection */}
                 <div className="mb-4">
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    选择AI提供商
+                    Select AI Provider
                   </label>
                   <div className="flex space-x-2">
                     <select
@@ -324,12 +324,12 @@ const EnhancedConflictResolutionModal: React.FC<EnhancedConflictResolutionModalP
                       {isAILoading ? (
                         <>
                           <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
-                          AI解决中...
+                          AI Resolving...
                         </>
                       ) : (
                         <>
                           <Bot className="w-4 h-4 mr-2" />
-                          使用AI解决
+                          Use AI to Resolve
                         </>
                       )}
                     </button>
@@ -340,9 +340,9 @@ const EnhancedConflictResolutionModal: React.FC<EnhancedConflictResolutionModalP
                 {aiResolution && (
                   <div className="flex-1 flex flex-col">
                     <div className="mb-3">
-                      <h3 className="text-lg font-medium text-gray-900">AI解决结果</h3>
+                      <h3 className="text-lg font-medium text-gray-900">AI Resolution Result</h3>
                       <div className="flex items-center mt-1">
-                        <span className="text-sm text-gray-600">置信度: </span>
+                        <span className="text-sm text-gray-600">Confidence: </span>
                         <div className="ml-2 bg-gray-200 rounded-full h-2 w-20">
                           <div
                             className="bg-blue-500 h-2 rounded-full"
@@ -354,7 +354,7 @@ const EnhancedConflictResolutionModal: React.FC<EnhancedConflictResolutionModalP
                         </span>
                         {aiResolution.requiresManualReview && (
                           <span className="ml-2 px-2 py-1 text-xs bg-yellow-100 text-yellow-800 rounded">
-                            需要人工审查
+                            Requires Manual Review
                           </span>
                         )}
                       </div>
@@ -363,7 +363,7 @@ const EnhancedConflictResolutionModal: React.FC<EnhancedConflictResolutionModalP
                     <div className="flex-1 flex space-x-4">
                       <div className="flex-1">
                         <label className="block text-sm font-medium text-gray-700 mb-2">
-                          AI建议的解决代码
+                          AI Suggested Resolution Code
                         </label>
                         <pre className="w-full h-full p-3 bg-blue-50 border border-blue-200 rounded-md overflow-auto text-sm">
                           <code>{aiResolution.resolvedCode}</code>
@@ -372,14 +372,14 @@ const EnhancedConflictResolutionModal: React.FC<EnhancedConflictResolutionModalP
 
                       <div className="flex-1">
                         <label className="block text-sm font-medium text-gray-700 mb-2">
-                          解决说明
+                          Resolution Explanation
                         </label>
                         <div className="w-full h-full p-3 bg-gray-50 border border-gray-300 rounded-md overflow-auto">
                           <p className="text-sm text-gray-700 mb-3">{aiResolution.explanation}</p>
 
                           {aiResolution.suggestions.length > 0 && (
                             <div>
-                              <h5 className="font-medium text-gray-700 mb-2">建议:</h5>
+                              <h5 className="font-medium text-gray-700 mb-2">Suggestions:</h5>
                               <ul className="text-sm text-gray-600 space-y-1">
                                 {aiResolution.suggestions.map((suggestion, index) => (
                                   <li key={index} className="flex items-start">
@@ -401,7 +401,7 @@ const EnhancedConflictResolutionModal: React.FC<EnhancedConflictResolutionModalP
                         className="px-4 py-2 text-sm text-gray-700 bg-gray-200 rounded hover:bg-gray-300 flex items-center"
                       >
                         <XCircle className="w-4 h-4 mr-1" />
-                        拒绝AI解决
+                        Reject AI Resolution
                       </button>
                       <button
                         onClick={handleAcceptAIResolution}
@@ -409,7 +409,7 @@ const EnhancedConflictResolutionModal: React.FC<EnhancedConflictResolutionModalP
                         className="px-4 py-2 text-sm text-white bg-green-600 rounded hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
                       >
                         <CheckCircle className="w-4 h-4 mr-1" />
-                        接受AI解决
+                        Accept AI Resolution
                       </button>
                     </div>
                   </div>
@@ -419,7 +419,7 @@ const EnhancedConflictResolutionModal: React.FC<EnhancedConflictResolutionModalP
                   <div className="flex-1 flex items-center justify-center">
                     <div className="text-center">
                       <Bot className="w-12 h-12 text-gray-400 mx-auto mb-3" />
-                      <p className="text-gray-600">选择一个AI提供商并点击"使用AI解决"来开始</p>
+                      <p className="text-gray-600">Select an AI provider and click "Use AI to Resolve" to start</p>
                     </div>
                   </div>
                 )}
@@ -433,17 +433,17 @@ const EnhancedConflictResolutionModal: React.FC<EnhancedConflictResolutionModalP
           <div className="text-sm text-gray-600">
             {activeTab === 'visual' && (
               <>
-                已解决 {Object.keys(resolutions).length} / {conflictData.conflicts.length} 个冲突
+                Resolved {Object.keys(resolutions).length} / {conflictData.conflicts.length} conflicts
                 {allConflictsResolved && (
-                  <span className="ml-2 text-green-600 font-medium">✓ 所有冲突已解决</span>
+                  <span className="ml-2 text-green-600 font-medium">✓ All conflicts resolved</span>
                 )}
               </>
             )}
             {activeTab === 'ai' && aiResolution && (
               <>
-                AI置信度: {(aiResolution.confidence * 100).toFixed(0)}%
+                AI Confidence: {(aiResolution.confidence * 100).toFixed(0)}%
                 {aiResolution.requiresManualReview && (
-                  <span className="ml-2 text-yellow-600">需要人工审查</span>
+                  <span className="ml-2 text-yellow-600">Requires Manual Review</span>
                 )}
               </>
             )}
@@ -454,7 +454,7 @@ const EnhancedConflictResolutionModal: React.FC<EnhancedConflictResolutionModalP
               onClick={onClose}
               className="px-4 py-2 text-sm text-gray-700 bg-gray-200 rounded hover:bg-gray-300"
             >
-              取消
+              Cancel
             </button>
             {(activeTab === 'visual' || activeTab === 'text') && (
               <button
@@ -463,7 +463,7 @@ const EnhancedConflictResolutionModal: React.FC<EnhancedConflictResolutionModalP
                 className="px-4 py-2 text-sm text-white bg-green-600 rounded hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
               >
                 <Save className="w-4 h-4 mr-1" />
-                应用解决
+                Apply Resolution
               </button>
             )}
           </div>

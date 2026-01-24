@@ -9,8 +9,8 @@ export class PatchConflictResolver {
     try {
       this.aiService = new AIConflictResolutionService(env)
     } catch (error) {
-      console.warn('AI冲突解决服务初始化失败:', error)
-      // 继续运行，但不提供AI冲突解决功能
+      console.warn('AI conflict resolution service initialization failed:', error)
+      // Continue running, but do not provide AI conflict resolution functionality
     }
   }
 
@@ -31,7 +31,7 @@ export class PatchConflictResolver {
     suggestions: string[]
   }> {
 
-    // 首先尝试基本的冲突检测
+    // First try basic conflict detection
     const basicConflicts = this.detectBasicConflicts(patchContent, targetContent)
 
     if (basicConflicts.length === 0) {
@@ -39,11 +39,11 @@ export class PatchConflictResolver {
         success: true,
         resolvedContent: this.applyPatchBasic(patchContent, targetContent),
         manualResolutionRequired: false,
-        suggestions: ['无冲突，patch可以直接应用']
+        suggestions: ['No conflicts, patch can be applied directly']
       }
     }
 
-    // 如果有AI服务且用户选择使用AI
+    // If AI service is available and user chooses to use AI
     if (this.aiService && options?.useAI !== false) {
       try {
         const aiResolution = await this.aiService.resolvePatchConflicts(
@@ -56,7 +56,7 @@ export class PatchConflictResolver {
           }
         )
 
-        // 验证AI解决方案
+        // Validate AI solution
         if (aiResolution.confidence > 0.7 && !aiResolution.requiresManualReview) {
           return {
             success: true,
@@ -64,7 +64,7 @@ export class PatchConflictResolver {
             aiResolution,
             manualResolutionRequired: false,
             suggestions: [
-              'AI已成功解决冲突',
+              'AI successfully resolved conflicts',
               ...aiResolution.suggestions
             ]
           }
@@ -75,40 +75,40 @@ export class PatchConflictResolver {
             aiResolution,
             manualResolutionRequired: true,
             suggestions: [
-              'AI提供的解决方案置信度较低，建议人工审查',
+              'AI solution has low confidence, recommend manual review',
               ...aiResolution.suggestions,
-              '请仔细检查AI建议的代码更改'
+              'Please carefully check AI-suggested code changes'
             ]
           }
         }
       } catch (error) {
-        console.error('AI冲突解决失败:', error)
+        console.error('AI conflict resolution failed:', error)
         return {
           success: false,
           resolvedContent: targetContent,
           manualResolutionRequired: true,
           suggestions: [
-            'AI冲突解决失败',
-            '请手动解决冲突',
-            '检查AI服务配置',
-            `错误信息: ${error instanceof Error ? error.message : '未知错误'}`
+            'AI conflict resolution failed',
+            'Please resolve conflicts manually',
+            'Check AI service configuration',
+            `Error message: ${error instanceof Error ? error.message : 'Unknown error'}`
           ]
         }
       }
     }
 
-    // 没有AI服务或AI解决失败，返回手动解决建议
+    // No AI service or AI resolution failed, return manual resolution suggestions
     return {
       success: false,
       resolvedContent: targetContent,
       manualResolutionRequired: true,
       suggestions: [
-        '检测到代码冲突，需要手动解决',
-        '请仔细比较原始代码和传入代码的差异',
-        '确保合并后的代码保持功能完整性',
-        '建议添加适当的注释说明冲突解决',
+        'Code conflicts detected, manual resolution required',
+        'Please carefully compare differences between original code and incoming code',
+        'Ensure merged code maintains functionality integrity',
+        'Recommend adding appropriate comments explaining conflict resolution',
         ...basicConflicts.map(conflict =>
-          `冲突在文件 ${conflict.filePath} 第 ${conflict.lineNumber} 行: ${conflict.conflictType}`
+          `Conflict in file ${conflict.filePath} at line ${conflict.lineNumber}: ${conflict.conflictType}`
         )
       ]
     }
@@ -123,7 +123,7 @@ export class PatchConflictResolver {
     const patchLines = patchContent.split('\n')
     const targetLines = targetContent.split('\n')
 
-    // 简单的冲突检测
+    // Simple conflict detection
     let lineNumber = 0
     for (const patchLine of patchLines) {
       lineNumber++
@@ -131,7 +131,7 @@ export class PatchConflictResolver {
       if (patchLine.startsWith('+')) {
         const content = patchLine.substring(1).trim()
         if (content.length > 0) {
-          // 检查是否已存在相同内容
+          // Check if same content already exists
           const exists = targetLines.some(targetLine =>
             targetLine.trim() === content
           )
@@ -148,7 +148,7 @@ export class PatchConflictResolver {
       if (patchLine.startsWith('-')) {
         const content = patchLine.substring(1).trim()
         if (content.length > 0) {
-          // 检查要删除的内容是否存在
+          // Check if content to be deleted exists
           const exists = targetLines.some(targetLine =>
             targetLine.trim() === content
           )
@@ -167,9 +167,9 @@ export class PatchConflictResolver {
   }
 
   private applyPatchBasic(patchContent: string, targetContent: string): string {
-    // 基本的patch应用逻辑（简化版）
-    // 这里应该实现更复杂的patch应用逻辑
-    // 目前只是返回原始内容
+    // Basic patch application logic (simplified version)
+    // More complex patch application logic should be implemented here
+    // Currently just returns original content
     return targetContent
   }
 

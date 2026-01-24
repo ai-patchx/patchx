@@ -30,7 +30,7 @@ export class EnhancedConflictResolutionService {
   }
 
   /**
-   * 执行三向差异分析
+   * Perform three-way diff analysis
    */
   performThreeWayDiff(
     originalCode: string,
@@ -49,7 +49,7 @@ export class EnhancedConflictResolutionService {
       const incomingLine = incomingLines[i] || ''
       const currentLine = currentLines[i] || ''
 
-      // 检测不同类型的冲突
+      // Detect different types of conflicts
       const conflictType = this.detectConflictType(baseLine, incomingLine, currentLine)
 
       if (conflictType) {
@@ -72,34 +72,34 @@ export class EnhancedConflictResolutionService {
   }
 
   /**
-   * 检测冲突类型
+   * Detect conflict type
    */
   private detectConflictType(
     base: string,
     incoming: string,
     current: string
   ): ThreeWayDiff['conflicts'][0]['conflictType'] | null {
-    // 完全相同，无冲突
+    // Identical, no conflict
     if (base === incoming && base === current) {
       return null
     }
 
-    // 添加-添加冲突：base为空，incoming和current都有内容且不同
+    // Add-add conflict: base is empty, incoming and current both have content and differ
     if (!base.trim() && incoming.trim() && current.trim() && incoming !== current) {
       return 'add_add'
     }
 
-    // 删除-添加冲突：base有内容，incoming为空，current有内容
+    // Delete-add conflict: base has content, incoming is empty, current has content
     if (base.trim() && !incoming.trim() && current.trim()) {
       return 'delete_add'
     }
 
-    // 修改-修改冲突：base相同，incoming和current不同
+    // Modify-modify conflict: base is same, incoming and current differ
     if (base === current && base !== incoming) {
       return 'modify_modify'
     }
 
-    // 上下文冲突：三方都不同
+    // Context conflict: all three differ
     if (base !== incoming && base !== current && incoming !== current) {
       return 'context_conflict'
     }
@@ -108,7 +108,7 @@ export class EnhancedConflictResolutionService {
   }
 
   /**
-   * 应用冲突解决
+   * Apply conflict resolution
    */
   applyConflictResolution(
     threeWayDiff: ThreeWayDiff,
@@ -123,7 +123,7 @@ export class EnhancedConflictResolutionService {
     conflicts.forEach(conflict => {
       const resolution = resolutions[conflict.lineNumber]
       if (!resolution) {
-        // 没有解决，保留当前版本
+        // No resolution, keep current version
         return
       }
 
@@ -145,7 +145,7 @@ export class EnhancedConflictResolutionService {
   }
 
   /**
-   * 验证解决结果
+   * Validate resolution result
    */
   validateResolution(
     resolvedCode: string,
@@ -161,19 +161,19 @@ export class EnhancedConflictResolutionService {
     const warnings: string[] = []
     const suggestions: string[] = []
 
-    // 基本验证
+    // Basic validation
     if (!resolvedCode || resolvedCode.trim().length === 0) {
-      issues.push('解决后的代码为空')
+      issues.push('Resolved code is empty')
       return { isValid: false, issues, warnings, suggestions }
     }
 
-    // 语法验证（简化版）
+    // Syntax validation (simplified version)
     const syntaxValidation = this.validateSyntax(resolvedCode)
     if (!syntaxValidation.isValid) {
       issues.push(...syntaxValidation.issues)
     }
 
-    // 完整性验证
+    // Completeness validation
     const completenessValidation = this.validateCompleteness(
       resolvedCode,
       originalCode,
@@ -191,7 +191,7 @@ export class EnhancedConflictResolutionService {
   }
 
   /**
-   * 语法验证
+   * Syntax validation
    */
   private validateSyntax(code: string): {
     isValid: boolean
@@ -199,7 +199,7 @@ export class EnhancedConflictResolutionService {
   } {
     const issues: string[] = []
 
-    // 括号匹配
+    // Bracket matching
     const openBraces = (code.match(/\{/g) || []).length
     const closeBraces = (code.match(/\}/g) || []).length
     const openParens = (code.match(/\(/g) || []).length
@@ -208,16 +208,16 @@ export class EnhancedConflictResolutionService {
     const closeBrackets = (code.match(/\]/g) || []).length
 
     if (openBraces !== closeBraces) {
-      issues.push(`大括号不匹配: ${openBraces} 开, ${closeBraces} 关`)
+      issues.push(`Braces do not match: ${openBraces} open, ${closeBraces} close`)
     }
     if (openParens !== closeParens) {
-      issues.push(`圆括号不匹配: ${openParens} 开, ${closeParens} 关`)
+      issues.push(`Parentheses do not match: ${openParens} open, ${closeParens} close`)
     }
     if (openBrackets !== closeBrackets) {
-      issues.push(`方括号不匹配: ${openBrackets} 开, ${closeBrackets} 关`)
+      issues.push(`Brackets do not match: ${openBrackets} open, ${closeBrackets} close`)
     }
 
-    // 检查常见的语法错误模式（不记录警告，仅用于潜在问题识别）
+    // Check common syntax error patterns (not logged as warnings, only for potential issue identification)
     const syntaxPatterns = [
       /;\s*}/g,
       /{\s*;/g,
@@ -225,7 +225,7 @@ export class EnhancedConflictResolutionService {
     ]
     syntaxPatterns.forEach(pattern => {
       if (pattern.test(code)) {
-        issues.push('检测到可能的语法异常')
+        issues.push('Possible syntax anomaly detected')
       }
     })
 
@@ -236,7 +236,7 @@ export class EnhancedConflictResolutionService {
   }
 
   /**
-   * 完整性验证
+   * Completeness validation
    */
   private validateCompleteness(
     resolvedCode: string,
@@ -253,39 +253,39 @@ export class EnhancedConflictResolutionService {
     const incomingLines = incomingCode.split('\n').filter(line => line.trim().length > 0)
     const resolvedLines = resolvedCode.split('\n').filter(line => line.trim().length > 0)
 
-    // 检查原始代码的保留程度
+    // Check preservation ratio of original code
     const preservedOriginalLines = originalLines.filter(originalLine =>
       resolvedLines.some(resolvedLine => resolvedLine.includes(originalLine.trim()))
     )
 
     const originalPreservationRatio = preservedOriginalLines.length / originalLines.length
     if (originalPreservationRatio < 0.3) {
-      warnings.push(`原始代码保留率较低 (${(originalPreservationRatio * 100).toFixed(1)}%)`)
-      suggestions.push('检查是否意外删除了重要的原始代码')
+      warnings.push(`Original code preservation ratio is low (${(originalPreservationRatio * 100).toFixed(1)}%)`)
+      suggestions.push('Check if important original code was accidentally deleted')
     }
 
-    // 检查传入代码的集成程度
+    // Check integration ratio of incoming code
     const integratedIncomingLines = incomingLines.filter(incomingLine =>
       resolvedLines.some(resolvedLine => resolvedLine.includes(incomingLine.trim()))
     )
 
     const incomingIntegrationRatio = integratedIncomingLines.length / incomingLines.length
     if (incomingIntegrationRatio < 0.5) {
-      warnings.push(`传入代码集成率较低 (${(incomingIntegrationRatio * 100).toFixed(1)}%)`)
-      suggestions.push('检查是否成功集成了传入的更改')
+      warnings.push(`Incoming code integration ratio is low (${(incomingIntegrationRatio * 100).toFixed(1)}%)`)
+      suggestions.push('Check if incoming changes were successfully integrated')
     }
 
-    // 检查代码行数变化
+    // Check code line count changes
     const lineCountChange = Math.abs(resolvedLines.length - originalLines.length)
     if (lineCountChange > originalLines.length * 0.5) {
-      warnings.push('代码行数变化较大，请检查是否引入了意外的更改')
+      warnings.push('Code line count change is significant, please check if unexpected changes were introduced')
     }
 
     return { warnings, suggestions }
   }
 
   /**
-   * 生成冲突解决报告
+   * Generate conflict resolution report
    */
   generateResolutionReport(
     threeWayDiff: ThreeWayDiff,
@@ -297,14 +297,14 @@ export class EnhancedConflictResolutionService {
   ): string {
     const report: string[] = []
 
-    report.push('=== 补丁冲突解决报告 ===')
+    report.push('=== Patch Conflict Resolution Report ===')
     report.push('')
-    report.push(`冲突总数: ${threeWayDiff.conflicts.length}`)
-    report.push(`已解决冲突: ${Object.keys(resolutions).length}`)
-    report.push(`未解决冲突: ${threeWayDiff.conflicts.length - Object.keys(resolutions).length}`)
+    report.push(`Total conflicts: ${threeWayDiff.conflicts.length}`)
+    report.push(`Resolved conflicts: ${Object.keys(resolutions).length}`)
+    report.push(`Unresolved conflicts: ${threeWayDiff.conflicts.length - Object.keys(resolutions).length}`)
     report.push('')
 
-    // 解决统计
+    // Resolution statistics
     const resolutionStats = {
       original: 0,
       incoming: 0,
@@ -315,28 +315,28 @@ export class EnhancedConflictResolutionService {
       resolutionStats[resolution.type]++
     })
 
-    report.push('解决方式统计:')
-    report.push(`- 使用原始版本: ${resolutionStats.original}`)
-    report.push(`- 使用传入版本: ${resolutionStats.incoming}`)
-    report.push(`- 自定义解决: ${resolutionStats.custom}`)
+    report.push('Resolution method statistics:')
+    report.push(`- Using original version: ${resolutionStats.original}`)
+    report.push(`- Using incoming version: ${resolutionStats.incoming}`)
+    report.push(`- Custom resolution: ${resolutionStats.custom}`)
     report.push('')
 
-    // 验证结果
-    report.push('验证结果:')
+    // Validation results
+    report.push('Validation results:')
     if (validationResult.isValid) {
-      report.push('✓ 代码语法验证通过')
+      report.push('✓ Code syntax validation passed')
     } else {
-      report.push('✗ 发现语法问题:')
+      report.push('✗ Syntax issues found:')
       validationResult.issues.forEach(issue => report.push(`  - ${issue}`))
     }
 
     if (validationResult.warnings.length > 0) {
-      report.push('⚠️  警告:')
+      report.push('⚠️  Warnings:')
       validationResult.warnings.forEach(warning => report.push(`  - ${warning}`))
     }
 
     if (validationResult.suggestions.length > 0) {
-      report.push('💡 建议:')
+      report.push('💡 Suggestions:')
       validationResult.suggestions.forEach(suggestion => report.push(`  - ${suggestion}`))
     }
 
@@ -344,7 +344,7 @@ export class EnhancedConflictResolutionService {
   }
 
   /**
-   * 自动解决简单冲突
+   * Auto-resolve simple conflicts
    */
   autoResolveSimpleConflicts(threeWayDiff: ThreeWayDiff): {
     resolved: boolean
@@ -362,10 +362,10 @@ export class EnhancedConflictResolutionService {
     let resolvedCount = 0
 
     threeWayDiff.conflicts.forEach(conflict => {
-      // 自动解决策略：根据冲突类型选择最佳方案
+      // Auto-resolution strategy: choose best solution based on conflict type
       switch (conflict.conflictType) {
         case 'add_add':
-          // 添加-添加冲突：合并两行（如果可能）
+          // Add-add conflict: merge two lines (if possible)
           if (conflict.original.trim() === '' && conflict.incoming !== conflict.current) {
             resolutions[conflict.lineNumber] = {
               type: 'custom',
@@ -376,7 +376,7 @@ export class EnhancedConflictResolutionService {
           break
 
         case 'delete_add':
-          // 删除-添加冲突：优先保留添加的内容
+          // Delete-add conflict: prioritize keeping added content
           if (!conflict.incoming.trim() && conflict.current.trim()) {
             resolutions[conflict.lineNumber] = {
               type: 'incoming',
@@ -403,12 +403,12 @@ export class EnhancedConflictResolutionService {
     return {
       resolved: resolvedCount > 0,
       resolutions,
-      explanation: `自动解决了 ${resolvedCount} 个简单冲突`
+      explanation: `Auto-resolved ${resolvedCount} simple conflicts`
     }
   }
 
   /**
-   * 计算字符串相似度
+   * Calculate string similarity
    */
   private calculateSimilarity(str1: string, str2: string): number {
     const longer = str1.length > str2.length ? str1 : str2
@@ -421,7 +421,7 @@ export class EnhancedConflictResolutionService {
   }
 
   /**
-   * Levenshtein距离算法
+   * Levenshtein distance algorithm
    */
   private levenshteinDistance(str1: string, str2: string): number {
     const matrix = []

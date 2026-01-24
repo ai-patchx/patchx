@@ -44,7 +44,7 @@ class AuthService {
 
     if (!response.ok) {
       const message = (data as { message?: string }).message
-      throw new Error(message || '登录失败')
+      throw new Error(message || 'Login failed')
     }
 
     return data
@@ -60,7 +60,7 @@ class AuthService {
 
     if (!response.ok) {
       const message = (data as { message?: string }).message
-      throw new Error(message || '获取用户信息失败')
+      throw new Error(message || 'Failed to get user information')
     }
 
     return data

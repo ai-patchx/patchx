@@ -19,7 +19,7 @@ export const uploadFile = async (file: File, project: string): Promise<UploadRes
 
   if (!response.ok) {
     const error = await response.text()
-    throw new Error(error || '文件上传失败')
+    throw new Error(error || 'File upload failed')
   }
 
   return response.json()
@@ -44,7 +44,7 @@ export const submitPatch = async (data: {
 
   if (!response.ok) {
     const error = await response.text()
-    throw new Error(error || 'Patch提交失败')
+    throw new Error(error || 'Patch submission failed')
   }
 
   return response.json()
@@ -57,7 +57,7 @@ export const getSubmissionStatus = async (id: string): Promise<ApiResponse<Statu
 
   if (!response.ok) {
     const error = await response.text()
-    throw new Error(error || '获取状态失败')
+    throw new Error(error || 'Failed to get status')
   }
 
   return response.json()

@@ -92,7 +92,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         const errData: unknown = await res.json().catch(() => null)
         const msg = (typeof errData === 'object' && errData && 'message' in errData)
           ? String((errData as { message?: unknown }).message)
-          : '登录失败'
+          : 'Login failed'
         throw new Error(msg)
       }
       const data = await res.json() as { user: WorkerUser; token: string }

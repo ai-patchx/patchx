@@ -36,7 +36,7 @@ const ThreeWayDiffViewer: React.FC<ThreeWayDiffViewerProps> = ({
     const incomingLines = conflictData.incomingCode.split('\n')
     const currentLines = conflictData.currentCode.split('\n')
 
-    // 简化的三向差异算法
+    // Simplified three-way diff algorithm
     const maxLines = Math.max(originalLines.length, incomingLines.length, currentLines.length)
 
     for (let i = 0; i < maxLines; i++) {
@@ -44,7 +44,7 @@ const ThreeWayDiffViewer: React.FC<ThreeWayDiffViewerProps> = ({
       const incoming = incomingLines[i] || ''
       const current = currentLines[i] || ''
 
-      // 检测冲突
+      // Detect conflicts
       const hasConflict = conflictData.conflicts.some(c => c.lineNumber === i + 1)
 
       if (hasConflict) {
@@ -55,7 +55,7 @@ const ThreeWayDiffViewer: React.FC<ThreeWayDiffViewerProps> = ({
           conflictInfo: { original, incoming, current }
         })
       } else if (original !== incoming || original !== current) {
-        // 非冲突的差异
+        // Non-conflicting differences
         if (original !== current && incoming === current) {
           lines.push({
             lineNumber: i + 1,
@@ -141,17 +141,17 @@ const ThreeWayDiffViewer: React.FC<ThreeWayDiffViewerProps> = ({
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-3">
             <GitMerge className="w-5 h-5 text-orange-500" />
-            <h3 className="font-semibold text-gray-900">三方差异比较 - {conflictData.filePath}</h3>
+            <h3 className="font-semibold text-gray-900">Three-way Diff Comparison - {conflictData.filePath}</h3>
           </div>
           <div className="flex items-center space-x-2">
             <span className="text-sm text-gray-600">
-              {conflictLines.length} 个冲突，已解决 {resolvedCount} 个
+              {conflictLines.length} conflicts, {resolvedCount} resolved
             </span>
             <button
               onClick={() => setShowResolved(!showResolved)}
               className="px-3 py-1 text-xs bg-blue-100 text-blue-700 rounded hover:bg-blue-200"
             >
-              {showResolved ? '隐藏已解决' : '显示已解决'}
+              {showResolved ? 'Hide Resolved' : 'Show Resolved'}
             </button>
           </div>
         </div>
@@ -163,7 +163,7 @@ const ThreeWayDiffViewer: React.FC<ThreeWayDiffViewerProps> = ({
         <div className="flex-1 border-r border-gray-200">
           <div className="px-3 py-2 bg-gray-100 border-b border-gray-200 flex items-center">
             <FileText className="w-4 h-4 mr-2 text-gray-600" />
-            <span className="text-sm font-medium text-gray-700">原始版本 (Base)</span>
+            <span className="text-sm font-medium text-gray-700">Original Version (Base)</span>
           </div>
           <div className="overflow-auto h-full p-2">
             {parseDiffLines.map((line) => (
@@ -191,7 +191,7 @@ const ThreeWayDiffViewer: React.FC<ThreeWayDiffViewerProps> = ({
         <div className="flex-1 border-r border-gray-200">
           <div className="px-3 py-2 bg-gray-100 border-b border-gray-200 flex items-center">
             <ArrowLeftRight className="w-4 h-4 mr-2 text-green-600" />
-            <span className="text-sm font-medium text-gray-700">传入版本 (Patch)</span>
+            <span className="text-sm font-medium text-gray-700">Incoming Version (Patch)</span>
           </div>
           <div className="overflow-auto h-full p-2">
             {parseDiffLines.map((line) => (
@@ -220,7 +220,7 @@ const ThreeWayDiffViewer: React.FC<ThreeWayDiffViewerProps> = ({
           <div className="px-3 py-2 bg-gray-100 border-b border-gray-200 flex items-center justify-between">
             <div className="flex items-center">
               <AlertTriangle className="w-4 h-4 mr-2 text-orange-600" />
-              <span className="text-sm font-medium text-gray-700">当前版本 + 解决</span>
+              <span className="text-sm font-medium text-gray-700">Current Version + Resolution</span>
             </div>
           </div>
           <div className="overflow-auto h-full p-2">
@@ -229,7 +229,7 @@ const ThreeWayDiffViewer: React.FC<ThreeWayDiffViewerProps> = ({
               const selectedResolution = selectedResolutions[line.lineNumber]
 
               if (!showResolved && isConflict && selectedResolution) {
-                return null // 隐藏已解决的冲突
+                return null // Hide resolved conflicts
               }
 
               return (
@@ -241,7 +241,7 @@ const ThreeWayDiffViewer: React.FC<ThreeWayDiffViewerProps> = ({
                     {isConflict ? (
                       <div className="border border-orange-300 rounded mb-1">
                         <div className="bg-orange-100 px-2 py-1 text-xs text-orange-800 flex items-center justify-between">
-                          <span>冲突需要解决</span>
+                          <span>Conflict needs resolution</span>
                           <AlertTriangle className="w-3 h-3" />
                         </div>
 
@@ -257,7 +257,7 @@ const ThreeWayDiffViewer: React.FC<ThreeWayDiffViewerProps> = ({
                               }`}
                             >
                               <X className="w-3 h-3 mr-1" />
-                              使用原始
+                              Use Original
                             </button>
                             <button
                               onClick={() => handleResolutionSelect(line.lineNumber, 'incoming')}
@@ -268,7 +268,7 @@ const ThreeWayDiffViewer: React.FC<ThreeWayDiffViewerProps> = ({
                               }`}
                             >
                               <Check className="w-3 h-3 mr-1" />
-                              使用传入
+                              Use Incoming
                             </button>
                             <button
                               onClick={() => handleResolutionSelect(line.lineNumber, 'custom')}
@@ -279,7 +279,7 @@ const ThreeWayDiffViewer: React.FC<ThreeWayDiffViewerProps> = ({
                               }`}
                             >
                               <ArrowLeftRight className="w-3 h-3 mr-1" />
-                              自定义
+                              Custom
                             </button>
                           </div>
 
@@ -324,7 +324,7 @@ const ThreeWayDiffViewer: React.FC<ThreeWayDiffViewerProps> = ({
       {/* Footer */}
       <div className="px-4 py-3 bg-gray-50 border-t border-gray-200 flex justify-between items-center">
         <div className="text-sm text-gray-600">
-          进度: {resolvedCount} / {conflictLines.length} 冲突已解决
+          Progress: {resolvedCount} / {conflictLines.length} conflicts resolved
         </div>
         <div className="flex space-x-2">
           <button
@@ -332,7 +332,7 @@ const ThreeWayDiffViewer: React.FC<ThreeWayDiffViewerProps> = ({
             className="px-4 py-2 text-sm text-gray-700 bg-gray-200 rounded hover:bg-gray-300 flex items-center"
           >
             <X className="w-4 h-4 mr-1" />
-            全部拒绝
+            Reject All
           </button>
           <button
             onClick={onAcceptAll}
@@ -340,7 +340,7 @@ const ThreeWayDiffViewer: React.FC<ThreeWayDiffViewerProps> = ({
             className="px-4 py-2 text-sm text-white bg-green-600 rounded hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
           >
             <Check className="w-4 h-4 mr-1" />
-            应用解决
+            Apply Resolution
           </button>
         </div>
       </div>

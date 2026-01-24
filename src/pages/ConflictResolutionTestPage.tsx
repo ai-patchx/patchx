@@ -18,7 +18,7 @@ import EnhancedConflictResolutionModal from '../components/EnhancedConflictResol
 import { ConflictData } from '../types/ui'
 import { ConflictResolutionResponse } from '../types/ai'
 
-// 更复杂的冲突场景
+// More complex conflict scenarios
 const complexConflictData: ConflictData = {
   filePath: 'src/services/apiService.ts',
   originalCode: [

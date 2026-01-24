@@ -21,9 +21,9 @@ export class GerritService {
     status: string
   }> {
     try {
-      // 构建Gerrit API请求
+      // Build Gerrit API request
       const changeData = {
-        project: project.replace('platform/', ''), // 移除platform前缀
+        project: project.replace('platform/', ''), // Remove platform prefix
         branch,
         subject,
         topic: 'aosp-patch-service',
@@ -37,7 +37,7 @@ export class GerritService {
       }, timeoutMs)
 
       try {
-        // 创建change
+        // Create change
         const createResponse = await fetch(`${this.env.GERRIT_BASE_URL}/a/changes/`, {
           method: 'POST',
           headers: {
@@ -52,13 +52,13 @@ export class GerritService {
 
         if (!createResponse.ok) {
           const errorText = await createResponse.text()
-          throw new Error(`创建Gerrit change失败: ${errorText}`)
+          throw new Error(`Failed to create Gerrit change: ${errorText}`)
         }
 
         const changeInfo = await createResponse.json() as { _number?: number; id?: string }
         const changeId = (changeInfo._number ?? changeInfo.id ?? '').toString()
 
-        // 上传patch set
+        // Upload patch set
         const patchSetData = {
           patch: patchContent,
           message: `${subject}\n\n${description}`
@@ -88,7 +88,7 @@ export class GerritService {
 
           if (!uploadResponse.ok) {
             const errorText = await uploadResponse.text()
-            throw new Error(`上传patch set失败: ${errorText}`)
+            throw new Error(`Failed to upload patch set: ${errorText}`)
           }
 
           const changeUrl = `${this.env.GERRIT_BASE_URL}/#/c/${changeId}/`
@@ -101,19 +101,19 @@ export class GerritService {
         } catch (uploadError) {
           clearTimeout(uploadTimeoutId)
           if (uploadError instanceof Error && uploadError.name === 'AbortError') {
-            throw new Error(`上传patch set超时: 操作在 ${timeoutMs}ms 后超时`)
+            throw new Error(`Upload patch set timeout: operation timed out after ${timeoutMs}ms`)
           }
           throw uploadError
         }
       } catch (createError) {
         clearTimeout(createTimeoutId)
         if (createError instanceof Error && createError.name === 'AbortError') {
-          throw new Error(`创建Gerrit change超时: 操作在 ${timeoutMs}ms 后超时`)
+          throw new Error(`Create Gerrit change timeout: operation timed out after ${timeoutMs}ms`)
         }
         throw createError
       }
     } catch (error) {
-      console.error('Gerrit提交错误:', error)
+      console.error('Gerrit submission error:', error)
       throw error
     }
   }
@@ -134,7 +134,7 @@ export class GerritService {
       )
 
       if (!response.ok) {
-        throw new Error('获取change状态失败')
+        throw new Error('Failed to get change status')
       }
 
       const data = await response.json() as { status?: string; mergeable?: boolean; submittable?: boolean }
@@ -145,7 +145,7 @@ export class GerritService {
         submittable: data.submittable || false
       }
     } catch (error) {
-      console.error('获取Gerrit状态错误:', error)
+      console.error('Error getting Gerrit status:', error)
       throw error
     }
   }

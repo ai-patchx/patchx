@@ -34,7 +34,7 @@ export async function onRequestPost(context) {
     } catch (error) {
       console.error('Error proxying login to Worker:', error);
       return new Response(
-        JSON.stringify({ message: '服务器内部错误' }),
+        JSON.stringify({ message: 'Internal server error' }),
         {
           status: 500,
           headers: {

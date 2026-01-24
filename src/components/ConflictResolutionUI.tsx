@@ -20,7 +20,7 @@ const ConflictResolutionUI: React.FC<ConflictResolutionUIProps> = ({
 
     setIsResolving(true)
     try {
-      // 调用AI冲突解决API
+      // Call AI conflict resolution API
       const response = await fetch('/api/ai/resolve-conflict', {
         method: 'POST',
         headers: {
@@ -37,18 +37,18 @@ const ConflictResolutionUI: React.FC<ConflictResolutionUIProps> = ({
       })
 
       if (!response.ok) {
-        throw new Error('AI冲突解决失败')
+        throw new Error('AI conflict resolution failed')
       }
 
       const result: { data: ConflictResolutionResponse } = await response.json()
       setResolution(result.data)
     } catch (error) {
-      console.error('AI冲突解决错误:', error)
+      console.error('AI conflict resolution error:', error)
       setResolution({
         resolvedCode: conflictData.currentCode,
-        explanation: `AI冲突解决失败: ${error instanceof Error ? error.message : '未知错误'}`,
+        explanation: `AI conflict resolution failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
         confidence: 0,
-        suggestions: ['请尝试其他AI提供商或手动解决冲突'],
+        suggestions: ['Please try another AI provider or resolve conflicts manually'],
         requiresManualReview: true
       })
     } finally {
@@ -69,7 +69,7 @@ const ConflictResolutionUI: React.FC<ConflictResolutionUIProps> = ({
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
       <div className="bg-white rounded-lg shadow-xl max-w-6xl w-full mx-4 max-h-[90vh] overflow-hidden">
-        {/* 头部 */}
+        {/* Header */}
         <div className="px-6 py-4 border-b border-gray-200">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-3">

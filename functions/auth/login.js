@@ -22,7 +22,7 @@ export async function onRequest(context) {
     // Validate input
     if (!username || !password) {
       return new Response(
-        JSON.stringify({ message: '用户名和密码不能为空' }),
+        JSON.stringify({ message: 'Username and password cannot be empty' }),
         {
           status: 400,
           headers: {
@@ -65,7 +65,7 @@ export async function onRequest(context) {
 
     if (!validCredential) {
       return new Response(
-        JSON.stringify({ message: '用户名或密码错误' }),
+        JSON.stringify({ message: 'Invalid username or password' }),
         {
           status: 401,
           headers: {
@@ -96,7 +96,7 @@ export async function onRequest(context) {
     const response = {
       user,
       token,
-      message: '登录成功'
+      message: 'Login successful'
     };
 
     return new Response(
@@ -114,7 +114,7 @@ export async function onRequest(context) {
   } catch (error) {
     console.error('Login error:', error);
     return new Response(
-      JSON.stringify({ message: '服务器内部错误' }),
+      JSON.stringify({ message: 'Internal server error' }),
       {
         status: 500,
         headers: {

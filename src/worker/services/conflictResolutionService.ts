@@ -14,20 +14,20 @@ export class ConflictResolutionService {
     filePath: string
   ): Promise<ConflictResolutionResponse> {
 
-    // 1. 检测冲突
+    // 1. Detect conflicts
     const conflicts = await this.detectConflicts(patchContent, targetContent, filePath)
 
     if (conflicts.length === 0) {
       return {
         resolvedCode: targetContent,
-        explanation: '未检测到冲突，可以直接应用patch',
+        explanation: 'No conflicts detected, patch can be applied directly',
         confidence: 1.0,
         suggestions: [],
         requiresManualReview: false
       }
     }
 
-    // 2. 构建冲突解决请求
+    // 2. Build conflict resolution request
     const request: ConflictResolutionRequest = {
       originalCode: targetContent,
       incomingCode: patchContent,
@@ -41,7 +41,7 @@ export class ConflictResolutionService {
       }))
     }
 
-    // 3. 调用AI解决冲突
+    // 3. Call AI to resolve conflicts
     return await this.aiService.resolvePatchConflict(request)
   }
 
@@ -52,24 +52,24 @@ export class ConflictResolutionService {
   ): Promise<PatchConflict[]> {
     const conflicts: PatchConflict[] = []
 
-    // 解析patch文件
+    // Parse patch file
     const patchLines = patchContent.split('\n')
     const targetLines = targetContent.split('\n')
 
-    // 简单的冲突检测逻辑
+    // Simple conflict detection logic
 
     for (let i = 0; i < patchLines.length; i++) {
       const patchLine = patchLines[i]
 
-      // 跳过patch头信息
+      // Skip patch header information
       if (patchLine.startsWith('---') || patchLine.startsWith('+++') || patchLine.startsWith('@@')) {
         continue
       }
 
-      // 检测删除操作
+      // Detect delete operations
       if (patchLine.startsWith('-')) {
         const content = patchLine.substring(1)
-        // 检查目标文件是否存在这行内容
+        // Check if target file contains this line
         const found = targetLines.find(line => line.trim() === content.trim())
         if (!found) {
           conflicts.push({
@@ -83,10 +83,10 @@ export class ConflictResolutionService {
         }
       }
 
-      // 检测添加操作
+      // Detect add operations
       if (patchLine.startsWith('+')) {
         const content = patchLine.substring(1)
-        // 检查目标文件是否已存在相同内容
+        // Check if target file already contains the same content
         const exists = targetLines.find(line => line.trim() === content.trim())
         if (exists) {
           conflicts.push({
@@ -100,9 +100,9 @@ export class ConflictResolutionService {
         }
       }
 
-      // 上下文行
+      // Context lines
       if (patchLine.startsWith(' ')) {
-        // 保留上下文计数逻辑可根据需要扩展
+        // Context counting logic can be extended as needed
       }
     }
 
@@ -117,13 +117,13 @@ export class ConflictResolutionService {
     const issues: string[] = []
     const suggestions: string[] = []
 
-    // 基本验证
+    // Basic validation
     if (!resolvedCode || resolvedCode.trim().length === 0) {
-      issues.push('解决后的代码为空')
+      issues.push('Resolved code is empty')
       return { valid: false, issues, suggestions }
     }
 
-    // 语法验证（简单的括号匹配）
+    // Syntax validation (simple bracket matching)
     const openBraces = (resolvedCode.match(/\{/g) || []).length
     const openParens = (resolvedCode.match(/\(/g) || []).length
     const openBrackets = (resolvedCode.match(/\[/g) || []).length
@@ -135,11 +135,11 @@ export class ConflictResolutionService {
     const closeTotal = closeBraces + closeParens + closeBrackets
 
     if (openTotal !== closeTotal) {
-      issues.push('括号不匹配，可能存在语法错误')
-      suggestions.push('请检查代码中的括号匹配')
+      issues.push('Brackets do not match, possible syntax error')
+      suggestions.push('Please check bracket matching in code')
     }
 
-    // 检查是否保留了重要的原始代码
+    // Check if important original code is preserved
     const originalLines = originalCode.split('\n').filter(line => line.trim().length > 0)
     const resolvedLines = resolvedCode.split('\n').filter(line => line.trim().length > 0)
 
@@ -150,7 +150,7 @@ export class ConflictResolutionService {
     const preservationRatio = preservedLines.length / originalLines.length
 
     if (preservationRatio < 0.5) {
-      suggestions.push('解决后的代码与原始代码差异较大，建议仔细审查')
+      suggestions.push('Resolved code differs significantly from original code, recommend careful review')
     }
 
     return {

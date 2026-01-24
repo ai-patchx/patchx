@@ -16,7 +16,7 @@ export class UploadService {
     const filename = file.name
     const content = await file.text()
 
-    // 验证patch文件
+    // Validate patch file
     const validation = validatePatchFile(content)
 
     const upload: Upload = {
@@ -29,7 +29,7 @@ export class UploadService {
       createdAt: new Date().toISOString()
     }
 
-    // 存储到KV
+    // Store to KV
     await this.kv.put(`uploads:${id}`, JSON.stringify(upload))
 
     return upload
@@ -52,20 +52,20 @@ export class UploadService {
         return {
           uploadId: upload.id,
           status: 'error',
-          message: upload.validationError || '文件验证失败'
+          message: upload.validationError || 'File validation failed'
         }
       }
 
       return {
         uploadId: upload.id,
         status: 'success',
-        message: '文件上传成功'
+        message: 'File uploaded successfully'
       }
     } catch (error) {
       return {
         uploadId: '',
         status: 'error',
-        message: error instanceof Error ? error.message : '上传失败'
+        message: error instanceof Error ? error.message : 'Upload failed'
       }
     }
   }

@@ -6,7 +6,7 @@ export class AIConflictResolutionService {
   private resolver: AIConflictResolver
 
   constructor(env: Env) {
-    // 从环境变量配置AI提供商
+    // Configure AI providers from environment variables
     const providers = this.configureProviders(env)
     this.resolver = new AIConflictResolver(providers)
   }
@@ -14,7 +14,7 @@ export class AIConflictResolutionService {
   private configureProviders(env: Env): Record<string, AIProvider> {
     const providers: Record<string, AIProvider> = {}
 
-    // OpenAI 配置
+    // OpenAI configuration
     if (env.OPENAI_API_KEY) {
       providers.openai = {
         name: 'OpenAI',
@@ -26,7 +26,7 @@ export class AIConflictResolutionService {
       }
     }
 
-    // Anthropic 配置
+    // Anthropic configuration
     if (env.ANTHROPIC_API_KEY) {
       providers.anthropic = {
         name: 'Anthropic',
@@ -38,7 +38,7 @@ export class AIConflictResolutionService {
       }
     }
 
-    // 其他兼容OpenAI API的提供商
+    // Other providers compatible with OpenAI API
     if (env.CUSTOM_AI_BASE_URL && env.CUSTOM_AI_API_KEY) {
       providers.custom = {
         name: 'Custom',
@@ -51,7 +51,7 @@ export class AIConflictResolutionService {
     }
 
     if (Object.keys(providers).length === 0) {
-      throw new Error('未配置任何AI提供商。请至少配置 OPENAI_API_KEY, ANTHROPIC_API_KEY 或 CUSTOM_AI_BASE_URL + CUSTOM_AI_API_KEY')
+      throw new Error('No AI providers configured. Please configure at least OPENAI_API_KEY, ANTHROPIC_API_KEY or CUSTOM_AI_BASE_URL + CUSTOM_AI_API_KEY')
     }
 
     return providers
@@ -70,15 +70,15 @@ export class AIConflictResolutionService {
 
     try {
       if (options?.useMultipleProviders) {
-        // 使用多个AI提供商，选择最佳解决方案
+        // Use multiple AI providers, select best solution
         const results = await this.resolver.resolveWithMultipleProviders(
           patchContent,
           targetContent,
           filePath
         )
 
-        // 记录所有提供商的结果用于调试
-        console.log('多提供商冲突解决结果:', {
+        // Log all provider results for debugging
+        console.log('Multi-provider conflict resolution results:', {
           bestProvider: results.recommendedProvider,
           confidence: results.bestResolution.confidence,
           requiresManualReview: results.bestResolution.requiresManualReview
@@ -86,7 +86,7 @@ export class AIConflictResolutionService {
 
         return results.bestResolution
       } else {
-        // 使用指定的单个提供商
+        // Use specified single provider
         return await this.resolver.resolveWithAI(
           patchContent,
           targetContent,
@@ -95,18 +95,18 @@ export class AIConflictResolutionService {
         )
       }
     } catch (error) {
-      console.error('AI冲突解决服务错误:', error)
+      console.error('AI conflict resolution service error:', error)
 
-      // 返回一个安全的默认响应
+      // Return a safe default response
       return {
         resolvedCode: targetContent,
-        explanation: `AI冲突解决失败: ${error instanceof Error ? error.message : '未知错误'}。请手动解决冲突。`,
+        explanation: `AI conflict resolution failed: ${error instanceof Error ? error.message : 'Unknown error'}. Please resolve conflicts manually.`,
         confidence: 0,
         suggestions: [
-          '检查AI提供商配置',
-          '尝试使用不同的AI提供商',
-          '手动解决代码冲突',
-          '联系技术支持'
+          'Check AI provider configuration',
+          'Try using a different AI provider',
+          'Manually resolve code conflicts',
+          'Contact technical support'
         ],
         requiresManualReview: true
       }

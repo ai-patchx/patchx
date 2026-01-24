@@ -4,38 +4,38 @@ export const generateId = (): string => {
 
 export const validatePatchFile = (content: string): { valid: boolean; error?: string } => {
   try {
-    // 检查是否包含patch文件的基本格式
+    // Check if patch file contains basic format
     if (!content.includes('---') || !content.includes('+++')) {
-      return { valid: false, error: '无效的patch格式：缺少文件头信息' }
+      return { valid: false, error: 'Invalid patch format: missing file header information' }
     }
 
-    // 检查是否包含diff块
+    // Check if diff blocks are present
     const diffBlocks = content.split(/^@@/m)
     if (diffBlocks.length < 2) {
-      return { valid: false, error: '无效的patch格式：缺少diff块' }
+      return { valid: false, error: 'Invalid patch format: missing diff blocks' }
     }
 
-    // 检查每个diff块的格式
+    // Check format of each diff block
     for (let i = 1; i < diffBlocks.length; i++) {
       const block = diffBlocks[i]
       const lines = block.split('\n')
 
-      // 检查diff头格式 - 由于split移除了@@，需要重新添加或直接匹配内容
-      // lines[0] 应该是类似 " -209,8 +209,8 @@" 的格式（没有开头的@@）
+      // Check diff header format - since split removed @@, need to match content directly
+      // lines[0] should be in format like " -209,8 +209,8 @@" (without leading @@)
       const firstLine = lines[0].trim()
-      // 匹配格式: -数字(,数字)? +数字(,数字)? @@ (可选的其他内容如函数名)
+      // Match format: -number(,number)? +number(,number)? @@ (optional other content like function name)
       const headerMatch = firstLine.match(/^-\d+(?:,\d+)?\s+\+\d+(?:,\d+)?\s+@@.*$/)
       if (!headerMatch) {
-        return { valid: false, error: `第 ${i} 个diff块格式错误` }
+        return { valid: false, error: `Diff block ${i} format error` }
       }
 
-      // 检查行格式
+      // Check line format
       let hasChanges = false
       for (let j = 1; j < lines.length; j++) {
         const line = lines[j]
         if (line.length === 0) continue
 
-        // 如果遇到新文件或新diff块的标记，停止检查（这些是下一个文件/块的内容）
+        // If encountering new file or new diff block markers, stop checking (these are content of next file/block)
         if (line.startsWith('diff --git') ||
             (line.startsWith('--- ') && j > 1) ||
             (line.startsWith('+++ ') && j > 1) ||
@@ -43,23 +43,23 @@ export const validatePatchFile = (content: string): { valid: boolean; error?: st
           break
         }
 
-        // 检查行前缀
+        // Check line prefix
         const firstChar = line[0]
         if (firstChar === '+' || firstChar === '-') {
           hasChanges = true
         } else if (firstChar !== ' ' && firstChar !== '\\') {
-          return { valid: false, error: `第 ${i} 个diff块中第 ${j} 行格式错误` }
+          return { valid: false, error: `Line ${j} in diff block ${i} format error` }
         }
       }
 
       if (!hasChanges) {
-        return { valid: false, error: `第 ${i} 个diff块中没有实际的更改` }
+        return { valid: false, error: `Diff block ${i} has no actual changes` }
       }
     }
 
     return { valid: true }
   } catch (error) {
-    return { valid: false, error: `验证patch文件时出错: ${error instanceof Error ? error.message : '未知错误'}` }
+    return { valid: false, error: `Error validating patch file: ${error instanceof Error ? error.message : 'Unknown error'}` }
   }
 }
 

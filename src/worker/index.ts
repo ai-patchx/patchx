@@ -52,12 +52,12 @@ function getCacheKeyString(path: string, queryParams: string, env?: Env): string
 }
 
 export default {
-  async fetch(request: Request, env: Env): Promise<Response> {
+  async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url)
     const path = url.pathname
     const method = request.method
 
-    // 设置CORS头 - 更完整的CORS支持
+    // Set CORS headers - more complete CORS support
     const corsHeaders = {
       'Access-Control-Allow-Origin': '*',
       'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
@@ -65,13 +65,13 @@ export default {
       'Access-Control-Max-Age': '86400',
     }
 
-    // 处理OPTIONS请求
+    // Handle OPTIONS requests
     if (method === 'OPTIONS') {
       return new Response(null, { headers: corsHeaders })
     }
 
     try {
-      // 根路径处理 - 返回服务信息
+      // Root path handling - return service information
       if (path === '/' && method === 'GET') {
         return new Response(
           JSON.stringify({
@@ -106,21 +106,21 @@ export default {
         )
       }
 
-      // 现有的API路由
+      // Existing API routes
       if (path === '/api/upload' && method === 'POST') {
         return await handleUpload(request, env, corsHeaders)
       } else if (path === '/api/submit' && method === 'POST') {
-        return await handleSubmit(request, env, corsHeaders)
+        return await handleSubmit(request, env, corsHeaders, ctx)
       } else if (path.startsWith('/api/status/') && method === 'GET') {
         return await handleStatus(path, env, corsHeaders)
       }
 
-      // 登录API路由
+      // Login API route
       else if (path === '/api/auth/login' && method === 'POST') {
         return await handleLogin(request, env, corsHeaders)
       }
 
-      // 新的AI冲突解决API路由
+      // New AI conflict resolution API routes
       else if (path === '/api/ai/resolve-conflict' && method === 'POST') {
         return await handleAIConflictResolution(request, env, corsHeaders)
       } else if (path === '/api/ai/providers' && method === 'GET') {
@@ -194,7 +194,7 @@ export default {
   }
 }
 
-// AI冲突解决API处理函数
+// AI conflict resolution API handler function
 async function handleAIConflictResolution(
   request: Request,
   env: Env,
@@ -214,7 +214,7 @@ async function handleAIConflictResolution(
 
     if (!originalCode || !incomingCode || !currentCode || !filePath) {
       return new Response(
-        JSON.stringify({ success: false, error: '缺少必要参数' }),
+        JSON.stringify({ success: false, error: 'Missing required parameters' }),
         {
           status: 400,
           headers: {
@@ -227,7 +227,7 @@ async function handleAIConflictResolution(
 
     const enhancedPatchService = new EnhancedPatchService(env)
 
-    // 模拟patch内容
+    // Mock patch content
     const mockUpload = {
       id: 'conflict-resolution',
       filename: filePath,
@@ -264,7 +264,7 @@ async function handleAIConflictResolution(
       return new Response(
         JSON.stringify({
           success: false,
-          error: '冲突解决失败',
+          error: 'Conflict resolution failed',
           data: result
         }),
         {
@@ -277,11 +277,11 @@ async function handleAIConflictResolution(
       )
     }
   } catch (error) {
-    console.error('AI冲突解决错误:', error)
+    console.error('AI conflict resolution error:', error)
     return new Response(
       JSON.stringify({
         success: false,
-        error: error instanceof Error ? error.message : 'AI冲突解决失败'
+        error: error instanceof Error ? error.message : 'AI conflict resolution failed'
       }),
       {
         status: 500,
@@ -306,7 +306,7 @@ async function handleAIProviders(env: Env, corsHeaders: Record<string, string>):
         data: {
           enabled: isEnabled,
           providers,
-          message: isEnabled ? 'AI冲突解决已启用' : 'AI冲突解决未启用，请配置AI提供商'
+          message: isEnabled ? 'AI conflict resolution is enabled' : 'AI conflict resolution is not enabled, please configure AI provider'
         }
       }),
       {
@@ -320,7 +320,7 @@ async function handleAIProviders(env: Env, corsHeaders: Record<string, string>):
     return new Response(
       JSON.stringify({
         success: false,
-        error: error instanceof Error ? error.message : '获取AI提供商失败'
+        error: error instanceof Error ? error.message : 'Failed to get AI providers'
       }),
       {
         status: 500,
@@ -341,7 +341,7 @@ async function handleAITestProviders(env: Env, corsHeaders: Record<string, strin
       return new Response(
         JSON.stringify({
           success: false,
-          error: 'AI冲突解决未启用'
+          error: 'AI conflict resolution is not enabled'
         }),
         {
           status: 400,
@@ -371,7 +371,7 @@ async function handleAITestProviders(env: Env, corsHeaders: Record<string, strin
     return new Response(
       JSON.stringify({
         success: false,
-        error: error instanceof Error ? error.message : '测试AI提供商失败'
+        error: error instanceof Error ? error.message : 'Failed to test AI providers'
       }),
       {
         status: 500,
@@ -384,16 +384,16 @@ async function handleAITestProviders(env: Env, corsHeaders: Record<string, strin
   }
 }
 
-// 登录处理函数
+// Login handler function
 async function handleLogin(request: Request, env: Env, corsHeaders: Record<string, string>): Promise<Response> {
   try {
     const body = await request.json() as { username: string; password: string }
     const { username, password } = body
 
-    // 验证输入
+    // Validate input
     if (!username || !password) {
       return new Response(
-        JSON.stringify({ message: '用户名和密码不能为空' }),
+        JSON.stringify({ message: 'Username and password cannot be empty' }),
         {
           status: 400,
           headers: {
@@ -404,23 +404,23 @@ async function handleLogin(request: Request, env: Env, corsHeaders: Record<strin
       )
     }
 
-    // 获取测试账号密码
+    // Get test account password
     const getTestPassword = () => {
-      // 支持 Cloudflare Workers 环境变量
+      // Support Cloudflare Workers environment variables
       if (env.TEST_USER_PASSWORD) {
         return env.TEST_USER_PASSWORD
       }
-      // 默认密码
+      // Default password
       return 'patchx'
     }
 
-    // 获取管理员账号密码
+    // Get administrator account password
     const getAdminPassword = () => {
-      // 支持 Cloudflare Workers 环境变量
+      // Support Cloudflare Workers environment variables
       if (env.ADMIN_USER_PASSWORD) {
         return env.ADMIN_USER_PASSWORD
       }
-      // 默认密码
+      // Default password
       return 'admin'
     }
 
@@ -437,14 +437,14 @@ async function handleLogin(request: Request, env: Env, corsHeaders: Record<strin
       }
     ]
 
-    // 验证凭据
+    // Validate credentials
     const validCredential = VALID_CREDENTIALS.find(
       cred => cred.username === username && cred.password === password
     )
 
     if (!validCredential) {
       return new Response(
-        JSON.stringify({ message: '用户名或密码错误' }),
+        JSON.stringify({ message: 'Invalid username or password' }),
         {
           status: 401,
           headers: {
@@ -455,25 +455,25 @@ async function handleLogin(request: Request, env: Env, corsHeaders: Record<strin
       )
     }
 
-    // 创建用户对象和简单的 JWT token
+    // Create user object and simple JWT token
     const user = {
       id: username === 'admin' ? 'admin-123' : 'user-123',
       username: username,
       role: validCredential.role
     }
 
-    // 简单的 token 生成（使用 base64 编码）
+    // Simple token generation (using base64 encoding)
     const token = btoa(JSON.stringify({
       userId: user.id,
       username: user.username,
       role: user.role,
-      exp: Date.now() + 24 * 60 * 60 * 1000 // 24 小时后过期
+      exp: Date.now() + 24 * 60 * 60 * 1000 // Expires after 24 hours
     }))
 
     const response = {
       user,
       token,
-      message: '登录成功'
+      message: 'Login successful'
     }
 
     return new Response(
@@ -489,7 +489,7 @@ async function handleLogin(request: Request, env: Env, corsHeaders: Record<strin
   } catch (error) {
     console.error('Login error:', error)
     return new Response(
-      JSON.stringify({ message: '服务器内部错误' }),
+      JSON.stringify({ message: 'Internal server error' }),
       {
         status: 500,
         headers: {
@@ -501,7 +501,7 @@ async function handleLogin(request: Request, env: Env, corsHeaders: Record<strin
   }
 }
 
-// 原有的处理函数保持不变...
+// Original handler functions remain unchanged...
 async function handleUpload(request: Request, env: Env, corsHeaders: Record<string, string>): Promise<Response> {
   const formData = await request.formData()
   const file = formData.get('file') as File | null
@@ -509,7 +509,7 @@ async function handleUpload(request: Request, env: Env, corsHeaders: Record<stri
 
   if (!file || !project) {
     return new Response(
-      JSON.stringify({ success: false, error: '缺少必要参数' }),
+      JSON.stringify({ success: false, error: 'Missing required parameters' }),
       {
         status: 400,
         headers: {
@@ -520,11 +520,11 @@ async function handleUpload(request: Request, env: Env, corsHeaders: Record<stri
     )
   }
 
-  // 检查文件大小
+  // Check file size
   const maxFileSize = env.MAX_FILE_SIZE || 10 * 1024 * 1024 // 10MB
   if (file.size > maxFileSize) {
     return new Response(
-      JSON.stringify({ success: false, error: '文件大小超过限制' }),
+      JSON.stringify({ success: false, error: 'File size exceeds limit' }),
       {
         status: 400,
         headers: {
@@ -549,7 +549,7 @@ async function handleUpload(request: Request, env: Env, corsHeaders: Record<stri
   )
 }
 
-async function handleSubmit(request: Request, env: Env, corsHeaders: Record<string, string>): Promise<Response> {
+async function handleSubmit(request: Request, env: Env, corsHeaders: Record<string, string>, ctx?: ExecutionContext): Promise<Response> {
   const body = await request.json() as {
     uploadId: string
     subject: string
@@ -565,7 +565,7 @@ async function handleSubmit(request: Request, env: Env, corsHeaders: Record<stri
 
   if (!uploadId || !subject || !branch) {
     return new Response(
-      JSON.stringify({ success: false, error: '缺少必要参数' }),
+      JSON.stringify({ success: false, error: 'Missing required parameters' }),
       {
         status: 400,
         headers: {
@@ -604,7 +604,7 @@ async function handleSubmit(request: Request, env: Env, corsHeaders: Record<stri
   const notificationCc = Array.isArray(body.notificationCc) ? body.notificationCc : undefined
 
   try {
-    // 创建提交记录
+    // Create submission record
     const submission = await submissionService.createSubmission(
       uploadId,
       subject,
@@ -617,34 +617,56 @@ async function handleSubmit(request: Request, env: Env, corsHeaders: Record<stri
       gitRepository
     )
 
-    // 异步提交到Gerrit或执行git命令（不等待完成）
+    // Asynchronously submit to Gerrit or execute git commands (don't wait for completion)
     console.log(`[Submit Handler] Starting async submission processing for ID: ${submission.id}`)
-    submissionService.submitToGerrit(submission.id)
-      .then(async (result) => {
-        console.log(`[Submit Handler] Submission ${submission.id} completed successfully`)
-        // Log completion (logs should already be added by submitToGerrit)
-      })
-      .catch(async (error) => {
-      console.error('Submission processing failed:', error)
-      // Try to log the error to the submission
+
+    // Create the async processing promise
+    const processingPromise = (async () => {
       try {
-        const failedSubmission = await submissionService.getSubmission(submission.id)
-        if (failedSubmission) {
-          failedSubmission.status = 'failed'
-          failedSubmission.error = error instanceof Error ? error.message : String(error)
-          failedSubmission.updatedAt = new Date().toISOString()
-          if (!failedSubmission.logs) {
-            failedSubmission.logs = []
+        await submissionService.submitToGerrit(submission.id)
+        console.log(`[Submit Handler] Submission ${submission.id} completed successfully`)
+      } catch (error) {
+        console.error(`[Submit Handler] Submission ${submission.id} processing failed:`, error)
+        // Try to log the error to the submission
+        try {
+          const failedSubmission = await submissionService.getSubmission(submission.id)
+          if (failedSubmission) {
+            failedSubmission.status = 'failed'
+            failedSubmission.error = error instanceof Error ? error.message : String(error)
+            failedSubmission.updatedAt = new Date().toISOString()
+            if (!failedSubmission.logs) {
+              failedSubmission.logs = []
+            }
+            const errorMsg = error instanceof Error ? error.message : String(error)
+            const errorStack = error instanceof Error ? error.stack : undefined
+            failedSubmission.logs.push(`[${new Date().toLocaleTimeString('en-US')}] [Error] Submission processing failed: ${errorMsg}`)
+            if (errorStack) {
+              failedSubmission.logs.push(`[${new Date().toLocaleTimeString('en-US')}] [Error] Stack: ${errorStack.substring(0, 500)}`)
+            }
+            // Use SubmissionService's internal KV access instead of direct env.KV
+            const kv = getKvNamespace(env)
+            await kv.put(`submissions:${submission.id}`, JSON.stringify(failedSubmission))
+          } else {
+            console.error(`[Submit Handler] Could not retrieve submission ${submission.id} to log error`)
           }
-          failedSubmission.logs.push(`[${new Date().toLocaleTimeString('en-US')}] [Error] Submission processing failed: ${error instanceof Error ? error.message : String(error)}`)
-          // Use SubmissionService's internal KV access instead of direct env.KV
-          const kv = getKvNamespace(env)
-          await kv.put(`submissions:${submission.id}`, JSON.stringify(failedSubmission))
+        } catch (logError) {
+          console.error(`[Submit Handler] Failed to log error to submission ${submission.id}:`, logError)
         }
-      } catch (logError) {
-        console.error('Failed to log error to submission:', logError)
       }
+    })().catch((unhandledError) => {
+      console.error(`[Submit Handler] Unhandled error in async submission processing for ${submission.id}:`, unhandledError)
     })
+
+    // Use ctx.waitUntil() to keep the execution context alive for async processing
+    if (ctx) {
+      ctx.waitUntil(processingPromise)
+    } else {
+      // Fallback if ctx is not available (shouldn't happen in production)
+      console.warn('[Submit Handler] ExecutionContext not available, async processing may not complete')
+      processingPromise.catch((err) => {
+        console.error('[Submit Handler] Async processing failed without ctx:', err)
+      })
+    }
 
     return new Response(
       JSON.stringify({
@@ -665,7 +687,7 @@ async function handleSubmit(request: Request, env: Env, corsHeaders: Record<stri
     return new Response(
       JSON.stringify({
         success: false,
-        error: error instanceof Error ? error.message : '提交失败'
+        error: error instanceof Error ? error.message : 'Submission failed'
       }),
       {
         status: 400,
@@ -683,7 +705,7 @@ async function handleStatus(path: string, env: Env, corsHeaders: Record<string, 
 
   if (!id) {
     return new Response(
-      JSON.stringify({ success: false, error: '缺少提交ID' }),
+      JSON.stringify({ success: false, error: 'Missing submission ID' }),
       {
         status: 400,
         headers: {
@@ -712,7 +734,7 @@ async function handleStatus(path: string, env: Env, corsHeaders: Record<string, 
     return new Response(
       JSON.stringify({
         success: false,
-        error: error instanceof Error ? error.message : '获取状态失败'
+        error: error instanceof Error ? error.message : 'Failed to get status'
       }),
       {
         status: 404,
