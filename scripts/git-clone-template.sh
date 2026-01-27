@@ -8,6 +8,8 @@
 #   GERRIT_BASE_URL: Base URL for Gerrit (e.g., https://android-review.googlesource.com) (required)
 #   WORKING_HOME: Working directory path on remote node (optional, defaults to ~/git-work)
 #   TARGET_DIR: Target directory name within working home (optional, auto-generated if not provided)
+#   COMMIT_MSG_HOOK_URL: Optional override for Gerrit commit-msg hook URL
+#                        (defaults to https://gerrit-review.googlesource.com/tools/hooks/commit-msg)
 
 set -e  # Exit on error
 set -u  # Exit on undefined variable
@@ -98,6 +100,22 @@ if git clone -b "$TARGET_BRANCH" --depth 1 "$REPOSITORY_URL" "$TARGET_DIR"; then
 
     # Verify the clone
     cd "$FULL_TARGET_DIR" || error "Failed to change to cloned directory"
+
+    # Install Gerrit commit-msg hook (best effort)
+    HOOK_URL="${COMMIT_MSG_HOOK_URL:-https://gerrit-review.googlesource.com/tools/hooks/commit-msg}"
+    if command -v curl >/dev/null 2>&1; then
+        info "Installing Gerrit commit-msg hook from: $HOOK_URL"
+        HOOK_FILE="$(git rev-parse --git-dir)/hooks/commit-msg"
+        mkdir -p "$(dirname "$HOOK_FILE")" || warn "Failed to create hooks directory for commit-msg"
+        if curl -fsSL -o "$HOOK_FILE" "$HOOK_URL"; then
+            chmod +x "$HOOK_FILE" || warn "Failed to mark commit-msg hook as executable"
+            info "Gerrit commit-msg hook installed at: $HOOK_FILE"
+        else
+            warn "Failed to download commit-msg hook from: $HOOK_URL"
+        fi
+    else
+        warn "curl not found; skipping Gerrit commit-msg hook installation"
+    fi
 
     # Check current branch
     CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
