@@ -168,7 +168,6 @@ export class SubmissionService {
       }
 
       await this.addLog(submissionId, `[Success] File uploaded: ${upload.filename}`)
-      await this.addLog(submissionId, `[Debug] Submission details - remoteNodeId: ${submission.remoteNodeId || 'not set'}, gitRepository: ${submission.gitRepository || 'not set'}, branch: ${submission.branch || 'not set'}`)
 
       // If remote node and git repository are specified, execute git commands first
       if (submission.remoteNodeId && submission.gitRepository) {

@@ -4,7 +4,7 @@
 
 set -e
 
-API_URL="${1:-https://supagraph.ai:8443/api/ssh}"
+API_URL="${1:-https://supagraph.ai/api/ssh}"
 API_KEY="${2:-sk-1234}"
 
 echo "=========================================="

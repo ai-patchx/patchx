@@ -5,7 +5,7 @@
 set -e
 
 # Default values
-API_URL="${1:-https://supagraph.ai:8443/api/ssh}"
+API_URL="${1:-https://supagraph.ai/api/ssh}"
 API_KEY="${2:-sk-1234}"
 HOST="${3:-localhost}"
 USERNAME="${4:-$USER}"
@@ -94,9 +94,9 @@ if [ -z "$HEALTH_HTTP_CODE" ]; then
   echo ""
   echo ""
   echo "Troubleshooting steps:"
-  echo "  1. Test direct connection: curl -v https://supagraph.ai:8443/api/ssh/health"
-  echo "  2. Check if port 8443 is accessible: telnet supagraph.ai 8443"
-  echo "  3. Verify SSL certificate: openssl s_client -connect supagraph.ai:8443"
+  echo "  1. Test direct connection: curl -v https://supagraph.ai/api/ssh/health"
+  echo "  2. Check if port 443 is accessible: telnet supagraph.ai 443"
+  echo "  3. Verify SSL certificate: openssl s_client -connect supagraph.ai:443"
   echo "  4. Check nginx logs: docker logs ssh-service-nginx or journalctl -u nginx"
   echo ""
   echo "Continuing with git-clone test anyway..."

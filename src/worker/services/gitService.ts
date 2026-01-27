@@ -161,7 +161,8 @@ export class GitService {
     if (node.sshServiceApiUrl) {
       try {
         const headers: Record<string, string> = {
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          'User-Agent': 'Cloudflare-Worker/1.0'
         }
         if (node.sshServiceApiKey) {
           headers['Authorization'] = `Bearer ${node.sshServiceApiKey}`
@@ -192,12 +193,65 @@ export class GitService {
           clearTimeout(timeoutId)
 
           if (!response.ok) {
-            const errorData = await response.json().catch(() => ({ error: 'Failed to execute SSH command' })) as { error?: string; commandId?: string }
+            // Normalize the SSH Service API URL for error messages
+            let baseUrl = node.sshServiceApiUrl.trim()
+            baseUrl = baseUrl.replace(/\/+$/, '') // Remove trailing slashes
+            const executeUrl = `${baseUrl}/execute`
+
+            let errorData: { error?: string; commandId?: string } = { error: 'Failed to execute SSH command' }
+            try {
+              errorData = await response.json() as { error?: string; commandId?: string }
+            } catch {
+              // If JSON parsing fails, try to get text and clean HTML if present
+              try {
+                const errorText = await response.text()
+                if (errorText) {
+                  // Check if response is HTML (common for nginx/404 errors)
+                  if (errorText.trim().startsWith('<') || errorText.includes('<html>') || errorText.includes('<!DOCTYPE')) {
+                    // Extract meaningful error from HTML
+                    const titleMatch = errorText.match(/<title[^>]*>([^<]+)<\/title>/i)
+                    const h1Match = errorText.match(/<h1[^>]*>([^<]+)<\/h1>/i)
+                    if (titleMatch) {
+                      errorData.error = titleMatch[1].trim()
+                    } else if (h1Match) {
+                      errorData.error = h1Match[1].trim()
+                    } else {
+                      errorData.error = `HTTP ${response.status}: ${response.statusText}`
+                    }
+                  } else {
+                    errorData.error = errorText
+                  }
+                }
+              } catch {
+                // Use default error message
+              }
+            }
+
+            // Provide more helpful error messages for common HTTP status codes
+            let finalError = errorData.error || 'Unknown error'
+            if (response.status === 404) {
+              // Check if this is an nginx 404 (HTML response) or backend 404 (JSON response)
+              const errorText = errorData.error || ''
+              const isNginx404 = errorText.includes('nginx') || errorText.includes('404 Not Found') || errorText.includes('<html>')
+              const urlObj = new URL(executeUrl)
+              const baseUrlOnly = urlObj.origin
+
+              if (isNginx404) {
+                finalError = `Endpoint not found (404): The nginx reverse proxy returned 404 for "${executeUrl}". This usually means: 1) The endpoint path is incorrect, 2) Nginx routing is misconfigured, or 3) The backend service is not running. Check: ${baseUrlOnly}/api/ssh/health`
+              } else {
+                finalError = `Endpoint not found (404): "${executeUrl}" was not found. Base URL: ${baseUrlOnly}. Check service health at ${baseUrlOnly}/api/ssh/health and verify nginx reverse proxy configuration.`
+              }
+            } else if (response.status === 401) {
+              finalError = `Authentication failed (401). Please check that your SSH Service API Key is correct.`
+            } else if (response.status === 403) {
+              finalError = `Access forbidden (403). Please verify your SSH Service API URL and API Key configuration.`
+            }
+
             const isTimeout = response.status === 408 || (errorData.error && errorData.error.includes('timed out'))
             return {
               success: false,
               output: '',
-              error: errorData.error || 'Unknown error',
+              error: finalError,
               commandId: errorData.commandId
             }
           }
@@ -260,7 +314,8 @@ export class GitService {
     nodeId: string,
     repositoryUrl: string,
     branch: string,
-    targetDir?: string
+    targetDir?: string,
+    onLog?: (message: string) => Promise<void>
   ): Promise<GitCommandResult & { targetDir?: string }> {
     const node = await this.getRemoteNode(nodeId)
     if (!node) {
@@ -298,21 +353,55 @@ export class GitService {
     // Try to use dedicated git-clone endpoint if SSH service API is configured
     if (node.sshServiceApiUrl) {
       try {
-        console.log(`[Git Clone] Using SSH Service API endpoint: ${node.sshServiceApiUrl}/git-clone`)
-        console.log(`[Git Clone] Target Project: ${projectName}`)
-        console.log(`[Git Clone] Repository URL: ${repositoryUrl}`)
-        console.log(`[Git Clone] Target Branch: ${branch}`)
-        console.log(`[Git Clone] Working Home: ${workingHome}`)
-        console.log(`[Git Clone] Target Dir: ${targetDir || 'auto-generated'}`)
+        // Normalize the SSH Service API URL
+        // Remove trailing slashes and ensure proper formatting
+        let baseUrl = node.sshServiceApiUrl.trim()
+        baseUrl = baseUrl.replace(/\/+$/, '') // Remove trailing slashes
+
+        // Construct the request URL
+        // Ensure the URL ends with /api/ssh (matching test script behavior)
+        // The test script shows: https://supagraph.ai/api/ssh/git-clone
+        if (!baseUrl.endsWith('/api/ssh')) {
+          // If baseUrl doesn't end with /api/ssh, ensure it does
+          if (baseUrl.includes('/api/ssh')) {
+            // Remove everything after /api/ssh
+            const apiSshIndex = baseUrl.indexOf('/api/ssh')
+            baseUrl = baseUrl.substring(0, apiSshIndex + '/api/ssh'.length)
+          } else {
+            // Append /api/ssh if not present
+            baseUrl = `${baseUrl}/api/ssh`
+          }
+        }
+
+        // Construct the full request URL (should be: https://supagraph.ai/api/ssh/git-clone)
+        const requestUrl = `${baseUrl}/git-clone`
+
+        // Validate URL format
+        try {
+          const urlObj = new URL(requestUrl)
+          if (!urlObj.pathname.startsWith('/api/ssh/')) {
+            console.warn(`[Git Clone] Warning: Request URL pathname "${urlObj.pathname}" doesn't start with "/api/ssh/"`)
+          }
+        } catch (urlError) {
+          console.error(`[Git Clone] Invalid URL constructed: ${requestUrl}`, urlError)
+        }
+
+        if (onLog) {
+          await onLog(`[Git Clone] Using SSH Service API endpoint: ${requestUrl}`)
+          await onLog(`[Git Clone] Target Project: ${projectName}`)
+          await onLog(`[Git Clone] Repository URL: ${repositoryUrl}`)
+          await onLog(`[Git Clone] Target Branch: ${branch}`)
+          await onLog(`[Git Clone] Working Home: ${workingHome}`)
+          await onLog(`[Git Clone] Target Dir: ${targetDir || 'auto-generated'}`)
+        }
 
         const headers: Record<string, string> = {
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          'User-Agent': 'Cloudflare-Worker/1.0'
         }
         if (node.sshServiceApiKey) {
           headers['Authorization'] = `Bearer ${node.sshServiceApiKey}`
         }
-
-        const requestUrl = `${node.sshServiceApiUrl}/git-clone`
         const requestBody = {
           host: node.host,
           port: node.port,
@@ -327,10 +416,12 @@ export class GitService {
           targetDir
         }
 
-        console.log(`[Git Clone] Request URL: ${requestUrl}`)
-        console.log(`[Git Clone] Request headers: ${JSON.stringify(Object.keys(headers))}`)
-        console.log(`[Git Clone] Has API key: ${!!node.sshServiceApiKey}`)
-        console.log(`[Git Clone] Request body keys: ${JSON.stringify(Object.keys(requestBody))}`)
+        if (onLog) {
+          await onLog(`[Git Clone] Request URL: ${requestUrl}`)
+          await onLog(`[Git Clone] Request headers: ${JSON.stringify(Object.keys(headers))}`)
+          await onLog(`[Git Clone] Has API key: ${!!node.sshServiceApiKey}`)
+          await onLog(`[Git Clone] Request body keys: ${JSON.stringify(Object.keys(requestBody))}`)
+        }
 
         // Add timeout (5 minutes for git clone)
         const timeout = 300000 // 5 minutes
@@ -342,7 +433,12 @@ export class GitService {
 
         let response: Response
         const fetchStartTime = Date.now()
-        console.log(`[Git Clone] Starting fetch request at ${new Date().toISOString()}`)
+        if (onLog) {
+          await onLog(`[Git Clone] Starting fetch request at ${new Date().toISOString()}`)
+          await onLog(`[Git Clone] Request URL: ${requestUrl}`)
+          await onLog(`[Git Clone] Request headers: ${JSON.stringify(headers)}`)
+          await onLog(`[Git Clone] Request body keys: ${JSON.stringify(Object.keys(requestBody))}`)
+        }
         try {
           response = await fetch(requestUrl, {
             method: 'POST',
@@ -352,7 +448,10 @@ export class GitService {
           })
           clearTimeout(timeoutId)
           const fetchDuration = Date.now() - fetchStartTime
-          console.log(`[Git Clone] Fetch completed in ${fetchDuration}ms, status: ${response.status}`)
+          if (onLog) {
+            await onLog(`[Git Clone] Fetch completed in ${fetchDuration}ms, status: ${response.status} ${response.statusText}`)
+            await onLog(`[Git Clone] Response headers: ${JSON.stringify(Object.fromEntries(response.headers.entries()))}`)
+          }
         } catch (fetchError) {
           clearTimeout(timeoutId)
           const fetchDuration = Date.now() - fetchStartTime
@@ -378,26 +477,94 @@ export class GitService {
         }
 
         const responseStartTime = Date.now()
-        console.log(`[Git Clone] Response status: ${response.status} ${response.statusText}`)
-        console.log(`[Git Clone] Response headers: ${JSON.stringify(Object.fromEntries(response.headers.entries()))}`)
-        console.log(`[Git Clone] Starting to read response body...`)
+        if (onLog) await onLog(`[Git Clone] Starting to read response body...`)
 
         if (!response.ok) {
           const errorText = await response.text().catch(() => 'Failed to read error response')
           const errorReadTime = Date.now() - responseStartTime
-          console.log(`[Git Clone] Error response read in ${errorReadTime}ms`)
-          let errorData: { error?: string } = { error: 'Failed to execute git clone' }
+          if (onLog) {
+            await onLog(`[Git Clone] Error response read in ${errorReadTime}ms`)
+            await onLog(`[Git Clone] Error response length: ${errorText.length} chars`)
+            await onLog(`[Git Clone] Error response preview (first 200 chars): ${errorText.substring(0, 200)}`)
+          }
+
+          let errorData: { error?: string; success?: boolean } = { error: 'Failed to execute git clone' }
           try {
             errorData = JSON.parse(errorText)
+            // Check if this is the nginx default location 404 (returns JSON)
+            if (errorData.error && errorData.error.includes('Endpoint not found') && errorData.error.includes('/api/ssh/*')) {
+              if (onLog) await onLog(`[Git Clone] Detected nginx default location 404 (JSON response from default location block)`)
+            }
           } catch {
-            errorData = { error: errorText || `HTTP ${response.status}: ${response.statusText}` }
+            // If JSON parsing fails, check if response is HTML and extract clean error
+            let cleanError = errorText || `HTTP ${response.status}: ${response.statusText}`
+            if (errorText && (errorText.trim().startsWith('<') || errorText.includes('<html>') || errorText.includes('<!DOCTYPE'))) {
+              // Extract meaningful error from HTML (e.g., title tag or h1)
+              const titleMatch = errorText.match(/<title[^>]*>([^<]+)<\/title>/i)
+              const h1Match = errorText.match(/<h1[^>]*>([^<]+)<\/h1>/i)
+              if (titleMatch) {
+                cleanError = titleMatch[1].trim()
+              } else if (h1Match) {
+                cleanError = h1Match[1].trim()
+              } else {
+                cleanError = `HTTP ${response.status}: ${response.statusText}`
+              }
+              if (onLog) await onLog(`[Git Clone] Extracted error from HTML: ${cleanError}`)
+            } else if (errorText.length > 0) {
+              // Not HTML, use the text as-is (might be plain text error)
+              cleanError = errorText.substring(0, 500) // Limit length
+            }
+            errorData = { error: cleanError }
           }
-          console.error(`[Git Clone] Failed with status ${response.status}: ${errorData.error || 'Unknown error'}`)
-          console.error(`[Git Clone] Full error response: ${errorText}`)
+
+          // Provide more helpful error messages for common HTTP status codes
+          let finalError = errorData.error || `HTTP ${response.status}: ${response.statusText}`
+          if (response.status === 404) {
+            // Check if this is an nginx 404 (HTML response) or backend 404 (JSON response)
+            const isNginx404 = errorText.includes('nginx') || errorText.includes('404 Not Found') || errorText.includes('<html>') || errorText.includes('<!DOCTYPE')
+            const isNginxDefault404 = errorData.error && errorData.error.includes('Endpoint not found') && errorData.error.includes('/api/ssh/*')
+            const urlObj = new URL(requestUrl)
+            const baseUrlOnly = urlObj.origin
+
+            // Additional diagnostics
+            if (onLog) {
+              await onLog(`[Git Clone] 404 Error Details:`)
+              await onLog(`[Git Clone] - Is nginx HTML 404: ${isNginx404}`)
+              await onLog(`[Git Clone] - Is nginx default location 404: ${isNginxDefault404}`)
+              await onLog(`[Git Clone] - Error text contains 'nginx': ${errorText.includes('nginx')}`)
+              await onLog(`[Git Clone] - Error text contains '<html>': ${errorText.includes('<html>')}`)
+              await onLog(`[Git Clone] - Response Content-Type: ${response.headers.get('content-type') || 'not set'}`)
+              await onLog(`[Git Clone] - Parsed error data: ${JSON.stringify(errorData)}`)
+            }
+
+            if (isNginxDefault404) {
+              // This is the nginx default location block returning 404 JSON
+              // This means the request didn't match /api/ssh/ location block
+              finalError = `Endpoint not found (404): Request to "${requestUrl}" did not match nginx location blocks and hit the default handler. This suggests: 1) The URL path might be incorrect, 2) Nginx location matching failed (check if trailing slash matters), 3) Request headers might be causing routing issues. Direct tests work, so this is likely a Cloudflare Worker request format issue. Try: ${baseUrlOnly}/api/ssh/health to verify nginx is accessible.`
+            } else if (isNginx404) {
+              finalError = `Endpoint not found (404): The nginx reverse proxy returned 404 for "${requestUrl}". This usually means: 1) The endpoint path is incorrect, 2) Nginx routing is misconfigured, or 3) The backend service is not running. Check: ${baseUrlOnly}/api/ssh/health. Note: Direct tests from the server work (see ssh.log), so this may be a Cloudflare Worker-specific routing issue.`
+            } else {
+              finalError = `Endpoint not found (404): "${requestUrl}" was not found. Base URL: ${baseUrlOnly}. Check service health at ${baseUrlOnly}/api/ssh/health and verify nginx reverse proxy configuration.`
+            }
+          } else if (response.status === 401) {
+            finalError = `Authentication failed (401). Please check that your SSH Service API Key is correct and matches the API_KEY configured on the SSH service.`
+          } else if (response.status === 403) {
+            finalError = `Access forbidden (403). This may indicate: 1) The API key is incorrect or missing, 2) A reverse proxy or firewall is blocking the request, 3) The SSH service API URL is incorrect.`
+          } else if (response.status >= 500) {
+            finalError = `Server error (${response.status}): ${finalError}. The SSH service API may be experiencing issues.`
+          }
+
+          console.error(`[Git Clone] Failed with status ${response.status}: ${finalError}`)
+          // Only log full error response in debug mode (truncate HTML to avoid log spam)
+          if (errorText && errorText.length < 200 && !errorText.includes('<html>')) {
+            console.error(`[Git Clone] Error response: ${errorText}`)
+          } else {
+            console.error(`[Git Clone] Error response (HTML or too long, ${errorText.length} chars)`)
+          }
           return {
             success: false,
             output: '',
-            error: errorData.error || `HTTP ${response.status}: ${response.statusText}`,
+            error: finalError,
             targetDir: undefined
           }
         }
@@ -415,11 +582,11 @@ export class GitService {
         try {
           const jsonText = await response.text()
           const jsonParseTime = Date.now() - responseStartTime
-          console.log(`[Git Clone] Response body read in ${jsonParseTime}ms, length: ${jsonText.length} characters`)
+          if (onLog) await onLog(`[Git Clone] Response body read in ${jsonParseTime}ms, length: ${jsonText.length} characters`)
           result = JSON.parse(jsonText) as typeof result
         } catch (parseError) {
           const parseDuration = Date.now() - responseStartTime
-          console.error(`[Git Clone] Failed to parse JSON response after ${parseDuration}ms:`, parseError)
+          if (onLog) await onLog(`[Git Clone] Failed to parse JSON response after ${parseDuration}ms: ${parseError instanceof Error ? parseError.message : String(parseError)}`)
           return {
             success: false,
             output: '',
@@ -428,10 +595,12 @@ export class GitService {
           }
         }
 
-        console.log(`[Git Clone] Response parsed successfully, success: ${result.success}`)
-        console.log(`[Git Clone] Response has output: ${!!result.output}, has stdout: ${!!result.stdout}, has stderr: ${!!result.stderr}, has combined: ${!!result.combined}`)
-        if (result.exitCode !== undefined) {
-          console.log(`[Git Clone] Exit code: ${result.exitCode}`)
+        if (onLog) {
+          await onLog(`[Git Clone] Response parsed successfully, success: ${result.success}`)
+          await onLog(`[Git Clone] Response has output: ${!!result.output}, has stdout: ${!!result.stdout}, has stderr: ${!!result.stderr}, has combined: ${!!result.combined}`)
+          if (result.exitCode !== undefined) {
+            await onLog(`[Git Clone] Exit code: ${result.exitCode}`)
+          }
         }
 
         // Use combined output if available (includes both stdout and stderr), otherwise fall back to output
@@ -440,13 +609,15 @@ export class GitService {
 
         // Log output to console for debugging
         if (fullOutput) {
-          console.log(`[Git Clone] Output length: ${fullOutput.length} characters`)
-          console.log(`[Git Clone] Output (first 500 chars):\n${fullOutput.substring(0, 500)}`)
-          if (fullOutput.length > 500) {
-            console.log(`[Git Clone] ... (truncated, ${fullOutput.length - 500} more characters)`)
+          if (onLog) {
+            await onLog(`[Git Clone] Output length: ${fullOutput.length} characters`)
+            await onLog(`[Git Clone] Output (first 500 chars):\n${fullOutput.substring(0, 500)}`)
+            if (fullOutput.length > 500) {
+              await onLog(`[Git Clone] ... (truncated, ${fullOutput.length - 500} more characters)`)
+            }
           }
         } else {
-          console.log(`[Git Clone] No output received from API`)
+          if (onLog) await onLog(`[Git Clone] No output received from API`)
         }
 
         // Extract target directory from output if available
@@ -454,11 +625,13 @@ export class GitService {
         const extractedTargetDir = targetDirMatch ? targetDirMatch[1] : undefined
 
         if (result.success) {
-          console.log(`[Git Clone] Success! Repository cloned to: ${extractedTargetDir || 'unknown'}`)
+          if (onLog) await onLog(`[Git Clone] Success! Repository cloned to: ${extractedTargetDir || 'unknown'}`)
         } else {
-          console.error(`[Git Clone] Failed: ${errorOutput || 'Unknown error'}`)
-          if (fullOutput) {
-            console.error(`[Git Clone] Error output: ${fullOutput}`)
+          if (onLog) {
+            await onLog(`[Git Clone] Failed: ${errorOutput || 'Unknown error'}`)
+            if (fullOutput) {
+              await onLog(`[Git Clone] Error output: ${fullOutput}`)
+            }
           }
         }
 
@@ -856,10 +1029,9 @@ fi
 
       const cloneStartTime = Date.now()
       if (onLog) await onLog('[Info] Calling cloneRepository function...')
-      const cloneResult = await this.cloneRepository(nodeId, repositoryUrl, branch, workDir)
+      const cloneResult = await this.cloneRepository(nodeId, repositoryUrl, branch, workDir, onLog)
       const cloneDuration = Date.now() - cloneStartTime
       console.log(`[Git Workflow] Clone completed in ${cloneDuration}ms`)
-      if (onLog) await onLog(`[Info] Git clone command completed in ${Math.round(cloneDuration / 1000)} seconds`)
       if (onLog) await onLog(`[Info] Clone result - success: ${cloneResult.success}, has output: ${!!cloneResult.output}`)
 
       results.clone = cloneResult
@@ -878,28 +1050,44 @@ fi
             }
           } else {
             await onLog('[Warning] Git clone command executed but produced no parseable output')
-            await onLog(`[Debug] Raw output (first 200 chars): ${cloneResult.output.substring(0, 200)}`)
+            // Only show debug output if it's not HTML (to avoid log spam)
+            if (!cloneResult.output.includes('<html>') && cloneResult.output.length < 500) {
+              await onLog(`[Debug] Raw output (first 200 chars): ${cloneResult.output.substring(0, 200)}`)
+            }
           }
-        } else {
-          await onLog('[Warning] Git clone command executed but no output was captured')
-          if (cloneResult.error) {
-            await onLog(`[Error] Clone error: ${cloneResult.error}`)
+        } else if (!cloneResult.success) {
+          // Only log warning if there's no error message (error will be logged below)
+          if (!cloneResult.error) {
+            await onLog('[Warning] Git clone command executed but no output was captured')
           }
         }
       }
 
       if (!cloneResult.success) {
         if (onLog) {
-          await onLog(`[Error] Git clone failed: ${cloneResult.error || 'Unknown error'}`)
-          if (cloneResult.error && cloneResult.error !== cloneResult.output) {
-            await onLog(`[Error Details] ${cloneResult.error}`)
+          // Error message is already clean (HTML removed in cloneRepository), so log it directly
+          const errorMsg = cloneResult.error || 'Unknown error'
+          // Split long error messages into multiple log entries for better readability
+          if (errorMsg.includes('\n\n')) {
+            const parts = errorMsg.split('\n\n')
+            await onLog(`[Error] Git clone failed: ${parts[0]}`)
+            if (parts.length > 1) {
+              // Log troubleshooting steps separately
+              const troubleshooting = parts.slice(1).join('\n\n')
+              const lines = troubleshooting.split('\n').filter(l => l.trim())
+              for (const line of lines) {
+                await onLog(`[Error] ${line.trim()}`)
+              }
+            }
+          } else {
+            await onLog(`[Error] Git clone failed: ${errorMsg}`)
           }
         }
         console.error(`[Git Workflow] Clone failed: ${cloneResult.error}`)
         return {
           success: false,
           results,
-          error: `Failed to clone repository: ${cloneResult.error}`
+          error: `Failed to clone repository: ${cloneResult.error || 'Unknown error'}`
         }
       }
       if (onLog) await onLog('[Success] Git clone completed successfully')

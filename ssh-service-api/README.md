@@ -230,18 +230,18 @@ Add:
 
 ```nginx
 server {
-    listen 8080;
+    listen 80;
     server_name your-domain.com;
 
     return 301 https://$host$request_uri;
 }
 
 server {
-    listen 8443 ssl;
+    listen 443 ssl;
     server_name your-domain.com;
 
-    ssl_certificate /etc/nginx/certs/public.crt;
-    ssl_certificate_key /etc/nginx/certs/private.key;
+    ssl_certificate /etc/nginx/ssl/fullchain.pem;
+    ssl_certificate_key /etc/nginx/ssl/privkey.pem;
 
     # To allow special characters in headers
     ignore_invalid_headers off;
@@ -301,20 +301,20 @@ sudo certbot --nginx -d your-domain.com
 # Make scripts executable
 chmod +x test-*.sh
 
-# Test all endpoints and connectivity (defaults to https://supagraph.ai:8443/api/ssh)
+# Test all endpoints and connectivity (defaults to https://supagraph.ai/api/ssh)
 ./test-connection.sh
 
 # Test git clone endpoint (password will be prompted if not provided)
-./test-git-clone.sh https://supagraph.ai:8443/api/ssh sk-1234 your-host your-user your-password
+./test-git-clone.sh https://supagraph.ai/api/ssh sk-1234 your-host your-user your-password
 
 # Test execute endpoint
-./test-execute.sh https://supagraph.ai:8443/api/ssh sk-1234 your-host your-user your-password "echo test"
+./test-execute.sh https://supagraph.ai/api/ssh sk-1234 your-host your-user your-password "echo test"
 
 # Test patch merge workflow
-./test-patch-merge.sh https://supagraph.ai:8443/api/ssh sk-1234 your-host your-user your-password ~/git-work/repo ../examples/platform-build-soong.patch
+./test-patch-merge.sh https://supagraph.ai/api/ssh sk-1234 your-host your-user your-password ~/git-work/repo ../examples/platform-build-soong.patch
 
 # Test full workflow (clone + patch + status)
-./test-full-workflow.sh https://supagraph.ai:8443/api/ssh sk-1234 your-host your-user your-password platform/build/soong master https://android-review.googlesource.com ../examples/platform-build-soong.patch
+./test-full-workflow.sh https://supagraph.ai/api/ssh sk-1234 your-host your-user your-password platform/build/soong master https://android-review.googlesource.com ../examples/platform-build-soong.patch
 ```
 
 ### Health Check

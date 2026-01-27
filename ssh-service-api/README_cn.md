@@ -230,18 +230,18 @@ sudo nano /etc/nginx/sites-available/ssh-service-api
 
 ```nginx
 server {
-    listen 8080;
+    listen 80;
     server_name your-domain.com;
 
     return 301 https://$host$request_uri;
 }
 
 server {
-    listen 8443 ssl;
+    listen 443 ssl;
     server_name your-domain.com;
 
-    ssl_certificate /etc/nginx/certs/public.crt;
-    ssl_certificate_key /etc/nginx/certs/private.key;
+    ssl_certificate /etc/nginx/ssl/fullchain.pem;
+    ssl_certificate_key /etc/nginx/ssl/privkey.pem;
 
     # To allow special characters in headers
     ignore_invalid_headers off;
@@ -301,20 +301,20 @@ sudo certbot --nginx -d your-domain.com
 # 使脚本可执行
 chmod +x test-*.sh
 
-# 测试所有端点和连接性（默认为 https://supagraph.ai:8443/api/ssh）
+# 测试所有端点和连接性（默认为 https://supagraph.ai/api/ssh）
 ./test-connection.sh
 
 # 测试 git clone 端点（如果未提供密码，将提示输入）
-./test-git-clone.sh https://supagraph.ai:8443/api/ssh sk-1234 your-host your-user your-password
+./test-git-clone.sh https://supagraph.ai/api/ssh sk-1234 your-host your-user your-password
 
 # 测试 execute 端点
-./test-execute.sh https://supagraph.ai:8443/api/ssh sk-1234 your-host your-user your-password "echo test"
+./test-execute.sh https://supagraph.ai/api/ssh sk-1234 your-host your-user your-password "echo test"
 
 # 测试补丁合并工作流
-./test-patch-merge.sh https://supagraph.ai:8443/api/ssh sk-1234 your-host your-user your-password ~/git-work/repo ../examples/platform-build-soong.patch
+./test-patch-merge.sh https://supagraph.ai/api/ssh sk-1234 your-host your-user your-password ~/git-work/repo ../examples/platform-build-soong.patch
 
 # 测试完整工作流（克隆 + 补丁 + 状态）
-./test-full-workflow.sh https://supagraph.ai:8443/api/ssh sk-1234 your-host your-user your-password platform/build/soong master https://android-review.googlesource.com ../examples/platform-build-soong.patch
+./test-full-workflow.sh https://supagraph.ai/api/ssh sk-1234 your-host your-user your-password platform/build/soong master https://android-review.googlesource.com ../examples/platform-build-soong.patch
 ```
 
 ### 健康检查

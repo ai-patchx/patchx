@@ -1451,6 +1451,47 @@ async function handleGetNodes(env: Env, corsHeaders: Record<string, string>): Pr
   }
 }
 
+/**
+ * Normalize and validate SSH key before saving to database
+ * Ensures the key has both BEGIN and END markers and is properly formatted
+ */
+function normalizeSshKey(sshKey: string | undefined | null): string | null {
+  if (!sshKey || typeof sshKey !== 'string') {
+    return null
+  }
+
+  // Trim and normalize line endings
+  let normalized = sshKey.trim()
+
+  // Replace escaped newlines with actual newlines (in case key was stored with \n as text)
+  normalized = normalized.replace(/\\n/g, '\n')
+
+  // Normalize line endings: convert \r\n and \r to \n
+  normalized = normalized.replace(/\r\n/g, '\n').replace(/\r/g, '\n')
+
+  // Ensure the key ends with a newline
+  if (!normalized.endsWith('\n')) {
+    normalized = normalized + '\n'
+  }
+
+  // Validate that the key has both BEGIN and END markers
+  const hasBegin = normalized.includes('BEGIN') && normalized.includes('PRIVATE KEY')
+  const hasEnd = normalized.includes('END') && normalized.includes('PRIVATE KEY')
+
+  if (!hasBegin || !hasEnd) {
+    console.error('Invalid SSH key format: missing BEGIN or END markers', {
+      hasBegin,
+      hasEnd,
+      keyLength: normalized.length,
+      firstChars: normalized.substring(0, 50),
+      lastChars: normalized.substring(Math.max(0, normalized.length - 50))
+    })
+    throw new Error('Invalid SSH key format: The key must include both BEGIN and END markers (e.g., -----BEGIN OPENSSH PRIVATE KEY----- ... -----END OPENSSH PRIVATE KEY-----)')
+  }
+
+  return normalized
+}
+
 async function handleCreateNode(request: Request, env: Env, corsHeaders: Record<string, string>): Promise<Response> {
   try {
     console.log('[CreateNode] Starting node creation')
@@ -1522,6 +1563,28 @@ async function handleCreateNode(request: Request, env: Env, corsHeaders: Record<
     const nodeId = generateUUID()
     const now = new Date().toISOString()
 
+    // Normalize SSH key if provided
+    let normalizedSshKey: string | null = null
+    if (body.authType === 'key' && body.sshKey) {
+      try {
+        normalizedSshKey = normalizeSshKey(body.sshKey)
+      } catch (error) {
+        return new Response(
+          JSON.stringify({
+            success: false,
+            error: error instanceof Error ? error.message : 'Invalid SSH key format'
+          }),
+          {
+            status: 400,
+            headers: {
+              'Content-Type': 'application/json',
+              ...corsHeaders
+            }
+          }
+        )
+      }
+    }
+
     // Insert node into D1
     const insertResult = await executeD1(
       db,
@@ -1536,7 +1599,7 @@ async function handleCreateNode(request: Request, env: Env, corsHeaders: Record<
         body.port || 22,
         body.username,
         body.authType,
-        body.authType === 'key' ? body.sshKey : null,
+        normalizedSshKey,
         body.authType === 'password' ? body.password : null,
         body.workingHome ? body.workingHome.trim() : null,
         body.sshServiceApiUrl ? body.sshServiceApiUrl.trim() : null,
@@ -1732,8 +1795,26 @@ async function handleUpdateNode(path: string, request: Request, env: Env, corsHe
     // Handle authentication credentials
     if (body.authType === 'key') {
       if (body.sshKey !== undefined) {
-        updateFields.push('ssh_key = ?')
-        updateParams.push(body.sshKey)
+        // Normalize SSH key before saving
+        try {
+          const normalizedSshKey = normalizeSshKey(body.sshKey)
+          updateFields.push('ssh_key = ?')
+          updateParams.push(normalizedSshKey)
+        } catch (error) {
+          return new Response(
+            JSON.stringify({
+              success: false,
+              error: error instanceof Error ? error.message : 'Invalid SSH key format'
+            }),
+            {
+              status: 400,
+              headers: {
+                'Content-Type': 'application/json',
+                ...corsHeaders
+              }
+            }
+          )
+        }
       }
       updateFields.push('password = ?')
       updateParams.push(null) // Clear password when switching to key auth
@@ -1749,8 +1830,26 @@ async function handleUpdateNode(path: string, request: Request, env: Env, corsHe
       updateFields.push('ssh_key = ?')
       updateParams.push(null) // Clear SSH key when switching to password auth
     } else if (body.sshKey !== undefined) {
-      updateFields.push('ssh_key = ?')
-      updateParams.push(body.sshKey)
+      // Normalize SSH key before saving
+      try {
+        const normalizedSshKey = normalizeSshKey(body.sshKey)
+        updateFields.push('ssh_key = ?')
+        updateParams.push(normalizedSshKey)
+      } catch (error) {
+        return new Response(
+          JSON.stringify({
+            success: false,
+            error: error instanceof Error ? error.message : 'Invalid SSH key format'
+          }),
+          {
+            status: 400,
+            headers: {
+              'Content-Type': 'application/json',
+              ...corsHeaders
+            }
+          }
+        )
+      }
     } else if (body.password !== undefined && body.password !== '') {
       updateFields.push('password = ?')
       updateParams.push(body.password)
@@ -2024,7 +2123,8 @@ async function executeSSHCommand(
         headers['Authorization'] = `Bearer ${trimmedApiKey}`
       }
 
-      const apiUrl = trimmedUrl.endsWith('/') ? trimmedUrl.slice(0, -1) : trimmedUrl
+      // Normalize the URL - remove trailing slashes
+      const apiUrl = trimmedUrl.replace(/\/+$/, '')
       const response = await fetch(`${apiUrl}/execute`, {
         method: 'POST',
         headers,
@@ -2048,10 +2148,27 @@ async function executeSSHCommand(
           const errorData = await response.json() as { error?: string; message?: string }
           errorMessage = errorData.error || errorData.message || errorMessage
         } catch {
-          // If JSON parsing fails, try to get text
+          // If JSON parsing fails, try to get text and clean HTML if present
           try {
             const text = await response.text()
-            if (text) errorMessage = text
+            if (text) {
+              // Check if response is HTML (common for nginx/404 errors)
+              if (text.trim().startsWith('<') || text.includes('<html>') || text.includes('<!DOCTYPE')) {
+                // Extract meaningful error from HTML (e.g., title tag or h1)
+                const titleMatch = text.match(/<title[^>]*>([^<]+)<\/title>/i)
+                const h1Match = text.match(/<h1[^>]*>([^<]+)<\/h1>/i)
+                if (titleMatch) {
+                  errorMessage = titleMatch[1].trim()
+                } else if (h1Match) {
+                  errorMessage = h1Match[1].trim()
+                } else {
+                  // Fallback: use status text
+                  errorMessage = `HTTP ${response.status}: ${response.statusText}`
+                }
+              } else {
+                errorMessage = text
+              }
+            }
           } catch {
             // Use default error message
           }
@@ -2059,13 +2176,17 @@ async function executeSSHCommand(
 
         // Provide more helpful error messages for common HTTP status codes
         if (response.status === 401) {
-          errorMessage = `Authentication failed (401): ${errorMessage}. Please check that your SSH Service API Key is correct and matches the API_KEY configured on the SSH service.`
+          errorMessage = `Authentication failed (401). Please check that your SSH Service API Key is correct and matches the API_KEY configured on the SSH service.`
         } else if (response.status === 403) {
-          errorMessage = `Access forbidden (403): ${errorMessage}. This may indicate: 1) The API key is incorrect or missing, 2) A reverse proxy or firewall is blocking the request, 3) The SSH service API URL is incorrect. Please verify your SSH Service API URL and API Key configuration.`
+          errorMessage = `Access forbidden (403). This may indicate: 1) The API key is incorrect or missing, 2) A reverse proxy or firewall is blocking the request, 3) The SSH service API URL is incorrect. Please verify your SSH Service API URL and API Key configuration.`
         } else if (response.status === 404) {
-          errorMessage = `Endpoint not found (404): ${errorMessage}. Please verify that the SSH Service API URL is correct and includes the full URL (e.g., https://your-domain.com). The service should have an /execute endpoint.`
+          // Provide concise error message for 404 errors
+          const urlObj = new URL(apiUrl)
+          const baseUrlOnly = urlObj.origin
+          const executeUrl = `${apiUrl}/execute`
+          errorMessage = `Endpoint not found (404): "${executeUrl}" was not found. Base URL: ${baseUrlOnly}. Check service health at ${baseUrlOnly}/api/ssh/health and verify nginx reverse proxy configuration.`
         } else if (response.status >= 500) {
-          errorMessage = `Server error (${response.status}): ${errorMessage}. The SSH service API may be experiencing issues. Please check the service logs.`
+          errorMessage = `Server error (${response.status}). The SSH service API may be experiencing issues. Please check the service logs.`
         }
 
         return { success: false, output: '', error: errorMessage }

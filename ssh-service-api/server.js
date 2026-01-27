@@ -48,8 +48,10 @@ app.use(express.urlencoded({ extended: true }))
 app.use((req, res, next) => {
   const allowedOrigins = process.env.ALLOWED_ORIGINS?.split(',').map(o => o.trim()) || ['*']
   const origin = req.headers.origin
+  const userAgent = req.headers['user-agent'] || ''
 
   // Allow requests without origin (server-to-server requests like Cloudflare Workers)
+  // Cloudflare Workers typically don't send Origin header, so we allow these requests
   // If no origin header, allow if ALLOWED_ORIGINS includes '*' or is empty
   if (!origin) {
     if (allowedOrigins.includes('*') || allowedOrigins.length === 0) {
@@ -60,7 +62,13 @@ app.use((req, res, next) => {
   }
 
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization')
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, User-Agent')
+  res.setHeader('Access-Control-Allow-Credentials', 'true')
+
+  // Log CORS requests for debugging
+  if (req.path === '/git-clone' || req.path === '/execute') {
+    console.log(`[CORS] ${req.method} ${req.path} - Origin: ${origin || 'none'}, User-Agent: ${userAgent.substring(0, 50)}`)
+  }
 
   if (req.method === 'OPTIONS') {
     return res.sendStatus(200)
@@ -239,6 +247,15 @@ fi
 
 // Git clone endpoint
 app.post('/git-clone', authenticate, async (req, res) => {
+  console.log('[Git Clone] Received request:', {
+    host: req.body.host,
+    port: req.body.port,
+    username: req.body.username,
+    project: req.body.project,
+    branch: req.body.branch,
+    hasGerritBaseUrl: !!req.body.gerritBaseUrl
+  })
+
   const { host, port, username, authType, sshKey, password, repositoryUrl, project, gerritBaseUrl, branch, workingHome, targetDir } = req.body
 
   // Support both old format (repositoryUrl) and new format (project + gerritBaseUrl)
@@ -261,22 +278,47 @@ app.post('/git-clone', authenticate, async (req, res) => {
     }
   }
 
+  // Validate SSH key format if using key authentication
+  if (authType === 'key' && sshKey) {
+    const trimmedKey = sshKey.trim()
+    // Check if key has valid format markers
+    const hasValidFormat = trimmedKey.includes('BEGIN') && trimmedKey.includes('PRIVATE KEY') && trimmedKey.includes('END')
+    if (!hasValidFormat) {
+      console.error('[Git Clone] Invalid SSH key format detected')
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid SSH key format. The key must include BEGIN and END markers (e.g., -----BEGIN OPENSSH PRIVATE KEY----- ... -----END OPENSSH PRIVATE KEY-----)',
+        output: ''
+      })
+    }
+  }
+
   // Validate required fields
   if (!host || !username || !authType || !targetProject || !branch) {
+    const missingFields = []
+    if (!host) missingFields.push('host')
+    if (!username) missingFields.push('username')
+    if (!authType) missingFields.push('authType')
+    if (!targetProject) missingFields.push('project or repositoryUrl')
+    if (!branch) missingFields.push('branch')
+
+    console.error('[Git Clone] Validation failed - missing fields:', missingFields)
     return res.status(400).json({
       success: false,
-      error: 'Missing required fields: host, username, authType, project (or repositoryUrl), branch'
+      error: `Missing required fields: ${missingFields.join(', ')}`
     })
   }
 
   if (!gerritUrl) {
+    console.error('[Git Clone] Validation failed - missing gerritBaseUrl')
     return res.status(400).json({
       success: false,
-      error: 'Missing required field: gerritBaseUrl (or GERRIT_BASE_URL must be provided)'
+      error: 'Missing required field: gerritBaseUrl (or GERRIT_BASE_URL environment variable must be provided)'
     })
   }
 
   if (authType === 'key' && !sshKey) {
+    console.error('[Git Clone] Validation failed - SSH key missing for key authentication')
     return res.status(400).json({
       success: false,
       error: 'SSH key is required when authType is "key"'
@@ -284,9 +326,18 @@ app.post('/git-clone', authenticate, async (req, res) => {
   }
 
   if (authType === 'password' && !password) {
+    console.error('[Git Clone] Validation failed - Password missing for password authentication')
     return res.status(400).json({
       success: false,
       error: 'Password is required when authType is "password"'
+    })
+  }
+
+  if (authType !== 'key' && authType !== 'password') {
+    console.error('[Git Clone] Validation failed - Invalid authType:', authType)
+    return res.status(400).json({
+      success: false,
+      error: `Invalid authType: "${authType}". Must be either "key" or "password"`
     })
   }
 
@@ -302,28 +353,71 @@ app.post('/git-clone', authenticate, async (req, res) => {
     // If using SSH key, write it to a temporary file
     if (authType === 'key' && sshKey) {
       tempKeyFile = path.join(os.tmpdir(), `ssh_key_${crypto.randomBytes(8).toString('hex')}`)
-      fs.writeFileSync(tempKeyFile, sshKey, { mode: 0o600 })
+      // Normalize the key: handle escaped newlines and line endings, but preserve structure
+      let normalizedKey = sshKey.trim()
+      // Replace escaped newlines with actual newlines (in case key was stored with \n as text)
+      normalizedKey = normalizedKey.replace(/\\n/g, '\n')
+      // Normalize line endings: convert \r\n and \r to \n
+      normalizedKey = normalizedKey.replace(/\r\n/g, '\n').replace(/\r/g, '\n')
+      // Ensure the key ends with a newline (required for proper parsing)
+      const formattedKey = normalizedKey.endsWith('\n') ? normalizedKey : normalizedKey + '\n'
+
+      console.log('[Git Clone] Key format check:', {
+        originalLength: sshKey.length,
+        formattedLength: formattedKey.length,
+        hasBegin: formattedKey.includes('BEGIN'),
+        hasEnd: formattedKey.includes('END'),
+        firstLine: formattedKey.split('\n')[0],
+        lastLine: formattedKey.split('\n').filter(l => l.trim()).pop()
+      })
+
+      fs.writeFileSync(tempKeyFile, formattedKey, { mode: 0o600, encoding: 'utf8' })
     }
 
     // Connect to SSH server with timeout
     await Promise.race([
       new Promise((resolve, reject) => {
+        // Prepare private key - try multiple formats for compatibility
+        let privateKeyConfig = null
+        if (authType === 'key' && sshKey && tempKeyFile) {
+          try {
+            // Read key as string (preferred for OpenSSH format)
+            // Don't trim - preserve the exact format from file
+            const keyString = fs.readFileSync(tempKeyFile, 'utf8')
+            // Verify key format before attempting connection
+            if (!keyString.includes('BEGIN') || !keyString.includes('PRIVATE KEY') || !keyString.includes('END')) {
+              reject(new Error('Invalid SSH key format: missing BEGIN/END markers'))
+              return
+            }
+            privateKeyConfig = { privateKey: keyString }
+            console.log('[Git Clone] Using SSH key authentication, key format verified')
+          } catch (readError) {
+            reject(new Error(`Failed to read SSH key file: ${readError.message}`))
+            return
+          }
+        }
+
         const connectConfig = {
           host,
           port: targetPort,
           username,
           readyTimeout: 10000,
-          ...(authType === 'key' && sshKey
-            ? { privateKey: fs.readFileSync(tempKeyFile) }
-            : { password })
+          ...(privateKeyConfig || { password })
         }
 
         sshClient.on('ready', () => {
+          console.log('[Git Clone] SSH connection established successfully')
           resolve()
         })
 
         sshClient.on('error', (err) => {
-          reject(err)
+          // Provide more detailed error for key parsing issues
+          if (err.message && (err.message.includes('parse') || err.message.includes('format') || err.message.includes('Unsupported'))) {
+            console.error('[Git Clone] SSH key parsing error:', err.message)
+            reject(new Error(`SSH authentication failed: Cannot parse privateKey: ${err.message}. Please verify the key format. The SSH key must be in OpenSSH format (-----BEGIN OPENSSH PRIVATE KEY-----) or PEM format (-----BEGIN RSA PRIVATE KEY----- or -----BEGIN EC PRIVATE KEY-----).`))
+          } else {
+            reject(err)
+          }
         })
 
         sshClient.connect(connectConfig)
@@ -451,7 +545,7 @@ bash /tmp/git-clone-*.sh '${escapedProject}' '${escapedBranch}' '${escapedGerrit
       try {
         fs.unlinkSync(tempKeyFile)
       } catch (unlinkError) {
-        console.error('Failed to delete temp key file:', unlinkError)
+        console.error('[Git Clone] Failed to delete temp key file:', unlinkError)
       }
     }
 
@@ -464,9 +558,26 @@ bash /tmp/git-clone-*.sh '${escapedProject}' '${escapedBranch}' '${escapedGerrit
       }
     }
 
+    // Provide more detailed error messages
+    let errorMessage = error.message || 'Failed to execute git clone'
+    const errorCode = error.code || ''
+
+    // Improve error messages for common SSH connection errors
+    if (errorMessage.includes('ECONNREFUSED') || errorMessage.includes('ENOTFOUND') || errorMessage.includes('EAI_AGAIN')) {
+      errorMessage = `SSH connection failed: Cannot connect to ${host}:${targetPort}. ${errorMessage}`
+    } else if (errorMessage.includes('timeout')) {
+      errorMessage = `SSH connection timeout: Failed to connect to ${host}:${targetPort} within 10 seconds`
+    } else if (errorMessage.includes('parse privateKey') || errorMessage.includes('Unsupported key format') || errorMessage.includes('key format')) {
+      errorMessage = `SSH authentication failed: Cannot parse privateKey: Unsupported key format. Please verify credentials. The SSH key must be in OpenSSH format (-----BEGIN OPENSSH PRIVATE KEY-----) or PEM format (-----BEGIN RSA PRIVATE KEY----- or -----BEGIN EC PRIVATE KEY-----).`
+    } else if (errorMessage.includes('Authentication') || errorMessage.includes('password') || errorMessage.includes('key')) {
+      errorMessage = `SSH authentication failed: ${errorMessage}. Please verify credentials.`
+    }
+
+    console.error(`[Git Clone] Error: ${errorMessage}`, { host, port: targetPort, username, errorCode })
+
     res.status(500).json({
       success: false,
-      error: error.message || 'Failed to execute git clone',
+      error: errorMessage,
       output: ''
     })
   }
@@ -534,6 +645,21 @@ app.post('/cancel', authenticate, async (req, res) => {
 app.post('/execute', authenticate, async (req, res) => {
   const { host, port, username, authType, sshKey, password, command, timeout } = req.body
 
+  // Validate SSH key format if using key authentication
+  if (authType === 'key' && sshKey) {
+    const trimmedKey = sshKey.trim()
+    // Check if key has valid format markers
+    const hasValidFormat = trimmedKey.includes('BEGIN') && trimmedKey.includes('PRIVATE KEY') && trimmedKey.includes('END')
+    if (!hasValidFormat) {
+      console.error('[Execute] Invalid SSH key format detected')
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid SSH key format. The key must include BEGIN and END markers (e.g., -----BEGIN OPENSSH PRIVATE KEY----- ... -----END OPENSSH PRIVATE KEY-----)',
+        output: ''
+      })
+    }
+  }
+
   // Validate required fields
   if (!host || !username || !authType || !command) {
     return res.status(400).json({
@@ -568,27 +694,69 @@ app.post('/execute', authenticate, async (req, res) => {
     // If using SSH key, write it to a temporary file
     if (authType === 'key' && sshKey) {
       tempKeyFile = path.join(os.tmpdir(), `ssh_key_${crypto.randomBytes(8).toString('hex')}`)
-      fs.writeFileSync(tempKeyFile, sshKey, { mode: 0o600 })
+      // Normalize the key: handle escaped newlines and line endings, but preserve structure
+      let normalizedKey = sshKey.trim()
+      // Replace escaped newlines with actual newlines (in case key was stored with \n as text)
+      normalizedKey = normalizedKey.replace(/\\n/g, '\n')
+      // Normalize line endings: convert \r\n and \r to \n
+      normalizedKey = normalizedKey.replace(/\r\n/g, '\n').replace(/\r/g, '\n')
+      // Ensure the key ends with a newline (required for proper parsing)
+      const formattedKey = normalizedKey.endsWith('\n') ? normalizedKey : normalizedKey + '\n'
+
+      console.log('[Git Clone] Key format check:', {
+        originalLength: sshKey.length,
+        formattedLength: formattedKey.length,
+        hasBegin: formattedKey.includes('BEGIN'),
+        hasEnd: formattedKey.includes('END'),
+        firstLine: formattedKey.split('\n')[0],
+        lastLine: formattedKey.split('\n').filter(l => l.trim()).pop()
+      })
+
+      fs.writeFileSync(tempKeyFile, formattedKey, { mode: 0o600, encoding: 'utf8' })
     }
 
     // Connect to SSH server
     await new Promise((resolve, reject) => {
+      // Prepare private key - try multiple formats for compatibility
+      let privateKeyConfig = null
+      if (authType === 'key' && sshKey && tempKeyFile) {
+        try {
+          // Read key as string (preferred for OpenSSH format)
+          const keyString = fs.readFileSync(tempKeyFile, 'utf8').trim()
+          // Verify key format before attempting connection
+          if (!keyString.includes('BEGIN') || !keyString.includes('PRIVATE KEY') || !keyString.includes('END')) {
+            reject(new Error('Invalid SSH key format: missing BEGIN/END markers'))
+            return
+          }
+          privateKeyConfig = { privateKey: keyString }
+          console.log('[Execute] Using SSH key authentication, key format verified')
+        } catch (readError) {
+          reject(new Error(`Failed to read SSH key file: ${readError.message}`))
+          return
+        }
+      }
+
       const connectConfig = {
         host,
         port: targetPort,
         username,
         readyTimeout: 10000,
-        ...(authType === 'key' && sshKey
-          ? { privateKey: fs.readFileSync(tempKeyFile) }
-          : { password })
+        ...(privateKeyConfig || { password })
       }
 
       sshClient.on('ready', () => {
+        console.log('[Execute] SSH connection established successfully')
         resolve()
       })
 
       sshClient.on('error', (err) => {
-        reject(err)
+        // Provide more detailed error for key parsing issues
+        if (err.message && (err.message.includes('parse') || err.message.includes('format') || err.message.includes('Unsupported'))) {
+          console.error('[Execute] SSH key parsing error:', err.message)
+          reject(new Error(`SSH authentication failed: Cannot parse privateKey: ${err.message}. Please verify the key format. The SSH key must be in OpenSSH format (-----BEGIN OPENSSH PRIVATE KEY-----) or PEM format (-----BEGIN RSA PRIVATE KEY----- or -----BEGIN EC PRIVATE KEY-----).`))
+        } else {
+          reject(err)
+        }
       })
 
       sshClient.connect(connectConfig)
@@ -722,7 +890,7 @@ app.post('/execute', authenticate, async (req, res) => {
       try {
         fs.unlinkSync(tempKeyFile)
       } catch (unlinkError) {
-        console.error('Failed to delete temp key file:', unlinkError)
+        console.error('[Execute] Failed to delete temp key file:', unlinkError)
       }
     }
 
@@ -735,10 +903,25 @@ app.post('/execute', authenticate, async (req, res) => {
       }
     }
 
-    const isTimeout = error.message && error.message.includes('timed out')
+    // Provide more detailed error messages
+    let errorMessage = error.message || 'Failed to execute SSH command'
+    const errorCode = error.code || ''
+    const isTimeout = errorMessage.includes('timed out') || errorMessage.includes('timeout')
+
+    // Improve error messages for common SSH connection errors
+    if (errorMessage.includes('ECONNREFUSED') || errorMessage.includes('ENOTFOUND') || errorMessage.includes('EAI_AGAIN')) {
+      errorMessage = `SSH connection failed: Cannot connect to ${host}:${targetPort}. ${errorMessage}`
+    } else if (errorMessage.includes('parse privateKey') || errorMessage.includes('Unsupported key format') || errorMessage.includes('key format')) {
+      errorMessage = `SSH authentication failed: Cannot parse privateKey: Unsupported key format. Please verify credentials. The SSH key must be in OpenSSH format (-----BEGIN OPENSSH PRIVATE KEY-----) or PEM format (-----BEGIN RSA PRIVATE KEY----- or -----BEGIN EC PRIVATE KEY-----).`
+    } else if (errorMessage.includes('Authentication') || errorMessage.includes('password') || errorMessage.includes('key')) {
+      errorMessage = `SSH authentication failed: ${errorMessage}. Please verify credentials.`
+    }
+
+    console.error(`[Execute] Error: ${errorMessage}`, { host, port: targetPort, username, errorCode, commandId })
+
     res.status(isTimeout ? 408 : 500).json({
       success: false,
-      error: error.message || 'Failed to execute SSH command',
+      error: errorMessage,
       output: '',
       commandId: isTimeout ? commandId : undefined
     })

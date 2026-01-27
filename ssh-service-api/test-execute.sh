@@ -5,7 +5,7 @@
 set -e
 
 # Default values
-API_URL="${1:-https://supagraph.ai:8443/api/ssh}"
+API_URL="${1:-https://supagraph.ai/api/ssh}"
 API_KEY="${2:-sk-1234}"
 HOST="${3:-localhost}"
 USERNAME="${4:-$USER}"

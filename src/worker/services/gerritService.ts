@@ -22,8 +22,9 @@ export class GerritService {
   }> {
     try {
       // Build Gerrit API request
+      // Note: Gerrit expects the full project path (e.g., "platform/build/soong")
       const changeData = {
-        project: project.replace('platform/', ''), // Remove platform prefix
+        project: project, // Use full project path as-is
         branch,
         subject,
         topic: 'aosp-patch-service',
