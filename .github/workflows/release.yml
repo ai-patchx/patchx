@@ -1,0 +1,98 @@
+name: Release
+
+on:
+  release:
+    types:
+      - created
+
+jobs:
+  build-vscode-extension:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      - name: Get version from tag
+        id: get_version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> "$GITHUB_OUTPUT"
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        working-directory: ./vscode
+        run: |
+          npm install
+
+      - name: Compile TypeScript
+        working-directory: ./vscode
+        run: |
+          npm run compile
+
+      - name: Install vsce
+        run: |
+          npm install -g @vscode/vsce
+
+      - name: Create dist directory
+        run: |
+          mkdir -p dist
+
+      - name: Package PatchX VS Code extension
+        working-directory: ./vscode
+        run: |
+          vsce package "${{ steps.get_version.outputs.VERSION }}" --out ../dist/patchx-vscode.vsix
+
+      - name: Verify package
+        run: |
+          ls -lh ./dist/patchx-vscode.vsix
+
+      - name: Upload extension artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: patchx-vscode-extension
+          path: dist/patchx-vscode.vsix
+
+      - name: Publish to VS Code Marketplace
+        if: github.event_name == 'release' && startsWith(github.ref, 'refs/tags/')
+        continue-on-error: true
+        working-directory: ./vscode
+        env:
+          VSCE_PAT: ${{ secrets.VSCODE_MARKETPLACE_TOKEN }}
+        run: |
+          vsce publish "${{ steps.get_version.outputs.VERSION }}" -p "$VSCE_PAT" --packagePath ../dist/patchx-vscode.vsix
+
+  create-release:
+    needs: [build-vscode-extension]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      - name: Get version from tag
+        id: get_version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> "$GITHUB_OUTPUT"
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+
+      - name: Create GitHub Release (attach VSIX)
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            patchx-vscode-extension/patchx-vscode.vsix
+          name: ${{ steps.get_version.outputs.VERSION }}
+          body: |
+            ## Installation (VS Code Extension)
+
+            1. Download `patchx-vscode.vsix` from this release.
+            2. Install in VS Code:
+
+               ```bash
+               code --install-extension patchx-vscode.vsix
+               ```
+
+            Or install from the VS Code Marketplace once published.
+        env:
+          GITHUB_TOKEN: ${{ secrets.AI_PATCHX_TOKEN }}

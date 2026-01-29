@@ -1,0 +1,103 @@
+{
+  "name": "patchx-vscode",
+  "displayName": "PatchX",
+  "description": "Run PatchX (upload/submit/status) from VS Code via PatchX Cloudflare Worker REST API.",
+  "version": "0.1.0",
+  "publisher": "patchx",
+  "private": true,
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onCommand:patchx.uploadPatchFile",
+    "onCommand:patchx.uploadAndSubmit",
+    "onCommand:patchx.submitLastUpload",
+    "onCommand:patchx.checkStatus",
+    "onCommand:patchx.login",
+    "onCommand:patchx.setAuthToken",
+    "onCommand:patchx.clearAuthToken"
+  ],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "patchx.uploadPatchFile",
+        "title": "PatchX: Upload Patch File"
+      },
+      {
+        "command": "patchx.submitLastUpload",
+        "title": "PatchX: Submit Last Upload"
+      },
+      {
+        "command": "patchx.uploadAndSubmit",
+        "title": "PatchX: Upload and Submit"
+      },
+      {
+        "command": "patchx.checkStatus",
+        "title": "PatchX: Check Submission Status"
+      },
+      {
+        "command": "patchx.login",
+        "title": "PatchX: Login (Get Auth Token)"
+      },
+      {
+        "command": "patchx.setAuthToken",
+        "title": "PatchX: Set Auth Token"
+      },
+      {
+        "command": "patchx.clearAuthToken",
+        "title": "PatchX: Clear Auth Token"
+      }
+    ],
+    "configuration": {
+      "title": "PatchX",
+      "properties": {
+        "patchx.baseUrl": {
+          "type": "string",
+          "default": "https://patchx-service.angersax.workers.dev",
+          "description": "PatchX Worker base URL (no trailing slash)."
+        },
+        "patchx.defaultProject": {
+          "type": "string",
+          "default": "",
+          "description": "Default project name for /api/upload (e.g. platform/frameworks/base)."
+        },
+        "patchx.defaultBranch": {
+          "type": "string",
+          "default": "refs/heads/master",
+          "description": "Default branch for /api/submit."
+        },
+        "patchx.defaultRemoteNodeId": {
+          "type": "string",
+          "default": "",
+          "description": "Optional default remote node id for /api/submit."
+        },
+        "patchx.pollIntervalMs": {
+          "type": "number",
+          "default": 2000,
+          "minimum": 500,
+          "description": "Polling interval for /api/status/<submissionId>."
+        },
+        "patchx.autoOpenChangeUrl": {
+          "type": "boolean",
+          "default": true,
+          "description": "Auto-open Gerrit change URL when submission completes."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "compile": "tsc -p .",
+    "watch": "tsc -p . -w"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.30",
+    "@types/vscode": "^1.85.0",
+    "typescript": "~5.8.3"
+  }
+}
+
