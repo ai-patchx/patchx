@@ -4,6 +4,7 @@
   "description": "Run PatchX (upload/submit/status) from VS Code via PatchX Cloudflare Worker REST API.",
   "version": "0.1.0",
   "publisher": "patchx",
+  "icon": "images/icon.png",
   "private": true,
   "license": "MIT",
   "engines": {
