@@ -1,8 +1,8 @@
-# PatchX VS Code Extension
+# PatchX
 
-This VS Code extension lets you configure and run **PatchX** by invoking the **PatchX Cloudflare Worker REST API** (upload → submit → status).
+A VS Code extension that streamlines contributing code to the Android Open Source Project (AOSP), with AI‑driven patch conflict resolution.
 
-It is intended to follow the general layout/pattern of a typical VS Code extension, but calls PatchX endpoints:
+It integrates with the PatchX service (upload → submit → status):
 - `POST /api/auth/login`
 - `POST /api/upload` (`multipart/form-data`)
 - `POST /api/submit` (`application/json`)
@@ -10,35 +10,38 @@ It is intended to follow the general layout/pattern of a typical VS Code extensi
 
 ## Configuration
 
-VS Code Settings:
-- **`patchx.baseUrl`**: PatchX Worker base URL (default: `https://patchx-service.angersax.workers.dev`)
-- **`patchx.defaultProject`**: default `project` for uploads (e.g. `platform/frameworks/base`)
-- **`patchx.defaultBranch`**: default branch for submit (default: `refs/heads/master`)
-- **`patchx.defaultRemoteNodeId`**: optional; enables remote node submit flow (requires project)
-- **`patchx.pollIntervalMs`**: status polling interval
-- **`patchx.autoOpenChangeUrl`**: open Gerrit URL when completed
+In VS Code settings (search for **PatchX**):
+
+| Setting | Description |
+|--------|-------------|
+| **`patchx.baseUrl`** | PatchX Worker base URL (no trailing slash). Default: `https://patchx-service.angersax.workers.dev` |
+| **`patchx.defaultProject`** | Default project name for /api/upload (e.g. `platform/frameworks/base`). |
+| **`patchx.defaultBranch`** | Default branch for /api/submit. Default: `refs/heads/master` |
+| **`patchx.defaultRemoteNodeId`** | Optional default remote node id for /api/submit. |
+| **`patchx.pollIntervalMs`** | Polling interval for /api/status/<submissionId>. Default: 2000, minimum: 500 |
+| **`patchx.autoOpenChangeUrl`** | Auto-open Gerrit change URL when submission completes. Default: true |
 
 ## Commands
 
-Open Command Palette and run:
-- **PatchX: Login (Get Auth Token)** (`patchx.login`)
-- **PatchX: Upload Patch File** (`patchx.uploadPatchFile`)
-- **PatchX: Submit Last Upload** (`patchx.submitLastUpload`)
-- **PatchX: Upload and Submit** (`patchx.uploadAndSubmit`)
-- **PatchX: Check Submission Status** (`patchx.checkStatus`)
-- **PatchX: Set Auth Token** (`patchx.setAuthToken`)
-- **PatchX: Clear Auth Token** (`patchx.clearAuthToken`)
+Open the Command Palette (`Ctrl+Shift+P` / `Cmd+Shift+P`) and run:
 
-## Development / Run locally
+- **PatchX: Upload Patch File** — upload a patch file
+- **PatchX: Submit Last Upload** — submit the last upload
+- **PatchX: Upload and Submit** — upload then submit in one step
+- **PatchX: Check Submission Status** — check status of a submission
+- **PatchX: Login (Get Auth Token)** — sign in and store auth token
+- **PatchX: Set Auth Token** — set auth token manually
+- **PatchX: Clear Auth Token** — clear stored auth token
 
-1. Open folder `vscode/extension` in VS Code.
+## Development
+
+1. Open the `vscode` folder in VS Code.
 2. Install dependencies:
 
-```powershell
-npm install
-```
+   ```bash
+   npm install
+   ```
 
 3. Press **F5** to run the extension (uses `.vscode/launch.json`).
 
-The extension writes logs to the **Output** panel → **PatchX** channel.
-
+Logs appear in the **Output** panel → **PatchX** channel.

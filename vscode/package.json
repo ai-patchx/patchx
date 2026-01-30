@@ -1,7 +1,7 @@
 {
   "name": "patchx-vscode",
   "displayName": "PatchX",
-  "description": "Run PatchX (upload/submit/status) from VS Code via PatchX Cloudflare Worker REST API.",
+  "description": "A VS Code extension that streamlines contributing code to the Android Open Source Project (AOSP), with AI‑driven patch conflict resolution.",
   "version": "0.1.0",
   "publisher": "patchx",
   "icon": "images/icon.png",
