@@ -93,7 +93,8 @@
   },
   "scripts": {
     "compile": "tsc -p .",
-    "watch": "tsc -p . -w"
+    "watch": "tsc -p . -w",
+    "package": "vsce package --no-update-package-json --out ../dist/patchx-vscode.vsix"
   },
   "devDependencies": {
     "@types/node": "^22.15.30",

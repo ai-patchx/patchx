@@ -39,10 +39,15 @@ jobs:
         run: |
           mkdir -p dist
 
+      - name: Sync version to package.json
+        working-directory: ./vscode
+        run: |
+          npm version "${{ steps.get_version.outputs.VERSION }}" --no-git-tag-version --allow-same-version
+
       - name: Package PatchX VS Code extension
         working-directory: ./vscode
         run: |
-          vsce package "${{ steps.get_version.outputs.VERSION }}" --out ../dist/patchx-vscode.vsix
+          vsce package --no-update-package-json --out ../dist/patchx-vscode.vsix
 
       - name: Verify package
         run: |
