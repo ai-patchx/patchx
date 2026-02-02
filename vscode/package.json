@@ -3,7 +3,7 @@
   "displayName": "PatchX",
   "description": "A VS Code extension that streamlines contributing code to the Android Open Source Project",
   "version": "1.1.0",
-  "publisher": "patchx",
+  "publisher": "craftslab",
   "icon": "images/icon.png",
   "private": true,
   "license": "MIT",
