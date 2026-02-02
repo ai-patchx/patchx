@@ -8,6 +8,24 @@
 - `POST /api/submit`（`application/json`）
 - `GET /api/status/<submissionId>`
 
+## 侧边栏
+
+点击活动栏中的 **PatchX** 图标可打开 PatchX 侧边栏。**Targets** 视图中可编辑：
+
+- **Login** / **Logout** — 登录 PatchX 服务（通过提示输入用户名/密码）或清除已保存的认证 token。
+- **Patch File（补丁文件）** — 要上传的补丁文件路径；点击 **Browse** 选择文件，对应设置 `patchx.patchFilePath`。
+- **Target Project（目标项目）** — 用于 /api/upload 的默认项目，对应设置 `patchx.defaultProject`。
+- **Target Branch（目标分支）** — 用于 /api/submit 的 Gerrit 目标 ref，对应设置 `patchx.defaultBranch`。
+- **Remote Node（远程节点）** — 可选，用于 /api/submit 的节点，从 API 节点列表中选择，对应设置 `patchx.defaultRemoteNodeId`。
+- **Commit Subject（提交主题）** — 用于 /api/submit 的默认单行主题，对应设置 `patchx.commitSubject`。
+- **Detailed Description（详细描述）** — 用于 /api/submit 的默认多行描述，对应设置 `patchx.detailedDescription`。
+- **Author Name（作者姓名）** — 提交时的作者姓名，对应设置 `patchx.authorName`。
+- **Author Email（作者邮箱）** — 提交时的作者邮箱，对应设置 `patchx.authorEmail`。
+- **Email Notifications（邮件通知）** — 文本输入，填写邮件通知（如逗号分隔的邮箱），对应设置 `patchx.emailNotifications`。
+- **Upload** / **Submit** / **Upload & Submit** / **Check Status** — 上传补丁文件、提交最近一次上传、上传并提交、或查看提交状态。
+
+编辑后会自动保存到设置。所有 PatchX 操作均在侧边栏完成（无需使用命令面板）。
+
 ## 配置项
 
 在 VS Code 设置中搜索 **PatchX**，可配置：
@@ -15,23 +33,17 @@
 | 配置项 | 说明 |
 |--------|------|
 | **`patchx.baseUrl`** | PatchX Worker 基础 URL，末尾不要加 `/`。默认：`https://patchx-service.angersax.workers.dev` |
-| **`patchx.defaultProject`** | 用于 /api/upload 的默认项目名（如 `platform/frameworks/base`）。 |
+| **`patchx.defaultProject`** | 用于 /api/upload 的默认项目名（如 `platform/frameworks/base`）。默认：空。 |
 | **`patchx.defaultBranch`** | 用于 /api/submit 的默认分支。默认：`refs/heads/main` |
-| **`patchx.defaultRemoteNodeId`** | 可选，用于 /api/submit 的默认远程节点 id。可用命令「PatchX: Set Default Remote Node」从 API 节点列表中选择。 |
-| **`patchx.pollIntervalMs`** | 轮询 /api/status/<submissionId> 的间隔（毫秒）。默认：2000，最小值：500 |
-| **`patchx.autoOpenChangeUrl`** | 提交完成后是否自动打开 Gerrit 变更链接。默认：true |
-
-## 命令
-
-在 VS Code 中打开命令面板（`Ctrl+Shift+P` / `Cmd+Shift+P`），可运行：
-
-- **PatchX: Upload Patch File** — 上传补丁文件
-- **PatchX: Submit Last Upload** — 提交最近一次上传
-- **PatchX: Upload and Submit** — 上传并提交（一步完成）
-- **PatchX: Check Submission Status** — 查看提交状态
-- **PatchX: Login (Get Auth Token)** — 登录并保存认证 token
-- **PatchX: Set Auth Token** — 手动设置认证 token
-- **PatchX: Clear Auth Token** — 清除已保存的认证 token
+| **`patchx.defaultRemoteNodeId`** | 可选，用于 /api/submit 的默认远程节点 id。在侧边栏的 Remote Node 列表中选择。 |
+| **`patchx.patchFilePath`** | 要上传的补丁文件路径（侧边栏与上传命令使用）。 |
+| **`patchx.commitSubject`** | 用于 /api/submit 的默认提交主题。 |
+| **`patchx.detailedDescription`** | 用于 /api/submit 的默认详细描述。 |
+| **`patchx.authorName`** | 补丁提交时的作者姓名。 |
+| **`patchx.authorEmail`** | 补丁提交时的作者邮箱。 |
+| **`patchx.emailNotifications`** | 提交的邮件通知（如逗号分隔的邮箱）。默认：空。 |
+| **`patchx.pollIntervalMs`** | 轮询 /api/status/<submissionId> 的间隔（毫秒）。默认：2000，最小值：500。 |
+| **`patchx.autoOpenChangeUrl`** | 提交完成后是否自动打开 Gerrit 变更链接。默认：true。 |
 
 ## 本地开发
 

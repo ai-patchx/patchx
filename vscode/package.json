@@ -14,51 +14,28 @@
     "Other"
   ],
   "activationEvents": [
-    "onCommand:patchx.uploadPatchFile",
-    "onCommand:patchx.uploadAndSubmit",
-    "onCommand:patchx.submitLastUpload",
-    "onCommand:patchx.checkStatus",
-    "onCommand:patchx.login",
-    "onCommand:patchx.setAuthToken",
-    "onCommand:patchx.clearAuthToken",
-    "onCommand:patchx.setDefaultRemoteNode"
+    "onView:patchx.settingsView"
   ],
   "main": "./dist/extension.js",
   "contributes": {
-    "commands": [
-      {
-        "command": "patchx.uploadPatchFile",
-        "title": "PatchX: Upload Patch File"
-      },
-      {
-        "command": "patchx.submitLastUpload",
-        "title": "PatchX: Submit Last Upload"
-      },
-      {
-        "command": "patchx.uploadAndSubmit",
-        "title": "PatchX: Upload and Submit"
-      },
-      {
-        "command": "patchx.checkStatus",
-        "title": "PatchX: Check Submission Status"
-      },
-      {
-        "command": "patchx.login",
-        "title": "PatchX: Login (Get Auth Token)"
-      },
-      {
-        "command": "patchx.setAuthToken",
-        "title": "PatchX: Set Auth Token"
-      },
-      {
-        "command": "patchx.clearAuthToken",
-        "title": "PatchX: Clear Auth Token"
-      },
-      {
-        "command": "patchx.setDefaultRemoteNode",
-        "title": "PatchX: Set Default Remote Node"
-      }
-    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "patchx",
+          "title": "PatchX",
+          "icon": "images/icon.png"
+        }
+      ]
+    },
+    "views": {
+      "patchx": [
+        {
+          "type": "webview",
+          "id": "patchx.settingsView",
+          "name": "Targets"
+        }
+      ]
+    },
     "configuration": {
       "title": "PatchX",
       "properties": {
@@ -81,6 +58,36 @@
           "type": "string",
           "default": "",
           "description": "Optional default remote node id for /api/submit."
+        },
+        "patchx.patchFilePath": {
+          "type": "string",
+          "default": "",
+          "description": "Path to patch file for upload (used by sidebar UI)."
+        },
+        "patchx.commitSubject": {
+          "type": "string",
+          "default": "",
+          "description": "Default commit subject for /api/submit."
+        },
+        "patchx.detailedDescription": {
+          "type": "string",
+          "default": "",
+          "description": "Default detailed description for /api/submit."
+        },
+        "patchx.authorName": {
+          "type": "string",
+          "default": "",
+          "description": "Author name for patch submission."
+        },
+        "patchx.authorEmail": {
+          "type": "string",
+          "default": "",
+          "description": "Author email for patch submission."
+        },
+        "patchx.emailNotifications": {
+          "type": "string",
+          "default": "",
+          "description": "Email notifications for submission (e.g. comma-separated emails or notification config)."
         },
         "patchx.pollIntervalMs": {
           "type": "number",

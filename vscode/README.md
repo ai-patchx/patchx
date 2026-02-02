@@ -8,6 +8,24 @@ It integrates with the PatchX service (upload → submit → status):
 - `POST /api/submit` (`application/json`)
 - `GET /api/status/<submissionId>`
 
+## Sidebar
+
+Click the **PatchX** icon in the Activity Bar to open the PatchX sidebar. The **Targets** view shows:
+
+- **Login** / **Logout** — Sign in to the PatchX service (username/password via prompt) or clear the stored auth token.
+- **Patch File** — Path to the patch file to upload; use **Browse** to pick a file (saved as `patchx.patchFilePath`).
+- **Target Project** — Default project for /api/upload (saved as `patchx.defaultProject`).
+- **Target Branch** — Gerrit target ref for /api/submit (saved as `patchx.defaultBranch`).
+- **Remote Node** — Optional node for /api/submit, chosen from the API node list (saved as `patchx.defaultRemoteNodeId`).
+- **Commit Subject** — Default one-line subject for /api/submit (saved as `patchx.commitSubject`).
+- **Detailed Description** — Default multi-line description for /api/submit (saved as `patchx.detailedDescription`).
+- **Author Name** — Author name for submission (saved as `patchx.authorName`).
+- **Author Email** — Author email for submission (saved as `patchx.authorEmail`).
+- **Email Notifications** — Text input for email notifications (e.g. comma-separated emails) (saved as `patchx.emailNotifications`).
+- **Upload** / **Submit** / **Upload & Submit** / **Check Status** — Actions to upload a patch file, submit the last upload, upload then submit in one step, or check submission status.
+
+Changes are saved to your settings as you edit. All PatchX actions are available from the sidebar only (no Command Palette commands).
+
 ## Configuration
 
 In VS Code settings (search for **PatchX**):
@@ -15,23 +33,17 @@ In VS Code settings (search for **PatchX**):
 | Setting | Description |
 |--------|-------------|
 | **`patchx.baseUrl`** | PatchX Worker base URL (no trailing slash). Default: `https://patchx-service.angersax.workers.dev` |
-| **`patchx.defaultProject`** | Default project name for /api/upload (e.g. `platform/frameworks/base`). |
+| **`patchx.defaultProject`** | Default project name for /api/upload (e.g. `platform/frameworks/base`). Default: empty. |
 | **`patchx.defaultBranch`** | Default branch for /api/submit. Default: `refs/heads/main` |
-| **`patchx.defaultRemoteNodeId`** | Optional default remote node id for /api/submit. Use command "PatchX: Set Default Remote Node" to pick from the API node list. |
-| **`patchx.pollIntervalMs`** | Polling interval for /api/status/<submissionId>. Default: 2000, minimum: 500 |
-| **`patchx.autoOpenChangeUrl`** | Auto-open Gerrit change URL when submission completes. Default: true |
-
-## Commands
-
-Open the Command Palette (`Ctrl+Shift+P` / `Cmd+Shift+P`) and run:
-
-- **PatchX: Upload Patch File** — upload a patch file
-- **PatchX: Submit Last Upload** — submit the last upload
-- **PatchX: Upload and Submit** — upload then submit in one step
-- **PatchX: Check Submission Status** — check status of a submission
-- **PatchX: Login (Get Auth Token)** — sign in and store auth token
-- **PatchX: Set Auth Token** — set auth token manually
-- **PatchX: Clear Auth Token** — clear stored auth token
+| **`patchx.defaultRemoteNodeId`** | Optional default remote node id for /api/submit. Pick from the Remote Node list in the sidebar. |
+| **`patchx.patchFilePath`** | Path to patch file for upload (used by sidebar and Upload command). |
+| **`patchx.commitSubject`** | Default commit subject for /api/submit. |
+| **`patchx.detailedDescription`** | Default detailed description for /api/submit. |
+| **`patchx.authorName`** | Author name for patch submission. |
+| **`patchx.authorEmail`** | Author email for patch submission. |
+| **`patchx.emailNotifications`** | Email notifications for submission (e.g. comma-separated emails). Default: empty. |
+| **`patchx.pollIntervalMs`** | Polling interval for /api/status/<submissionId>. Default: 2000, minimum: 500. |
+| **`patchx.autoOpenChangeUrl`** | Auto-open Gerrit change URL when submission completes. Default: true. |
 
 ## Development
 
