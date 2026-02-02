@@ -10,10 +10,4 @@ Place the PatchX VS Code extension icon here as `icon.png`.
 
 ## Activity Bar (sidebar) icon
 
-The Activity Bar uses a **28×28** version so the sidebar icon displays correctly. Generate it from `icon.png`:
-
-```bash
-npm run resize-icon
-```
-
-This runs `scripts/resize-activitybar-icon.js` (requires `sharp`) and writes **`icon-activitybar.png`** (28×28). The same script runs automatically after `npm install` (`prepare` script). If the sidebar icon is missing, run `npm run resize-icon` or `npm install` in the `vscode` folder.
+The Activity Bar uses **`icon-activitybar.svg`** (24×24 viewBox). VS Code recommends SVG for view container icons so the sidebar icon displays correctly. The SVG is committed; no resize step needed. Optionally, **`icon-activitybar.png`** (28×28) can be generated from `icon.png` via `npm run resize-icon` for other uses.
