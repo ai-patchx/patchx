@@ -1,0 +1,11 @@
+# Exclude dev/source; keep dist/, images/, README, package.json for packaging
+.vscode/**
+src/**
+scripts/**
+node_modules/**
+*.ts
+!*.d.ts
+tsconfig.json
+.gitignore
+*.map
+*.log

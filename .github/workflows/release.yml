@@ -52,6 +52,9 @@ jobs:
       - name: Verify package
         run: |
           ls -lh ./dist/patchx-vscode.vsix
+      - name: Verify Activity Bar icon in package
+        run: |
+          unzip -l ./dist/patchx-vscode.vsix | grep "icon-activitybar.svg" || (echo "Missing icon in VSIX; listing package:" && unzip -l ./dist/patchx-vscode.vsix && exit 1)
 
       - name: Upload extension artifact
         uses: actions/upload-artifact@v4
