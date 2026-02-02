@@ -7,9 +7,9 @@ const STATE_LAST_SUBMISSION_ID = 'patchx.lastSubmissionId'
 
 function getSettings() {
   const cfg = vscode.workspace.getConfiguration('patchx')
-  const baseUrl = (cfg.get<string>('baseUrl') || '').trim()
+  const baseUrl = (cfg.get<string>('baseUrl') || 'https://patchx-service.angersax.workers.dev').trim()
   const defaultProject = (cfg.get<string>('defaultProject') || '').trim()
-  const defaultBranch = (cfg.get<string>('defaultBranch') || 'refs/heads/master').trim()
+  const defaultBranch = (cfg.get<string>('defaultBranch') || 'refs/heads/main').trim()
   const defaultRemoteNodeId = (cfg.get<string>('defaultRemoteNodeId') || '').trim()
   const pollIntervalMs = Math.max(500, cfg.get<number>('pollIntervalMs') ?? 2000)
   const autoOpenChangeUrl = cfg.get<boolean>('autoOpenChangeUrl') ?? true
@@ -31,6 +31,53 @@ async function getClient(ctx: vscode.ExtensionContext): Promise<PatchxClient> {
   }
   const authToken = await ctx.secrets.get(SECRET_AUTH_TOKEN)
   return new PatchxClient({ baseUrl, authToken: authToken || undefined })
+}
+
+const PICK_NONE = ''
+const PICK_CUSTOM = '__custom__'
+
+type NodeItem = { id: string; name?: string }
+
+async function pickRemoteNodeId(
+  client: PatchxClient,
+  currentValue: string
+): Promise<string | undefined> {
+  const items: { label: string; id: string }[] = [
+    { label: 'None', id: PICK_NONE },
+    { label: 'Enter custom ID...', id: PICK_CUSTOM }
+  ]
+  let nodes: NodeItem[] = []
+  try {
+    const res = await client.getNodes()
+    if (res.success && Array.isArray(res.data) && res.data.length > 0) {
+      nodes = res.data
+      for (const n of nodes) {
+        items.splice(items.length - 1, 0, {
+          label: n.name ? `${n.name} (${n.id})` : n.id,
+          id: n.id
+        })
+      }
+    }
+  } catch {
+    // Fall back to custom only
+  }
+  const picked = await vscode.window.showQuickPick(items, {
+    title: 'Remote Node (optional)',
+    placeHolder: 'Select a node for /api/submit or None to skip.',
+    matchOnDescription: true,
+    ignoreFocusOut: true
+  })
+  if (picked === undefined) return undefined
+  if (picked.id === PICK_CUSTOM) {
+    const custom = (await vscode.window.showInputBox({
+      title: 'Remote Node ID',
+      prompt: 'Enter node id for /api/submit.',
+      value: currentValue || '',
+      ignoreFocusOut: true
+    }))?.trim()
+    return custom === undefined ? undefined : custom
+  }
+  return picked.id === PICK_NONE ? '' : picked.id
 }
 
 function getUploadIdFromUploadResponse(data: unknown): string | undefined {
@@ -108,6 +155,19 @@ export function activate(context: vscode.ExtensionContext) {
   )
 
   context.subscriptions.push(
+    vscode.commands.registerCommand('patchx.setDefaultRemoteNode', async () => {
+      const client = await getClient(context)
+      const settings = getSettings()
+      const picked = await pickRemoteNodeId(client, settings.defaultRemoteNodeId)
+      if (picked === undefined) return
+      await vscode.workspace.getConfiguration('patchx').update('defaultRemoteNodeId', picked, vscode.ConfigurationTarget.Global)
+      vscode.window.showInformationMessage(
+        picked ? `PatchX default remote node set to: ${picked}` : 'PatchX default remote node cleared.'
+      )
+    })
+  )
+
+  context.subscriptions.push(
     vscode.commands.registerCommand('patchx.uploadPatchFile', async () => {
       const settings = getSettings()
       const picked = await vscode.window.showOpenDialog({
@@ -179,18 +239,15 @@ export function activate(context: vscode.ExtensionContext) {
 
       const branch = await vscode.window.showInputBox({
         title: 'Target Branch',
-        prompt: 'Gerrit target ref (e.g. refs/heads/master).',
+        prompt: 'Gerrit target ref (e.g. refs/heads/main).',
         value: settings.defaultBranch,
         ignoreFocusOut: true
       })
       if (!branch) return
 
-      const remoteNodeId = (await vscode.window.showInputBox({
-        title: 'Remote Node ID (optional)',
-        prompt: 'If provided, PatchX will use the remote node flow. When set, project is required.',
-        value: settings.defaultRemoteNodeId,
-        ignoreFocusOut: true
-      }))?.trim()
+      const client = await getClient(context)
+      const remoteNodeId = await pickRemoteNodeId(client, settings.defaultRemoteNodeId)
+      if (remoteNodeId === undefined) return
 
       const projectForRemote = remoteNodeId
         ? await vscode.window.showInputBox({
@@ -202,7 +259,6 @@ export function activate(context: vscode.ExtensionContext) {
         : undefined
       if (remoteNodeId && !projectForRemote) return
 
-      const client = await getClient(context)
       log(`Submitting uploadId=${uploadId} branch=${branch}`)
 
       const submitResp = await client.submit({

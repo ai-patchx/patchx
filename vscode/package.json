@@ -1,7 +1,7 @@
 {
   "name": "patchx-vscode",
   "displayName": "PatchX",
-  "description": "A VS Code extension that streamlines contributing code to the Android Open Source Project (AOSP), with AI‑driven patch conflict resolution.",
+  "description": "A VS Code extension that streamlines contributing code to the Android Open Source Project",
   "version": "1.1.0-rc2",
   "publisher": "patchx",
   "icon": "images/icon.png",
@@ -20,7 +20,8 @@
     "onCommand:patchx.checkStatus",
     "onCommand:patchx.login",
     "onCommand:patchx.setAuthToken",
-    "onCommand:patchx.clearAuthToken"
+    "onCommand:patchx.clearAuthToken",
+    "onCommand:patchx.setDefaultRemoteNode"
   ],
   "main": "./dist/extension.js",
   "contributes": {
@@ -52,6 +53,10 @@
       {
         "command": "patchx.clearAuthToken",
         "title": "PatchX: Clear Auth Token"
+      },
+      {
+        "command": "patchx.setDefaultRemoteNode",
+        "title": "PatchX: Set Default Remote Node"
       }
     ],
     "configuration": {
@@ -69,7 +74,7 @@
         },
         "patchx.defaultBranch": {
           "type": "string",
-          "default": "refs/heads/master",
+          "default": "refs/heads/main",
           "description": "Default branch for /api/submit."
         },
         "patchx.defaultRemoteNodeId": {

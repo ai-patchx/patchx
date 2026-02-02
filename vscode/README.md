@@ -16,8 +16,8 @@ In VS Code settings (search for **PatchX**):
 |--------|-------------|
 | **`patchx.baseUrl`** | PatchX Worker base URL (no trailing slash). Default: `https://patchx-service.angersax.workers.dev` |
 | **`patchx.defaultProject`** | Default project name for /api/upload (e.g. `platform/frameworks/base`). |
-| **`patchx.defaultBranch`** | Default branch for /api/submit. Default: `refs/heads/master` |
-| **`patchx.defaultRemoteNodeId`** | Optional default remote node id for /api/submit. |
+| **`patchx.defaultBranch`** | Default branch for /api/submit. Default: `refs/heads/main` |
+| **`patchx.defaultRemoteNodeId`** | Optional default remote node id for /api/submit. Use command "PatchX: Set Default Remote Node" to pick from the API node list. |
 | **`patchx.pollIntervalMs`** | Polling interval for /api/status/<submissionId>. Default: 2000, minimum: 500 |
 | **`patchx.autoOpenChangeUrl`** | Auto-open Gerrit change URL when submission completes. Default: true |
 

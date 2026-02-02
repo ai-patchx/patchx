@@ -103,5 +103,14 @@ export class PatchxClient {
 
     return await readJson<PatchxStatusResponse>(resp)
   }
+
+  /** GET /api/nodes - list remote nodes for defaultRemoteNodeId selection */
+  async getNodes(): Promise<{ success: boolean; data?: Array<{ id: string; name?: string }>; error?: string }> {
+    const resp = await fetch(`${this.baseUrl}/api/nodes`, {
+      method: 'GET',
+      headers: buildHeaders(this.authToken)
+    })
+    return await readJson<{ success: boolean; data?: Array<{ id: string; name?: string }>; error?: string }>(resp)
+  }
 }
 

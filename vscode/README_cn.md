@@ -16,8 +16,8 @@
 |--------|------|
 | **`patchx.baseUrl`** | PatchX Worker 基础 URL，末尾不要加 `/`。默认：`https://patchx-service.angersax.workers.dev` |
 | **`patchx.defaultProject`** | 用于 /api/upload 的默认项目名（如 `platform/frameworks/base`）。 |
-| **`patchx.defaultBranch`** | 用于 /api/submit 的默认分支。默认：`refs/heads/master` |
-| **`patchx.defaultRemoteNodeId`** | 可选，用于 /api/submit 的默认远程节点 id。 |
+| **`patchx.defaultBranch`** | 用于 /api/submit 的默认分支。默认：`refs/heads/main` |
+| **`patchx.defaultRemoteNodeId`** | 可选，用于 /api/submit 的默认远程节点 id。可用命令「PatchX: Set Default Remote Node」从 API 节点列表中选择。 |
 | **`patchx.pollIntervalMs`** | 轮询 /api/status/<submissionId> 的间隔（毫秒）。默认：2000，最小值：500 |
 | **`patchx.autoOpenChangeUrl`** | 提交完成后是否自动打开 Gerrit 变更链接。默认：true |
 
