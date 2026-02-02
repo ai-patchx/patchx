@@ -147,22 +147,33 @@ function getPatchxSettingsHtml(state: PatchxSettingsViewState): string {
     .hint { font-size: 11px; color: var(--vscode-descriptionForeground); margin-top: 2px; }
     .row { display: flex; gap: 6px; align-items: center; }
     .row input { flex: 1; }
-    .row button { padding: 6px 10px; white-space: nowrap; }
-    .auth-row { display: flex; gap: 8px; margin-bottom: 12px; }
-    .auth-row button { padding: 6px 12px; }
+    .auth-row { display: flex; gap: 6px; margin-bottom: 12px; flex-wrap: wrap; }
+    button.btn-primary {
+      padding: 4px 8px;
+      font-size: 12px;
+      white-space: nowrap;
+      background: var(--vscode-button-background);
+      color: var(--vscode-button-foreground);
+      border: none;
+      border-radius: 2px;
+      cursor: pointer;
+    }
+    button.btn-primary:hover {
+      background: var(--vscode-button-hoverBackground);
+    }
     </style>
 </head>
 <body>
   <div class="auth-row">
-    <button id="btn-login">Login</button>
-    <button id="btn-logout">Logout</button>
+    <button id="btn-login" class="btn-primary">Login</button>
+    <button id="btn-logout" class="btn-primary">Logout</button>
   </div>
   <div class="hint" style="margin-top: 0;">Sign in to PatchX service or clear stored token.</div>
 
   <label for="patch-file">Patch File</label>
   <div class="row">
     <input id="patch-file" type="text" value="${patchFileEsc}" placeholder="Path to .patch or .diff file" />
-    <button id="patch-browse">Browse</button>
+    <button id="patch-browse" class="btn-primary">Browse</button>
   </div>
   <div class="hint">File to upload via /api/upload</div>
 
@@ -198,10 +209,10 @@ function getPatchxSettingsHtml(state: PatchxSettingsViewState): string {
   <div class="hint">Email notifications for submission</div>
 
   <div class="auth-row" style="margin-top: 16px;">
-    <button id="btn-upload">Upload</button>
-    <button id="btn-submit">Submit</button>
-    <button id="btn-upload-submit">Upload & Submit</button>
-    <button id="btn-status">Check Status</button>
+    <button id="btn-upload" class="btn-primary">Upload</button>
+    <button id="btn-submit" class="btn-primary">Submit</button>
+    <button id="btn-upload-submit" class="btn-primary">Upload & Submit</button>
+    <button id="btn-status" class="btn-primary">Check Status</button>
   </div>
   <div class="hint" style="margin-top: 0;">Upload patch file, submit last upload, or check submission status.</div>
 
@@ -265,7 +276,8 @@ function getPatchxSettingsHtml(state: PatchxSettingsViewState): string {
         (m.nodes || []).forEach(n => {
           const opt = document.createElement('option');
           opt.value = n.id;
-          opt.textContent = n.name ? n.name + ' (' + n.id + ')' : n.id;
+          opt.textContent = (n.name && n.name.trim()) ? n.name.trim() : n.id;
+          opt.title = n.id;
           if (n.id === initialRemoteId) opt.selected = true;
           nodeEl.appendChild(opt);
         });

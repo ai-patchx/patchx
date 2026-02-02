@@ -4,6 +4,7 @@
   "version": "1.1.0",
   "type": "module",
   "scripts": {
+    "resize-icon": "npm run resize-icon --prefix vscode",
     "dev": "vite",
     "dev:full": "node dev-start.js",
     "dev:env": "TEST_USER_PASSWORD=test123 vite",

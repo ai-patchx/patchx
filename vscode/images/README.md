@@ -1,17 +1,19 @@
-# Icon Placeholder
+# Icons
+
+## icon.png (main extension icon)
 
 Place the PatchX VS Code extension icon here as `icon.png`.
 
-Recommended specifications:
-- Size: 128x128 pixels
-- Format: PNG
-- Background: Transparent or solid color
-- Design: Simple, recognizable icon representing PatchX (patch upload / submit / status, or diff symbols)
+- **Size**: 128×128 pixels (for marketplace and general use)
+- **Format**: PNG
+- **Background**: Transparent or solid color
 
-Suggested design elements:
-- Diff symbols (- / +)
-- Patch/document sheet
-- Upload/submit arrow
-- A small "X" or "PX" monogram for PatchX
+## Activity Bar (sidebar) icon
 
-The extension can run without an icon, but providing one is recommended for publishing to the marketplace.
+The Activity Bar uses a **28×28** version so the sidebar icon displays correctly. Generate it from `icon.png`:
+
+```bash
+npm run resize-icon
+```
+
+This runs `scripts/resize-activitybar-icon.js` (requires `sharp`) and writes **`icon-activitybar.png`** (28×28). The same script runs automatically after `npm install` (`prepare` script). If the sidebar icon is missing, run `npm run resize-icon` or `npm install` in the `vscode` folder.

@@ -23,7 +23,7 @@
         {
           "id": "patchx",
           "title": "PatchX",
-          "icon": "images/icon.png"
+          "icon": "images/icon-activitybar.png"
         }
       ]
     },
@@ -42,62 +42,74 @@
         "patchx.baseUrl": {
           "type": "string",
           "default": "https://patchx-service.angersax.workers.dev",
+          "order": 1,
           "description": "PatchX Worker base URL (no trailing slash)."
+        },
+        "patchx.patchFilePath": {
+          "type": "string",
+          "default": "",
+          "order": 2,
+          "description": "Path to patch file for upload (used by sidebar UI)."
         },
         "patchx.defaultProject": {
           "type": "string",
           "default": "",
+          "order": 3,
           "description": "Default project name for /api/upload (e.g. platform/frameworks/base)."
         },
         "patchx.defaultBranch": {
           "type": "string",
           "default": "refs/heads/main",
+          "order": 4,
           "description": "Default branch for /api/submit."
         },
         "patchx.defaultRemoteNodeId": {
           "type": "string",
           "default": "",
+          "order": 5,
           "description": "Optional default remote node id for /api/submit."
-        },
-        "patchx.patchFilePath": {
-          "type": "string",
-          "default": "",
-          "description": "Path to patch file for upload (used by sidebar UI)."
         },
         "patchx.commitSubject": {
           "type": "string",
           "default": "",
+          "order": 6,
           "description": "Default commit subject for /api/submit."
         },
         "patchx.detailedDescription": {
           "type": "string",
           "default": "",
+          "order": 7,
           "description": "Default detailed description for /api/submit."
         },
         "patchx.authorName": {
           "type": "string",
           "default": "",
+          "order": 8,
           "description": "Author name for patch submission."
         },
         "patchx.authorEmail": {
           "type": "string",
           "default": "",
+          "order": 9,
           "description": "Author email for patch submission."
         },
         "patchx.emailNotifications": {
           "type": "string",
           "default": "",
+          "order": 10,
           "description": "Email notifications for submission (e.g. comma-separated emails or notification config)."
         },
         "patchx.pollIntervalMs": {
           "type": "number",
           "default": 2000,
           "minimum": 500,
+          "order": 11,
           "description": "Polling interval for /api/status/<submissionId>."
         },
         "patchx.autoOpenChangeUrl": {
           "type": "boolean",
           "default": true,
+          "order": 12,
           "description": "Auto-open Gerrit change URL when submission completes."
         }
       }
@@ -106,11 +118,14 @@
   "scripts": {
     "compile": "tsc -p .",
     "watch": "tsc -p . -w",
-    "package": "vsce package --no-update-package-json --out ../dist/patchx-vscode.vsix"
+    "package": "vsce package --no-update-package-json --out ../dist/patchx-vscode.vsix",
+    "resize-icon": "node scripts/resize-activitybar-icon.js",
+    "prepare": "node scripts/resize-activitybar-icon.js"
   },
   "devDependencies": {
     "@types/node": "^22.15.30",
     "@types/vscode": "^1.85.0",
+    "sharp": "^0.33.5",
     "typescript": "~5.8.3"
   }
 }
