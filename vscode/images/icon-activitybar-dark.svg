@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24">
-  <!-- Single color so VS Code applies activity bar foreground (currentColor) -->
-  <path fill="currentColor" fill-rule="evenodd"
+  <!-- Light icon for dark theme activity bar -->
+  <path fill="#CCCCCC" fill-rule="evenodd"
         d="M5 2a1 1 0 0 0-1 1v18a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1V6.414a1 1 0 0 0-.293-.707l-3.414-3.414A1 1 0 0 0 15.586 2H5zm11 4V4h-2v4h4v-2h-2zm-8 4h6v2H8v-2zm0 4h6v2H8v-2zm4-8H8v2h4V6z"/>
 </svg>
