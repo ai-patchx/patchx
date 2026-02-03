@@ -112,6 +112,7 @@ function escapeHtml(s: string): string {
 }
 
 type PatchxSettingsViewState = {
+  hasAuth: boolean
   branch: string
   project: string
   remoteNodeId: string
@@ -124,6 +125,7 @@ type PatchxSettingsViewState = {
 }
 
 function getPatchxSettingsHtml(state: PatchxSettingsViewState): string {
+  const authLabel = state.hasAuth ? 'Sign out' : 'Login'
   const branchEsc = escapeHtml(state.branch)
   const projectEsc = escapeHtml(state.project)
   const remoteJson = JSON.stringify(state.remoteNodeId)
@@ -165,8 +167,7 @@ function getPatchxSettingsHtml(state: PatchxSettingsViewState): string {
 </head>
 <body>
   <div class="auth-row">
-    <button id="btn-login" class="btn-primary">Login</button>
-    <button id="btn-logout" class="btn-primary">Logout</button>
+    <button id="btn-auth-toggle" class="btn-primary">${authLabel}</button>
   </div>
   <div class="hint" style="margin-top: 0;">Sign in to PatchX service or clear stored token.</div>
 
@@ -229,6 +230,12 @@ function getPatchxSettingsHtml(state: PatchxSettingsViewState): string {
     const emailNotifEl = document.getElementById('email-notifications');
 
     const initialRemoteId = ${remoteJson};
+    let isLoggedIn = ${state.hasAuth};
+    const authBtn = document.getElementById('btn-auth-toggle');
+
+    function updateAuthButton() {
+      authBtn.textContent = isLoggedIn ? 'Sign out' : 'Login';
+    }
 
     function save() {
       vscode.postMessage({
@@ -262,8 +269,13 @@ function getPatchxSettingsHtml(state: PatchxSettingsViewState): string {
     emailNotifEl.addEventListener('change', save);
 
     document.getElementById('patch-browse').addEventListener('click', () => vscode.postMessage({ type: 'pickFile' }));
-    document.getElementById('btn-login').addEventListener('click', () => vscode.postMessage({ type: 'login' }));
-    document.getElementById('btn-logout').addEventListener('click', () => vscode.postMessage({ type: 'logout' }));
+    authBtn.addEventListener('click', () => {
+      vscode.postMessage({ type: isLoggedIn ? 'logout' : 'login' });
+      if (isLoggedIn) {
+        isLoggedIn = false;
+        updateAuthButton();
+      }
+    });
     document.getElementById('btn-upload').addEventListener('click', () => vscode.postMessage({ type: 'upload' }));
     document.getElementById('btn-submit').addEventListener('click', () => vscode.postMessage({ type: 'submit' }));
     document.getElementById('btn-upload-submit').addEventListener('click', () => vscode.postMessage({ type: 'uploadSubmit' }));
@@ -304,6 +316,10 @@ function getPatchxSettingsHtml(state: PatchxSettingsViewState): string {
         authorEmailEl.value = m.authorEmail || '';
         emailNotifEl.value = m.emailNotifications || '';
       }
+      if (m.type === 'authState') {
+        isLoggedIn = m.hasAuth === true;
+        updateAuthButton();
+      }
     });
   </script>
 </body>
@@ -311,18 +327,28 @@ function getPatchxSettingsHtml(state: PatchxSettingsViewState): string {
 }
 
 class PatchxSettingsViewProvider implements vscode.WebviewViewProvider {
+  private webviewView: vscode.WebviewView | undefined
+
   constructor(
     private readonly ctx: vscode.ExtensionContext
   ) {}
+
+  async updateAuthState(): Promise<void> {
+    const token = await this.ctx.secrets.get(SECRET_AUTH_TOKEN)
+    this.webviewView?.webview.postMessage({ type: 'authState', hasAuth: !!token })
+  }
 
   resolveWebviewView(
     webviewView: vscode.WebviewView,
     _context: vscode.WebviewViewResolveContext,
     _token: vscode.CancellationToken
   ): void | Thenable<void> {
+    this.webviewView = webviewView
+    webviewView.onDidDispose(() => { this.webviewView = undefined })
     webviewView.webview.options = { enableScripts: true }
     const settings = getSettings()
     const state: PatchxSettingsViewState = {
+      hasAuth: false,
       branch: settings.defaultBranch,
       project: settings.defaultProject,
       remoteNodeId: settings.defaultRemoteNodeId,
@@ -333,7 +359,9 @@ class PatchxSettingsViewProvider implements vscode.WebviewViewProvider {
       authorEmail: settings.authorEmail,
       emailNotifications: settings.emailNotifications
     }
-    webviewView.webview.html = getPatchxSettingsHtml(state)
+    return (async () => {
+      state.hasAuth = !!(await this.ctx.secrets.get(SECRET_AUTH_TOKEN))
+      webviewView.webview.html = getPatchxSettingsHtml(state)
     const cfg = vscode.workspace.getConfiguration('patchx')
     webviewView.webview.onDidReceiveMessage(async (msg: {
       type: string
@@ -403,6 +431,7 @@ class PatchxSettingsViewProvider implements vscode.WebviewViewProvider {
         }
       })
       .catch(() => {})
+    })()
   }
 }
 
@@ -416,8 +445,9 @@ export function activate(context: vscode.ExtensionContext) {
 
   context.subscriptions.push(output)
 
+  const settingsViewProvider = new PatchxSettingsViewProvider(context)
   context.subscriptions.push(
-    vscode.window.registerWebviewViewProvider('patchx.settingsView', new PatchxSettingsViewProvider(context))
+    vscode.window.registerWebviewViewProvider('patchx.settingsView', settingsViewProvider)
   )
 
   context.subscriptions.push(
@@ -459,6 +489,7 @@ export function activate(context: vscode.ExtensionContext) {
         await context.secrets.store(SECRET_AUTH_TOKEN, res.token)
         vscode.window.showInformationMessage('PatchX login succeeded. Token saved.')
         log(`Login ok. message=${res.message ?? '(none)'}`)
+        await settingsViewProvider.updateAuthState()
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e)
         log(`Login failed: ${msg}`)
@@ -471,6 +502,7 @@ export function activate(context: vscode.ExtensionContext) {
     vscode.commands.registerCommand('patchx.clearAuthToken', async () => {
       await context.secrets.delete(SECRET_AUTH_TOKEN)
       vscode.window.showInformationMessage('PatchX auth token cleared.')
+      await settingsViewProvider.updateAuthState()
     })
   )
 
