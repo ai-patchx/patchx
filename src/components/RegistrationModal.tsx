@@ -89,7 +89,7 @@ export default function RegistrationModal({ isOpen, onClose }: RegistrationModal
           <div className="px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
             <div className="flex justify-between items-center mb-4">
               <h3 className={`text-lg font-medium ${theme === 'dark' ? 'text-gradient-primary' : 'text-gray-900'}`}>
-                {isLogin ? 'Login' : 'Register'}
+                {isLogin ? 'Sign in' : 'Register'}
               </h3>
               <button
                 onClick={onClose}
@@ -239,7 +239,7 @@ export default function RegistrationModal({ isOpen, onClose }: RegistrationModal
                       : 'bg-blue-600 hover:bg-blue-700'
                 } focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500`}
               >
-                {loading ? 'Processing...' : (isLogin ? 'Login' : 'Register')}
+                {loading ? 'Processing...' : (isLogin ? 'Sign in' : 'Register')}
               </button>
             </form>
             )}
@@ -250,7 +250,7 @@ export default function RegistrationModal({ isOpen, onClose }: RegistrationModal
                 onClick={() => setIsLogin(!isLogin)}
                 className={`text-sm ${theme === 'dark' ? 'text-blue-400 hover:text-blue-300' : 'text-blue-600 hover:text-blue-500'}`}
               >
-                {isLogin ? 'No account? Click to register' : 'Already have an account? Click to login'}
+                {isLogin ? 'No account? Click to register' : 'Already have an account? Click to sign in'}
               </button>
             </div>
           </div>

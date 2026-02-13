@@ -1,4 +1,4 @@
-// Cloudflare Pages Function for login - proxies to Worker to use Worker's env vars
+// Cloudflare Pages Function for sign-in - proxies to Worker to use Worker's env vars
 export async function onRequestPost(context) {
   const { request } = context;
   const workerUrl = 'https://patchx-service.angersax.workers.dev';
@@ -28,7 +28,7 @@ export async function onRequestPost(context) {
       headers: responseHeaders
     });
   } catch (error) {
-    console.error('Error proxying login to Worker:', error);
+    console.error('Error proxying sign-in to Worker:', error);
     return new Response(
       JSON.stringify({ message: 'Internal server error' }),
       {

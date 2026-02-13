@@ -44,7 +44,7 @@ class AuthService {
 
     if (!response.ok) {
       const message = (data as { message?: string }).message
-      throw new Error(message || 'Login failed')
+      throw new Error(message || 'Sign in failed')
     }
 
     return data

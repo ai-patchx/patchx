@@ -4,7 +4,7 @@ export async function onRequestPost(context) {
   const url = new URL(request.url);
   const pathname = url.pathname;
 
-  // Proxy /api/auth/login to Worker (Worker has TEST_USER_PASSWORD and ADMIN_USER_PASSWORD env vars configured)
+  // Proxy /api/auth/login to Worker for sign-in (Worker has TEST_USER_PASSWORD and ADMIN_USER_PASSWORD env vars configured)
   if (pathname === '/api/auth/login') {
     const workerUrl = 'https://patchx-service.angersax.workers.dev';
     try {
@@ -32,7 +32,7 @@ export async function onRequestPost(context) {
         headers: responseHeaders
       });
     } catch (error) {
-      console.error('Error proxying login to Worker:', error);
+      console.error('Error proxying sign-in to Worker:', error);
       return new Response(
         JSON.stringify({ message: 'Internal server error' }),
         {

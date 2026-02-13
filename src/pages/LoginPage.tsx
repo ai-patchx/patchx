@@ -48,8 +48,8 @@ export default function LoginPage() {
       }
       navigate('/submit')
     } catch (err) {
-      console.error('Login error:', err)
-      setError(err instanceof Error ? err.message : 'Login failed, please try again')
+      console.error('Sign in error:', err)
+      setError(err instanceof Error ? err.message : 'Sign in failed, please try again')
     } finally {
       setIsLoading(false)
     }
@@ -179,7 +179,7 @@ export default function LoginPage() {
                   }
                 `}
               >
-                {isLoading ? 'Logging in...' : 'Login'}
+                {isLoading ? 'Signing in...' : 'Sign in'}
               </button>
 
               <div className="relative">

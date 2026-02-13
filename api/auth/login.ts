@@ -123,12 +123,12 @@ export default async function handler(
     const response: LoginResponse = {
       user,
       token,
-      message: 'Login successful'
+      message: 'Sign in successful'
     }
 
     return res.status(200).json(response)
   } catch (error) {
-    console.error('Login error:', error)
+    console.error('Sign in error:', error)
     return res.status(500).json({ message: 'Internal server error' })
   }
 }

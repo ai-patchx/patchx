@@ -46,13 +46,13 @@ export class PatchxClient {
     })
 
     if (!resp.ok) {
-      // Worker login returns { message } on error
+      // Worker sign-in returns { message } on error
       const raw = await resp.text()
-      throw new Error(`Login failed (${resp.status}): ${raw.slice(0, 500)}`)
+      throw new Error(`Sign in failed (${resp.status}): ${raw.slice(0, 500)}`)
     }
 
     const data = await readJson<{ user: unknown; token: string; message?: string }>(resp)
-    if (!data?.token) throw new Error('Login response missing token')
+    if (!data?.token) throw new Error('Sign in response missing token')
     return data
   }
 

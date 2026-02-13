@@ -115,7 +115,7 @@ export default {
         return await handleStatus(path, env, corsHeaders)
       }
 
-      // Login API route
+      // Sign-in API route
       else if (path === '/api/auth/login' && method === 'POST') {
         return await handleLogin(request, env, corsHeaders)
       }
@@ -384,7 +384,7 @@ async function handleAITestProviders(env: Env, corsHeaders: Record<string, strin
   }
 }
 
-// Login handler function
+// Sign-in handler function
 async function handleLogin(request: Request, env: Env, corsHeaders: Record<string, string>): Promise<Response> {
   try {
     const body = await request.json() as { username: string; password: string }
@@ -473,7 +473,7 @@ async function handleLogin(request: Request, env: Env, corsHeaders: Record<strin
     const response = {
       user,
       token,
-      message: 'Login successful'
+      message: 'Sign in successful'
     }
 
     return new Response(
@@ -487,7 +487,7 @@ async function handleLogin(request: Request, env: Env, corsHeaders: Record<strin
       }
     )
   } catch (error) {
-    console.error('Login error:', error)
+    console.error('Sign in error:', error)
     return new Response(
       JSON.stringify({ message: 'Internal server error' }),
       {

@@ -125,7 +125,7 @@ type PatchxSettingsViewState = {
 }
 
 function getPatchxSettingsHtml(state: PatchxSettingsViewState): string {
-  const authLabel = state.hasAuth ? 'Sign out' : 'Login'
+  const authLabel = state.hasAuth ? 'Sign out' : 'Sign in'
   const branchEsc = escapeHtml(state.branch)
   const projectEsc = escapeHtml(state.project)
   const remoteJson = JSON.stringify(state.remoteNodeId)
@@ -234,7 +234,7 @@ function getPatchxSettingsHtml(state: PatchxSettingsViewState): string {
     const authBtn = document.getElementById('btn-auth-toggle');
 
     function updateAuthButton() {
-      authBtn.textContent = isLoggedIn ? 'Sign out' : 'Login';
+      authBtn.textContent = isLoggedIn ? 'Sign out' : 'Sign in';
     }
 
     function save() {
@@ -270,7 +270,7 @@ function getPatchxSettingsHtml(state: PatchxSettingsViewState): string {
 
     document.getElementById('patch-browse').addEventListener('click', () => vscode.postMessage({ type: 'pickFile' }));
     authBtn.addEventListener('click', () => {
-      vscode.postMessage({ type: isLoggedIn ? 'logout' : 'login' });
+      vscode.postMessage({ type: isLoggedIn ? 'signOut' : 'signIn' });
       if (isLoggedIn) {
         isLoggedIn = false;
         updateAuthButton();
@@ -386,11 +386,11 @@ class PatchxSettingsViewProvider implements vscode.WebviewViewProvider {
         }
         return
       }
-      if (msg.type === 'login') {
-        await vscode.commands.executeCommand('patchx.login')
+      if (msg.type === 'signIn') {
+        await vscode.commands.executeCommand('patchx.signIn')
         return
       }
-      if (msg.type === 'logout') {
+      if (msg.type === 'signOut') {
         await vscode.commands.executeCommand('patchx.clearAuthToken')
         return
       }
@@ -465,7 +465,7 @@ export function activate(context: vscode.ExtensionContext) {
   )
 
   context.subscriptions.push(
-    vscode.commands.registerCommand('patchx.login', async () => {
+    vscode.commands.registerCommand('patchx.signIn', async () => {
       const username = await vscode.window.showInputBox({
         title: 'PatchX Username',
         prompt: 'Default accounts are usually "patchx" or "admin".',
@@ -483,17 +483,17 @@ export function activate(context: vscode.ExtensionContext) {
       if (!password) return
 
       const client = await getClient(context)
-      log(`Logging in as "${username}"...`)
+      log(`Signing in as "${username}"...`)
       try {
         const res = await client.login({ username, password })
         await context.secrets.store(SECRET_AUTH_TOKEN, res.token)
-        vscode.window.showInformationMessage('PatchX login succeeded. Token saved.')
-        log(`Login ok. message=${res.message ?? '(none)'}`)
+        vscode.window.showInformationMessage('PatchX sign-in succeeded. Token saved.')
+        log(`Sign in ok. message=${res.message ?? '(none)'}`)
         await settingsViewProvider.updateAuthState()
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e)
-        log(`Login failed: ${msg}`)
-        vscode.window.showErrorMessage(`PatchX login failed: ${msg}`)
+        log(`Sign in failed: ${msg}`)
+        vscode.window.showErrorMessage(`PatchX sign-in failed: ${msg}`)
       }
     })
   )

@@ -12,7 +12,7 @@ It integrates with the PatchX service (upload → submit → status):
 
 Click the **PatchX** icon in the Activity Bar to open the PatchX sidebar. The **Targets** view shows:
 
-- **Login** / **Sign out** — One button that toggles: sign in to the PatchX service (username/password via prompt) or clear the stored auth token.
+- **Sign in** / **Sign out** — One button that toggles: sign in to the PatchX service (username/password via prompt) or clear the stored auth token.
 - **Patch File** — Path to the patch file to upload; use **Browse** to pick a file (saved as `patchx.patchFilePath`).
 - **Target Project** — Default project for /api/upload (saved as `patchx.defaultProject`).
 - **Target Branch** — Gerrit target ref for /api/submit (saved as `patchx.defaultBranch`).

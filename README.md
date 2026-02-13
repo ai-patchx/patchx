@@ -12,7 +12,7 @@ A web service that streamlines contributing code to the Android Open Source Proj
 - 🔄 Auto submission: push to Google AOSP Gerrit
 - 📊 Status tracking: real‑time submission progress and results
 - 📱 Responsive design: desktop and mobile support
-- 🔐 User login and token‑based authentication
+- 🔐 User sign-in and token‑based authentication
 - 🧑‍💻 User registration: Email-based authentication
 - 📋 Dynamic project listing: automatically fetch all projects from Gerrit
 - 🌿 Dynamic branch listing: automatically fetch branches for selected project
@@ -447,7 +447,7 @@ Set the frontend base URL for the backend Worker to avoid hardcoded endpoints an
 VITE_WORKER_BASE_URL=https://patchx-service.angersax.workers.dev
 ```
 
-The login page calls `${VITE_WORKER_BASE_URL}/api/auth/login`. Provide different values for staging/production as needed.
+The sign-in page calls `${VITE_WORKER_BASE_URL}/api/auth/login`. Provide different values for staging/production as needed.
 
 #### Cloudflare Pages: Environment configuration
 
@@ -695,7 +695,7 @@ AI conflict resolution is enabled based on configuration:
 
 ### Authentication API
 
-#### Login
+#### Sign in
 ```
 POST /api/auth/login
 ```
@@ -713,7 +713,7 @@ Response:
 {
   "user": { "id": "user-123", "username": "patchx" },
   "token": "<base64-token>",
-  "message": "Login successful"
+  "message": "Sign in successful"
 }
 ```
 

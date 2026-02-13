@@ -69,7 +69,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     try {
       // TODO: Reimplement email/password authentication with D1 or alternative auth system
       throw new Error(
-        'Email/password login is not available. Authentication system needs to be reimplemented after D1 migration. ' +
+        'Email/password sign-in is not available. Authentication system needs to be reimplemented after D1 migration. ' +
         'Please use Worker authentication (username/password) instead.'
       )
     } catch (error) {
@@ -92,7 +92,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         const errData: unknown = await res.json().catch(() => null)
         const msg = (typeof errData === 'object' && errData && 'message' in errData)
           ? String((errData as { message?: unknown }).message)
-          : 'Login failed'
+          : 'Sign in failed'
         throw new Error(msg)
       }
       const data = await res.json() as { user: WorkerUser; token: string }
@@ -111,7 +111,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       // Clear all authentication state
       // Note: Supabase authentication is no longer available
     } catch (error) {
-      // Ignore errors during logout
+      // Ignore errors during sign out
       console.warn('Sign out error (ignored):', error)
     }
     // Always clear localStorage and state regardless of user type

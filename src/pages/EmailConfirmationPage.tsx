@@ -55,7 +55,7 @@ export default function EmailConfirmationPage() {
               onClick={() => navigate('/')}
               className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
             >
-              Go to Login
+              Go to Sign in
             </button>
           </>
         )}
@@ -72,7 +72,7 @@ export default function EmailConfirmationPage() {
                 onClick={() => navigate('/')}
                 className="w-full px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
               >
-                Go to Login
+                Go to Sign in
               </button>
               <button
                 onClick={() => window.location.reload()}

@@ -60,7 +60,7 @@ export default function Home() {
                     className={`${theme === 'dark' ? 'btn-gradient' : 'bg-blue-600 hover:bg-blue-700 text-white'} px-3 py-1 rounded-lg text-sm transition-colors duration-200 flex items-center`}
                   >
                     <LogIn className="w-4 h-4 mr-1" />
-                    Login
+                    Sign in
                   </button>
                   <button
                     onClick={() => handleAuthAction()}

@@ -1,4 +1,4 @@
-// Cloudflare Pages Function for login fallback
+// Cloudflare Pages Function for sign-in fallback
 export async function onRequest(context) {
   const { request, env } = context;
 
@@ -96,7 +96,7 @@ export async function onRequest(context) {
     const response = {
       user,
       token,
-      message: 'Login successful'
+      message: 'Sign in successful'
     };
 
     return new Response(
@@ -112,7 +112,7 @@ export async function onRequest(context) {
       }
     );
   } catch (error) {
-    console.error('Login error:', error);
+    console.error('Sign in error:', error);
     return new Response(
       JSON.stringify({ message: 'Internal server error' }),
       {

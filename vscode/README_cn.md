@@ -12,7 +12,7 @@
 
 点击活动栏中的 **PatchX** 图标可打开 PatchX 侧边栏。**Targets** 视图中可编辑：
 
-- **Login** / **Sign out** — 单一按钮切换：登录 PatchX 服务（通过提示输入用户名/密码）或清除已保存的认证 token。
+- **Sign in** / **Sign out** — 单一按钮切换：登录 PatchX 服务（通过提示输入用户名/密码）或清除已保存的认证 token。
 - **Patch File（补丁文件）** — 要上传的补丁文件路径；点击 **Browse** 选择文件，对应设置 `patchx.patchFilePath`。
 - **Target Project（目标项目）** — 用于 /api/upload 的默认项目，对应设置 `patchx.defaultProject`。
 - **Target Branch（目标分支）** — 用于 /api/submit 的 Gerrit 目标 ref，对应设置 `patchx.defaultBranch`。
